@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-- 阶段：MVP 发布收尾
+- 阶段：MVP 完成
 - GitHub：`https://github.com/xxf66666/AgentCallout`（公开仓库，`main` 已推送）
 - 本地分支：`main`
 - 阻塞：无
@@ -35,10 +35,12 @@
 - [x] Codex 可选 Skills-only Plugin 0.1.2 安装并由 `$agent-callout` 调用 MCP doctor
 - [x] GitHub clean clone 完成 `npm ci`、完整 gate、示例重生 clean diff、doctor 与 MCP smoke
 - [x] Node 20.10 doctor 与 Node 20.19 完整 gate 通过；生产依赖 audit 为 0 漏洞
+- [x] 最终验证文档提交后，GitHub clean clone 在 `833490b` 再次通过完整 gate
+- [x] 准备并推送 `v0.1.2` 版本标签
 
 ## 进行中
 
-- [ ] 提交最终验证文档、创建版本标签并推送
+- 无。
 
 ## 待完成
 
@@ -58,5 +60,5 @@
 | 2026-08-30 | 三组示例                             | 重复渲染 hash 一致、无 warning、sidecar 无绝对开发机路径；privacy redact 为单一不透明 RGBA            |
 | 2026-08-30 | Claude Code 2.1.251                  | GitHub install/update/uninstall/reinstall；doctor + 两次 annotate；预览可见，输出 hash 已复核         |
 | 2026-08-30 | Codex CLI 0.151.0                    | GitHub CLI + mcp add/remove/reinstall；doctor/inspect/validate + 两次 annotate；预览可见              |
-| 2026-08-30 | Clean clone                          | `npm ci`、verify、examples clean diff、doctor、MCP smoke；commit `40208ad`                            |
+| 2026-08-30 | Clean clone                          | `npm ci`、verify、examples clean diff、doctor、MCP smoke；最终验证 commit `833490b`                   |
 | 2026-08-30 | Node 20 / audit                      | 20.10 doctor；20.19 52 tests/typecheck/build/dist/self-test；官方 registry production audit 0 漏洞    |
