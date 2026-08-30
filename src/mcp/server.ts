@@ -59,8 +59,7 @@ const annotateInputSchema = z
   .object({
     inputPath: pathSchema,
     spec: specSchema,
-    outputPath: pathSchema.optional(),
-    overwrite: z.boolean().optional().default(false)
+    outputPath: pathSchema.optional()
   })
   .strict();
 
@@ -69,8 +68,7 @@ const cropInputSchema = z
     inputPath: pathSchema,
     rect: rectSchema,
     coordinateSpace: coordinateSpaceSchema.optional().default("pixel"),
-    outputPath: pathSchema.optional(),
-    overwrite: z.boolean().optional().default(false)
+    outputPath: pathSchema.optional()
   })
   .strict();
 
@@ -83,8 +81,7 @@ const contactSheetInputSchema = z
     cellHeight: z.number().int().positive().max(4096).optional(),
     padding: z.number().int().nonnegative().max(512).optional(),
     background: z.string().min(1).max(128).optional(),
-    labels: z.boolean().optional().default(true),
-    overwrite: z.boolean().optional().default(false)
+    labels: z.boolean().optional().default(true)
   })
   .strict();
 
@@ -376,13 +373,12 @@ export function createAgentCalloutMcpServer(options: AgentCalloutMcpServerOption
         openWorldHint: false
       }
     },
-    async ({ inputPath, spec, outputPath, overwrite }) =>
+    async ({ inputPath, spec, outputPath }) =>
       safeToolCall(async () => {
         const allowedRoots = await rootAuthority.roots();
         const result = await annotateImage({
           inputPath,
           spec,
-          overwrite,
           ...(outputPath === undefined ? {} : { outputPath }),
           allowedRoots
         });
@@ -403,14 +399,13 @@ export function createAgentCalloutMcpServer(options: AgentCalloutMcpServerOption
         openWorldHint: false
       }
     },
-    async ({ inputPath, rect, coordinateSpace, outputPath, overwrite }) =>
+    async ({ inputPath, rect, coordinateSpace, outputPath }) =>
       safeToolCall(async () => {
         const allowedRoots = await rootAuthority.roots();
         const result = await cropImage({
           inputPath,
           rect,
           coordinateSpace,
-          overwrite,
           ...(outputPath === undefined ? {} : { outputPath }),
           allowedRoots
         });
@@ -439,15 +434,13 @@ export function createAgentCalloutMcpServer(options: AgentCalloutMcpServerOption
       cellHeight,
       padding,
       background,
-      labels,
-      overwrite
+      labels
     }) =>
       safeToolCall(async () => {
         const allowedRoots = await rootAuthority.roots();
         const result = await createContactSheet({
           inputPaths,
           labels,
-          overwrite,
           ...(outputPath === undefined ? {} : { outputPath }),
           ...(columns === undefined ? {} : { columns }),
           ...(cellWidth === undefined ? {} : { cellWidth }),

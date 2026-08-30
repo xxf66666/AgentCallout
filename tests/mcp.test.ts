@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { access, mkdtemp, rm } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -69,6 +69,7 @@ describe("AgentCallout MCP server", () => {
       expect(tool.inputSchema.additionalProperties).toBe(false);
       expect(tool.inputSchema.properties).not.toHaveProperty("allowedRoots");
       if (["annotate_image", "create_contact_sheet", "crop_image"].includes(tool.name)) {
+        expect(tool.inputSchema.properties).not.toHaveProperty("overwrite");
         expect(tool.outputSchema).toBeUndefined();
       } else {
         expect(tool.outputSchema?.type).toBe("object");
@@ -165,6 +166,51 @@ describe("AgentCallout MCP server", () => {
     expect(payload?.ok).toBe(false);
     expect(payload?.error?.code).toBe("AGENT_CALLOUT_ERROR");
     expect(typeof payload?.error?.message).toBe("string");
+  });
+
+  test("strictly rejects overwrite authority for every image-writing tool", async () => {
+    const calls = [
+      {
+        name: "annotate_image",
+        outputPath: join(directory, "forbidden-annotate.png"),
+        arguments: {
+          inputPath,
+          spec: { version: "1.0", annotations: [] },
+          outputPath: join(directory, "forbidden-annotate.png"),
+          overwrite: true
+        }
+      },
+      {
+        name: "crop_image",
+        outputPath: join(directory, "forbidden-crop.png"),
+        arguments: {
+          inputPath,
+          outputPath: join(directory, "forbidden-crop.png"),
+          rect: { x: 0, y: 0, width: 10, height: 10 },
+          overwrite: true
+        }
+      },
+      {
+        name: "create_contact_sheet",
+        outputPath: join(directory, "forbidden-contact-sheet.png"),
+        arguments: {
+          inputPaths: [inputPath],
+          outputPath: join(directory, "forbidden-contact-sheet.png"),
+          overwrite: true
+        }
+      }
+    ];
+
+    for (const call of calls) {
+      const result = (await client.callTool({
+        name: call.name,
+        arguments: call.arguments
+      })) as CallToolResult;
+      expect(result.isError).toBe(true);
+      const text = result.content.find((item) => item.type === "text");
+      expect(text?.type === "text" ? text.text : "").toContain("overwrite");
+      await expect(access(call.outputPath)).rejects.toThrow();
+    }
   });
 
   test("returns an actionable error when a path is outside startup and client roots", async () => {
