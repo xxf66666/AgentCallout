@@ -1,0 +1,489 @@
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { delimiter, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { z } from "zod";
+
+import {
+  AGENT_CALLOUT_VERSION,
+  annotateImage,
+  createContactSheet,
+  createImagePreview,
+  cropImage,
+  getCoreDoctorReport,
+  inspectImage,
+  validateSpecForImage
+} from "../index.js";
+import { annotationSpecSchema } from "../spec/index.js";
+
+const MAX_PATH_LENGTH = 32_767;
+const MAX_ALLOWED_ROOTS = 32;
+const MAX_CONTACT_SHEET_INPUTS = 64;
+const MAX_PREVIEW_BYTES = 128 * 1024;
+const PREVIEW_SIZES = [1024, 768, 512, 384, 256, 192, 128, 96, 64] as const;
+const CLIENT_ROOT_CACHE_MS = 2_000;
+const CLIENT_ROOT_TIMEOUT_MS = 2_000;
+const STARTUP_ROOTS_ENV = "AGENT_CALLOUT_ALLOWED_ROOTS";
+
+const pathSchema = z.string().min(1).max(MAX_PATH_LENGTH);
+const specSchema = annotationSpecSchema;
+const coordinateSpaceSchema = z.enum(["pixel", "normalized"]);
+const rectSchema = z
+  .object({
+    x: z.number().finite(),
+    y: z.number().finite(),
+    width: z.number().finite().positive(),
+    height: z.number().finite().positive()
+  })
+  .strict();
+const structuredOutputSchema = z.object({}).catchall(z.unknown());
+
+const inspectInputSchema = z
+  .object({
+    inputPath: pathSchema.describe("PNG, JPEG, or WebP file to inspect.")
+  })
+  .strict();
+
+const validateInputSchema = z
+  .object({
+    inputPath: pathSchema,
+    spec: specSchema
+  })
+  .strict();
+
+const annotateInputSchema = z
+  .object({
+    inputPath: pathSchema,
+    spec: specSchema,
+    outputPath: pathSchema.optional(),
+    overwrite: z.boolean().optional().default(false)
+  })
+  .strict();
+
+const cropInputSchema = z
+  .object({
+    inputPath: pathSchema,
+    rect: rectSchema,
+    coordinateSpace: coordinateSpaceSchema.optional().default("pixel"),
+    outputPath: pathSchema.optional(),
+    overwrite: z.boolean().optional().default(false)
+  })
+  .strict();
+
+const contactSheetInputSchema = z
+  .object({
+    inputPaths: z.array(pathSchema).min(1).max(MAX_CONTACT_SHEET_INPUTS),
+    outputPath: pathSchema.optional(),
+    columns: z.number().int().positive().max(16).optional(),
+    cellWidth: z.number().int().positive().max(4096).optional(),
+    cellHeight: z.number().int().positive().max(4096).optional(),
+    padding: z.number().int().nonnegative().max(512).optional(),
+    background: z.string().min(1).max(128).optional(),
+    labels: z.boolean().optional().default(true),
+    overwrite: z.boolean().optional().default(false)
+  })
+  .strict();
+
+const doctorInputSchema = z.object({}).strict();
+
+type GeneratedImageResult = Awaited<ReturnType<typeof cropImage>>;
+
+interface PreviewPayload {
+  data: string;
+  height: number;
+  sizeBytes: number;
+  width: number;
+}
+
+export interface AgentCalloutMcpServerOptions {
+  fixedAllowedRoots?: string[];
+}
+
+interface RootAuthority {
+  roots(): Promise<string[]>;
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim() !== "") {
+    return error.message;
+  }
+  return String(error);
+}
+
+function actionableToolErrorMessage(error: unknown): string {
+  const message = errorMessage(error);
+  if (message.toLowerCase().includes("outside the allowed roots")) {
+    return `${message} Add that directory to the MCP client's file roots, pass --allow-root when starting AgentCallout MCP, or set ${STARTUP_ROOTS_ENV}.`;
+  }
+  return message;
+}
+
+function jsonCompatible(value: unknown): unknown {
+  return JSON.parse(
+    JSON.stringify(value, (_key, nestedValue: unknown) =>
+      typeof nestedValue === "bigint" ? nestedValue.toString() : nestedValue
+    )
+  );
+}
+
+function structuredObject(value: unknown): Record<string, unknown> {
+  const compatible = jsonCompatible(value);
+  if (compatible === null || typeof compatible !== "object" || Array.isArray(compatible)) {
+    return { result: compatible };
+  }
+  return compatible as Record<string, unknown>;
+}
+
+function textContent(value: unknown): { type: "text"; text: string } {
+  return { type: "text", text: JSON.stringify(jsonCompatible(value)) };
+}
+
+function structuredToolResult(value: unknown): CallToolResult {
+  const structuredContent = structuredObject(value);
+  return {
+    content: [textContent(structuredContent)],
+    structuredContent,
+    isError: false
+  };
+}
+
+function toolError(error: unknown): CallToolResult {
+  const payload = {
+    ok: false,
+    error: {
+      code: "AGENT_CALLOUT_ERROR",
+      message: actionableToolErrorMessage(error)
+    }
+  };
+  return {
+    content: [textContent(payload)],
+    isError: true
+  };
+}
+
+function environmentRoots(): string[] {
+  const value = process.env[STARTUP_ROOTS_ENV];
+  if (value === undefined || value.trim() === "") {
+    return [];
+  }
+  return value
+    .split(delimiter)
+    .map((root) => root.trim())
+    .filter((root) => root !== "");
+}
+
+function uniqueResolvedRoots(roots: readonly string[]): string[] {
+  return [...new Set(roots.map((root) => resolve(root)))].slice(0, MAX_ALLOWED_ROOTS);
+}
+
+export function fileRootsFromMcpUris(uris: readonly string[]): string[] {
+  const roots: string[] = [];
+  for (const uri of uris) {
+    try {
+      const parsed = new URL(uri);
+      if (parsed.protocol === "file:") {
+        roots.push(fileURLToPath(parsed));
+      }
+    } catch {
+      // Malformed and non-file roots do not grant local filesystem authority.
+    }
+  }
+  return uniqueResolvedRoots(roots);
+}
+
+function createRootAuthority(
+  server: McpServer,
+  options: AgentCalloutMcpServerOptions
+): RootAuthority {
+  const fixed = uniqueResolvedRoots([
+    process.cwd(),
+    tmpdir(),
+    ...environmentRoots(),
+    ...(options.fixedAllowedRoots ?? [])
+  ]);
+  let cachedClientRoots: string[] = [];
+  let refreshAfter = 0;
+
+  return {
+    async roots(): Promise<string[]> {
+      const supportsRoots = server.server.getClientCapabilities()?.roots !== undefined;
+      if (supportsRoots && Date.now() >= refreshAfter) {
+        refreshAfter = Date.now() + CLIENT_ROOT_CACHE_MS;
+        try {
+          const result = await server.server.listRoots({}, { timeout: CLIENT_ROOT_TIMEOUT_MS });
+          cachedClientRoots = fileRootsFromMcpUris(result.roots.map((root) => root.uri));
+        } catch {
+          // Retain the prior cache; core supplies an actionable error for out-of-scope paths.
+        }
+      }
+      return uniqueResolvedRoots([...fixed, ...cachedClientRoots]);
+    }
+  };
+}
+
+async function safeToolCall(operation: () => Promise<CallToolResult>): Promise<CallToolResult> {
+  try {
+    return await operation();
+  } catch (error) {
+    return toolError(error);
+  }
+}
+
+async function createBoundedPreview(
+  result: GeneratedImageResult,
+  requestedRoots: string[]
+): Promise<PreviewPayload> {
+  const temporaryRoot = await mkdtemp(join(tmpdir(), "agent-callout-mcp-preview-"));
+  try {
+    const roots = [...requestedRoots, temporaryRoot];
+    const allowedRoots = [...new Set(roots.map((root) => resolve(root)))];
+
+    for (const size of PREVIEW_SIZES) {
+      const outputPath = join(temporaryRoot, `preview-${size}.png`);
+      const preview = await createImagePreview({
+        inputPath: result.outputPath,
+        outputPath,
+        maxWidth: size,
+        maxHeight: size,
+        allowedRoots
+      });
+      const bytes = await readFile(preview.outputPath);
+      if (bytes.byteLength <= MAX_PREVIEW_BYTES) {
+        return {
+          data: bytes.toString("base64"),
+          width: preview.outputDimensions.width,
+          height: preview.outputDimensions.height,
+          sizeBytes: bytes.byteLength
+        };
+      }
+    }
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
+  throw new Error("Could not create a bounded PNG preview.");
+}
+
+async function imageToolResult(
+  result: GeneratedImageResult,
+  allowedRoots: string[]
+): Promise<CallToolResult> {
+  try {
+    const preview = await createBoundedPreview(result, allowedRoots);
+    return {
+      content: [
+        textContent(result),
+        {
+          type: "image",
+          data: preview.data,
+          mimeType: "image/png",
+          _meta: {
+            "codex/imageDetail": "original",
+            "agent-callout/previewWidth": preview.width,
+            "agent-callout/previewHeight": preview.height,
+            "agent-callout/previewBytes": preview.sizeBytes
+          }
+        }
+      ],
+      isError: false
+    };
+  } catch (error) {
+    return {
+      content: [
+        textContent(result),
+        textContent({
+          preview: {
+            available: false,
+            message: `Output was written successfully, but its MCP preview failed: ${errorMessage(error)}`
+          }
+        })
+      ],
+      isError: false
+    };
+  }
+}
+
+export const SERVER_INSTRUCTIONS = [
+  "Inspect the screenshot before annotating it. If a target is uncertain, crop the relevant area and inspect it again. Validate the AnnotationSpec, render the annotation, examine the returned image preview, and revise the spec when placement is inaccurate or obscures the target. Return the final absolute output path and Markdown reference only after visual review.",
+  "Blur is visual weakening only. Use redact for secrets that require irreversible opaque pixel replacement. Never claim an image was visually checked when the client omitted ImageContent; use the absolute path as a fallback and say what remains unverified."
+].join(" ");
+
+export function createAgentCalloutMcpServer(options: AgentCalloutMcpServerOptions = {}): McpServer {
+  const server = new McpServer(
+    { name: "agent-callout", version: AGENT_CALLOUT_VERSION },
+    { instructions: SERVER_INSTRUCTIONS }
+  );
+  const rootAuthority = createRootAuthority(server, options);
+
+  server.registerTool(
+    "inspect_image",
+    {
+      title: "Inspect image",
+      description:
+        "Read image format, dimensions, orientation, byte size, and SHA-256 before annotation.",
+      inputSchema: inspectInputSchema,
+      outputSchema: structuredOutputSchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ inputPath }) =>
+      safeToolCall(async () => {
+        const allowedRoots = await rootAuthority.roots();
+        return structuredToolResult(await inspectImage(inputPath, { allowedRoots }));
+      })
+  );
+
+  server.registerTool(
+    "validate_annotation_spec",
+    {
+      title: "Validate annotation spec",
+      description:
+        "Validate a versioned AnnotationSpec and resolve its coordinates against an image.",
+      inputSchema: validateInputSchema,
+      outputSchema: structuredOutputSchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ inputPath, spec }) =>
+      safeToolCall(async () => {
+        const allowedRoots = await rootAuthority.roots();
+        return structuredToolResult(await validateSpecForImage({ inputPath, spec, allowedRoots }));
+      })
+  );
+
+  server.registerTool(
+    "annotate_image",
+    {
+      title: "Annotate image",
+      description:
+        "Render a validated AnnotationSpec to a new PNG and return a bounded image preview.",
+      inputSchema: annotateInputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false
+      }
+    },
+    async ({ inputPath, spec, outputPath, overwrite }) =>
+      safeToolCall(async () => {
+        const allowedRoots = await rootAuthority.roots();
+        const result = await annotateImage({
+          inputPath,
+          spec,
+          overwrite,
+          ...(outputPath === undefined ? {} : { outputPath }),
+          allowedRoots
+        });
+        return imageToolResult(result, allowedRoots);
+      })
+  );
+
+  server.registerTool(
+    "crop_image",
+    {
+      title: "Crop image",
+      description: "Crop a pixel or normalized rectangle for closer visual inspection.",
+      inputSchema: cropInputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false
+      }
+    },
+    async ({ inputPath, rect, coordinateSpace, outputPath, overwrite }) =>
+      safeToolCall(async () => {
+        const allowedRoots = await rootAuthority.roots();
+        const result = await cropImage({
+          inputPath,
+          rect,
+          coordinateSpace,
+          overwrite,
+          ...(outputPath === undefined ? {} : { outputPath }),
+          allowedRoots
+        });
+        return imageToolResult(result, allowedRoots);
+      })
+  );
+
+  server.registerTool(
+    "create_contact_sheet",
+    {
+      title: "Create contact sheet",
+      description: "Combine multiple images into a PNG contact sheet and return a bounded preview.",
+      inputSchema: contactSheetInputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false
+      }
+    },
+    async ({
+      inputPaths,
+      outputPath,
+      columns,
+      cellWidth,
+      cellHeight,
+      padding,
+      background,
+      labels,
+      overwrite
+    }) =>
+      safeToolCall(async () => {
+        const allowedRoots = await rootAuthority.roots();
+        const result = await createContactSheet({
+          inputPaths,
+          labels,
+          overwrite,
+          ...(outputPath === undefined ? {} : { outputPath }),
+          ...(columns === undefined ? {} : { columns }),
+          ...(cellWidth === undefined ? {} : { cellWidth }),
+          ...(cellHeight === undefined ? {} : { cellHeight }),
+          ...(padding === undefined ? {} : { padding }),
+          ...(background === undefined ? {} : { background }),
+          allowedRoots
+        });
+        return imageToolResult(result, allowedRoots);
+      })
+  );
+
+  server.registerTool(
+    "doctor",
+    {
+      title: "Doctor",
+      description: "Report the local renderer, Sharp/libvips, font, and runtime health.",
+      inputSchema: doctorInputSchema,
+      outputSchema: structuredOutputSchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false
+      }
+    },
+    async () => safeToolCall(async () => structuredToolResult(await getCoreDoctorReport()))
+  );
+
+  return server;
+}
+
+export async function startStdioMcpServer(
+  options: AgentCalloutMcpServerOptions = {}
+): Promise<McpServer> {
+  const server = createAgentCalloutMcpServer(options);
+  await server.connect(new StdioServerTransport());
+  return server;
+}
