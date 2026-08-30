@@ -5,7 +5,7 @@
 ![AgentCallout 三组可再分发示例](examples/contact-sheet.png)
 
 > [!IMPORTANT]
-> 当前源码、CLI、stdio MCP、像素级 redact 和示例已在本机工作树验证；**从 GitHub 安装到 Claude Code/Codex 以及真实 Agent 调用仍为 PENDING / NOT VERIFIED**。下面的 Marketplace 命令来自当前客户端格式和仓库 manifest，但在主验收完成前不得视为已跑通。详见[兼容性与证据边界](docs/compatibility.md)。
+> Windows 上的源码 gate、GitHub CLI 安装、Claude Plugin、Codex 直接 MCP、真实 Agent 两轮批注和像素级 redact 均已验证。尚未完成的是 Node 20.9 下限、macOS/Linux、干净 clone 终验及最终版本卸载/重装。详见[兼容性与证据边界](docs/compatibility.md)。
 
 ## 为什么 Agent 需要它
 
@@ -49,7 +49,7 @@ Windows 是首要目标。Node 20.9 下限、macOS 和 Linux 尚未完成项目�
 
 ## 安装到 Claude Code
 
-状态：**PENDING / NOT VERIFIED**。仓库包含 Claude Marketplace、Plugin、Skill 和 `.mcp.json`，但尚未完成干净配置下的安装、真实调用、二次渲染和卸载验收。
+状态：**VERIFIED（Windows / Claude Code 2.1.251）**。GitHub Marketplace add、Plugin install/update、Skill/MCP 发现、doctor、inspect 和两次批注预览均已真实执行；最终版本卸载/重装在发布收尾记录。
 
 ```powershell
 claude plugin marketplace add https://github.com/xxf66666/AgentCallout.git
@@ -75,25 +75,41 @@ claude plugin uninstall agent-callout@agent-callout; claude plugin marketplace r
 
 ## 安装到 Codex
 
-状态：**PENDING / NOT VERIFIED**。仓库包含 Codex Marketplace、Plugin manifest、Skill 和内置 MCP 配置，但尚未完成真实 Codex 安装与 Agent 图片查看闭环。
+Codex `0.151.0` 的主安装方式是 GitHub CLI 包 + 官方 MCP 注册，共两条命令。显式 `--install-links=true` 可覆盖某些 npm 配置中的 `install-links=false`，避免 Git 包被链接到会清理的临时 clone。
 
 ```powershell
-codex plugin marketplace add xxf66666/AgentCallout
+npm install --global --install-links=true git+https://github.com/xxf66666/AgentCallout.git
 ```
 
 ```powershell
-codex plugin add agent-callout@agent-callout
+codex mcp add agent-callout -- agent-callout mcp
 ```
 
-若插件未立即出现，最多重启 Codex 一次，然后调用 `doctor`。
+开启一个新 Codex 会话，然后让 Agent 调用 `doctor`。`codex mcp get agent-callout --json` 可查看注册结果。
 
-更新 Marketplace snapshot 及已配置插件：
+更新 CLI；既有 MCP 注册无需重复添加：
+
+```powershell
+npm install --global --install-links=true git+https://github.com/xxf66666/AgentCallout.git
+```
+
+卸载能力：
+
+```powershell
+codex mcp remove agent-callout; npm uninstall --global agent-callout
+```
+
+仓库还提供可选的 **Skills-only Codex Plugin**，用于获得 `$agent-callout` 工作流提示；它不负责启动 MCP Server。先完成上面的两条主安装命令，再按需执行：
+
+```powershell
+codex plugin marketplace add xxf66666/AgentCallout; codex plugin add agent-callout@agent-callout
+```
+
+可选 Skill 的更新与卸载：
 
 ```powershell
 codex plugin marketplace upgrade agent-callout
 ```
-
-卸载插件并移除 Marketplace 来源：
 
 ```powershell
 codex plugin remove agent-callout@agent-callout; codex plugin marketplace remove agent-callout
@@ -101,7 +117,7 @@ codex plugin remove agent-callout@agent-callout; codex plugin marketplace remove
 
 ## 首次使用为什么可能较慢
 
-插件已经携带构建后的 MCP Server、锁定版本的 package/lockfile 和中文字体，但 Sharp/libvips 包含平台相关原生运行时，不能伪装成单一 JavaScript 文件。
+Claude Plugin 已携带构建后的 MCP Server、锁定版本的 package/lockfile 和中文字体，但 Sharp/libvips 包含平台相关原生运行时，不能伪装成单一 JavaScript 文件。
 
 第一次启动 MCP 时，`bootstrap.mjs` 会检查插件目录中的 `node_modules/sharp/package.json`。如果缺失，它会在**插件自己的目录**运行锁定依赖的：
 
@@ -109,14 +125,14 @@ codex plugin remove agent-callout@agent-callout; codex plugin marketplace remove
 npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 ```
 
-这一步需要 npm 网络访问，输出只写入 stderr，不上传截图，也不修改全局 Node/npm 配置。后续启动在 Sharp 已存在时直接跳过。代理、只读插件缓存、npm 不可用或首次启动超时都可能让 bootstrap 失败；排除网络/权限问题后可重试。该首次 bootstrap 的 Claude/Codex 实装结果目前仍为 **PENDING**。
+这一步需要 npm 网络访问，输出只写入 stderr，不上传截图，也不修改全局 Node/npm 配置。后续启动在 Sharp 已存在时直接跳过。代理、只读插件缓存、npm 不可用或首次启动超时都可能让 bootstrap 失败；排除网络/权限问题后可重试。Codex 主安装方式在全局 npm install 阶段完成同一原生依赖安装，不使用 Plugin bootstrap。
 
 ## 直接安装 CLI（GitHub fallback）
 
-不使用 Agent 插件时，可直接从 GitHub 安装全局 CLI。该 Git 安装路径尚待 clean-clone 验收：
+不使用 Agent 插件时，可直接从 GitHub 安装全局 CLI：
 
 ```powershell
-npm install --global git+https://github.com/xxf66666/AgentCallout.git
+npm install --global --install-links=true git+https://github.com/xxf66666/AgentCallout.git
 ```
 
 无法全局安装时，使用显式 clone/build fallback：
@@ -128,7 +144,7 @@ git clone https://github.com/xxf66666/AgentCallout.git; Set-Location .\AgentCall
 更新或卸载全局 CLI：
 
 ```powershell
-npm install --global git+https://github.com/xxf66666/AgentCallout.git
+npm install --global --install-links=true git+https://github.com/xxf66666/AgentCallout.git
 ```
 
 ```powershell
@@ -302,17 +318,17 @@ npm run examples
 
 状态含义和完整证据日志见 [`docs/compatibility.md`](docs/compatibility.md)。`VERIFIED` 只覆盖表中明确写出的范围，不外推到 GitHub/客户端安装。
 
-| 范围                                   | 状态                                              | 当前证据边界                                                                                      |
-| -------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Windows 11 + Node 24.18 当前工作树     | [PARTIALLY VERIFIED](docs/compatibility.md)       | lint、typecheck、52/52 tests、临时可复现 build 对比通过；尚非 clean clone                         |
-| CLI core/doctor/self-test              | [PARTIALLY VERIFIED](docs/compatibility.md)       | 本机真实图片 I/O、sidecar 解码和 redact 像素自检通过；GitHub 全局安装待验收                       |
-| stdio MCP 协议层                       | [PARTIALLY VERIFIED](docs/compatibility.md)       | 构建产物 initialize、六个 tools、结构化 doctor 和 stdout/stderr smoke 通过；宿主 Agent 调用待验收 |
-| 三组模拟示例                           | [VERIFIED（本地生成范围）](docs/compatibility.md) | 项目自身生成 PNG/sidecar，重复渲染确定性检查通过                                                  |
-| Claude Code Marketplace 安装与真实调用 | [NOT VERIFIED / PENDING](docs/compatibility.md)   | manifest 已实现；安装、图片查看、二次渲染、卸载待主验收                                           |
-| Codex Marketplace 安装与真实调用       | [NOT VERIFIED / PENDING](docs/compatibility.md)   | manifest/bootstrap 已实现；首次依赖准备、图片查看、二次渲染、卸载待主验收                         |
-| Node 20.9 下限、macOS、Linux           | [NOT VERIFIED](docs/compatibility.md)             | 目标支持范围，尚无项目级运行证据                                                                  |
+| 范围                                   | 状态                                              | 当前证据边界                                                                           |
+| -------------------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Windows 11 + Node 24.18 当前工作树     | [PARTIALLY VERIFIED](docs/compatibility.md)       | lint、typecheck、52/52 tests、临时可复现 build 对比通过；尚非 clean clone              |
+| CLI core/doctor/self-test              | [VERIFIED](docs/compatibility.md)                 | GitHub 全局安装、doctor/self-test、sidecar 解码和 redact 像素自检通过                  |
+| stdio MCP 与真实 Agent                 | [VERIFIED](docs/compatibility.md)                 | 六个 tools；Claude/Codex doctor、inspect、两次 annotate 和模型可见预览通过             |
+| 三组模拟示例                           | [VERIFIED（本地生成范围）](docs/compatibility.md) | 项目自身生成 PNG/sidecar，重复渲染确定性检查通过                                       |
+| Claude Code Marketplace 安装与真实调用 | [VERIFIED](docs/compatibility.md)                 | GitHub install/update、Skill/MCP 发现、两次图片预览和视觉评价通过；最终卸载/重装待收尾 |
+| Codex GitHub CLI + 直接 MCP            | [VERIFIED](docs/compatibility.md)                 | 两命令安装、真实 doctor/inspect/validate/两次 annotate 和两个模型可见预览通过          |
+| Node 20.9 下限、macOS、Linux           | [NOT VERIFIED](docs/compatibility.md)             | 目标支持范围，尚无项目级运行证据                                                       |
 
-当前本机事实：Sharp `0.35.4`、libvips `8.18.6`、Noto Sans CJK SC `2.004`；`npm run check:dist` 用临时目录重建并逐字节比较了 3 个 dist 文件。GitHub clean clone、正式客户端安装和真实 Agent 二次修正不在这些证据内。
+当前本机事实：Sharp `0.35.4`、libvips `8.18.6`、Noto Sans CJK SC `2.004`；`npm run check:dist` 用临时目录重建并逐字节比较了 3 个 dist 文件。GitHub clean clone、Node 20.9 和非 Windows 平台仍不在这些证据内。
 
 ## 安全与限制
 
@@ -330,9 +346,8 @@ npm run examples
 
 ## 已知限制
 
-- GitHub Marketplace 的 clean-profile 安装、升级、重复安装、首次 bootstrap 和卸载尚未真实验收。
-- Claude Code/Codex 的真实 Agent tool 调用、图片进入模型上下文和“查看后重渲染”尚未验证。
-- 首次插件启动通常依赖 npm 网络；当前没有离线单文件可执行程序。
+- 最终 `0.1.2` 的 clean clone 与卸载后重装仍须完成；Claude 0.1.0 → 0.1.1 update 已验证。
+- Claude Plugin 首次准备依赖、Codex GitHub 全局安装都需要 npm 网络；当前没有离线单文件可执行程序。
 - 自动排版是确定性启发式，不是全局最优。warning 表示必须视觉复核，不能静默忽略。
 - `validate_annotation_spec` 验证 schema 与坐标；极端长文字是否能在具体画布中排下，要到渲染阶段才能完全确定。
 - ImageContent 是受控预览，可能缩小；远程宿主不能假设可读取本机绝对路径。
@@ -350,7 +365,7 @@ npm run examples
 npm ci; npm run lint; npm run typecheck; npm test; npm run build; npm run check:dist; npm run smoke:mcp; node .\dist\cli.js doctor --self-test --json
 ```
 
-截至 2026-08-30，当前 Windows 工作树最近一次独立检查结果：lint 通过、typecheck 通过、Vitest `52/52` 通过、临时构建与 3 个 dist 文件逐字节一致、stdio MCP smoke 发现六个 tools 且 doctor `ok: true`、CLI self-test 的 redact 像素验证通过。这不是 clean clone 或 Claude/Codex 端到端证明。
+截至 2026-08-30，当前 Windows 工作树最近一次独立检查结果：lint 通过、typecheck 通过、Vitest `52/52` 通过、临时构建与 3 个 dist 文件逐字节一致、CLI self-test 的 redact 像素验证通过；Claude/Codex 均完成真实两轮批注和预览查看。这仍不是 clean clone 或非 Windows 证明。
 
 ## License 与字体
 

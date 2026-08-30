@@ -1,6 +1,6 @@
 {
   "name": "agent-callout",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Give AI agents a pen for existing screenshots.",
   "author": {
     "name": "AgentCallout contributors",
@@ -11,16 +11,6 @@
   "license": "MIT",
   "keywords": ["screenshot", "annotation", "mcp", "redaction"],
   "skills": "./skills/",
-  "mcpServers": {
-    "agent-callout": {
-      "type": "stdio",
-      "command": "node",
-      "args": ["${PLUGIN_ROOT}/bootstrap.mjs"],
-      "cwd": "${PLUGIN_ROOT}",
-      "startup_timeout_sec": 120,
-      "tool_timeout_sec": 120
-    }
-  },
   "interface": {
     "displayName": "AgentCallout",
     "shortDescription": "Annotate screenshots for reviews and reports",

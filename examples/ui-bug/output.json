@@ -162,7 +162,7 @@
     "libvips": "8.18.6",
     "name": "sharp-svg-pango",
     "sharp": "0.35.4",
-    "version": "0.1.1"
+    "version": "0.1.2"
   },
   "resolvedAnnotations": [
     {

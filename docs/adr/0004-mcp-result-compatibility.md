@@ -1,6 +1,6 @@
 # ADR-0004：MCP 结果兼容与 Codex 0.151 图片优先级规避
 
-- 状态：已接受；真实客户端闭环待验证
+- 状态：已接受；Codex 0.151 与 Claude Code 2.1.251 真实图片闭环已验证
 - 日期：2026-08-30
 - 关联：[决策索引](../decisions.md)、[MCP 调研](../research.md#2-mcp-协议结论)、[Codex 调研](../research.md#9-codex-专项调研)
 
@@ -36,8 +36,8 @@ MCP 2026-07-28 允许一个 Tool 结果同时包含 `structuredContent`、TextCo
 
 ## 验证状态
 
-- 已有证据：协议允许混合内容块并建议文本兼容；本机 Codex 版本为 0.151.0；stdio/SDK 测试确认图片工具返回 JSON TextContent + 可解码、受限 ImageContent，且省略 structuredContent。
-- 尚未完成：必须用真实 Codex/Claude Tool 调用证明 ImageContent 进入模型上下文、模型能检查图片并修改 spec 重渲染。完成前不得声称图片结果在所有宿主等价。
+- 已有证据：stdio/SDK 测试确认图片工具返回 JSON TextContent + 可解码、受限 ImageContent，且省略 structuredContent。Codex 0.151 与 Claude Code 2.1.251 均真实完成两次 `annotate_image`；两个模型都确认两张预览可见，并给出不同输出 hash 与第二轮视觉评价。
+- 仍需回归：客户端升级、非 Windows 宿主、超大预览退化和远程宿主路径 fallback。当前证据不外推为所有 MCP 客户端等价。
 
 ## 证据
 

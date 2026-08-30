@@ -238,14 +238,21 @@ codex mcp remove agent-callout
 
 stdio 配置写入 `~/.codex/config.toml` 的 `[mcp_servers.<name>]`，命令与 args 分开保存；CLI 方式优于让用户手写 TOML。Codex 会读取 MCP initialize 返回的 server instructions。
 
-[Build skills](https://learn.chatgpt.com/docs/build-skills)说明 Skill 必须含 `SKILL.md` 的 `name` 与 `description`；本地可从 `.agents/skills` 发现，但可复用分发应优先 Plugin。[Build plugins](https://learn.chatgpt.com/docs/build-plugins)和[插件打包文档](https://developers.openai.com/plugins/build/plugins)规定 `.codex-plugin/plugin.json`、`skills/`、`.mcp.json` 与 Git marketplace。当前 CLI 已实测支持：
+[Build skills](https://learn.chatgpt.com/docs/build-skills)说明 Skill 必须含 `SKILL.md` 的 `name` 与 `description`；本地可从 `.agents/skills` 发现。[Build plugins](https://learn.chatgpt.com/docs/build-plugins)和[插件打包文档](https://developers.openai.com/plugins/build/plugins)规定 `.codex-plugin/plugin.json`、`skills/`、`.mcp.json` 与 Git marketplace。当前 CLI 已实测支持可选 Skills-only Plugin：
 
 ```powershell
 codex plugin marketplace add xxf66666/AgentCallout
 codex plugin add agent-callout@agent-callout
 ```
 
-Git marketplace 只物化并缓存插件文件，不替插件执行 `npm install`；因此包含 Sharp 的 Git 插件必须自带可启动 bootstrap，在首次运行时以固定 lockfile 安装 runtime 依赖，或另行完成全局安装。AgentCallout 选择前者，并以 `startup_timeout_sec` 给第一次受控安装足够时间；Claude Code 安装时相同 bootstrap 会因依赖已存在而直接启动。
+最终 runtime 主路径仍是两条命令：
+
+```powershell
+npm install --global --install-links=true git+https://github.com/xxf66666/AgentCallout.git
+codex mcp add agent-callout -- agent-callout mcp
+```
+
+Git marketplace 只物化并缓存插件文件，不替插件执行 `npm install`。进一步真实验收发现，Codex 0.151 的本地 Plugin MCP 子进程没有可用的 plugin-root `cwd`、环境变量或参数展开，因此不能可靠定位缓存内的 bootstrap。AgentCallout 最终选择后者：用 GitHub 全局 npm 包安装 runtime，再以 `codex mcp add agent-callout -- agent-callout mcp` 注册；Plugin 只承载 Skill。该变化及实测理由见 [ADR-0005](adr/0005-codex-direct-mcp-distribution.md)。
 
 升级可用 `codex plugin marketplace upgrade agent-callout`，当前版本会刷新 Git snapshot 并重新安装已配置插件；卸载为 plugin remove，若不再保留来源再 marketplace remove。实际安装、首次依赖获取、Skill/MCP 发现、调用、二次重渲染和卸载仍必须逐项实测。
 
