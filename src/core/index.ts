@@ -153,12 +153,23 @@ interface LoadedImage {
 
 interface InputManifestRecord {
   path: string;
+  pathSemantics: "relative-to-sidecar" | "basename-only-resolve-by-sha256";
   format: string;
   sha256: string;
   sizeBytes: number;
   dimensions: Dimensions;
   storedDimensions: Dimensions;
   orientation: number | null;
+}
+
+interface FileIdentity {
+  device: bigint;
+  inode: bigint;
+}
+
+interface PortablePathReference {
+  path: string;
+  semantics: "relative-to-sidecar" | "basename-only-resolve-by-sha256";
 }
 
 interface FinalizeGeneratedArguments {
@@ -321,6 +332,62 @@ async function pathExists(candidate: string): Promise<boolean> {
   }
 }
 
+async function existingFileIdentity(candidate: string): Promise<FileIdentity | null> {
+  try {
+    const information = await stat(candidate, { bigint: true });
+    return { device: information.dev, inode: information.ino };
+  } catch (error) {
+    if (isMissingPathError(error)) return null;
+    throw error;
+  }
+}
+
+function sameFileIdentity(left: FileIdentity, right: FileIdentity): boolean {
+  return left.device === right.device && left.inode === right.inode;
+}
+
+async function assertTargetsDoNotAliasInputs(
+  targets: readonly string[],
+  inputs: readonly ImageInspection[]
+): Promise<void> {
+  const inputIdentities = await Promise.all(
+    inputs.map(async (input) => ({
+      path: input.path,
+      identity: await existingFileIdentity(input.path)
+    }))
+  );
+  const targetIdentities = await Promise.all(
+    targets.map(async (target) => ({
+      path: target,
+      identity: await existingFileIdentity(target)
+    }))
+  );
+
+  for (const target of targetIdentities) {
+    for (const input of inputIdentities) {
+      if (
+        target.path === input.path ||
+        (target.identity !== null &&
+          input.identity !== null &&
+          sameFileIdentity(target.identity, input.identity))
+      ) {
+        throw new Error("Output and sidecar paths must not overwrite or alias any input image.");
+      }
+    }
+  }
+
+  const [output, sidecar] = targetIdentities;
+  if (
+    output?.identity !== null &&
+    output?.identity !== undefined &&
+    sidecar?.identity !== null &&
+    sidecar?.identity !== undefined &&
+    sameFileIdentity(output.identity, sidecar.identity)
+  ) {
+    throw new Error("Output and sidecar paths must not alias the same file.");
+  }
+}
+
 function defaultOutputPath(inputPath: string, suffix: string): string {
   const extension = path.extname(inputPath);
   const stem = path.basename(inputPath, extension);
@@ -445,10 +512,18 @@ function stableJson(value: unknown): string {
   return `${JSON.stringify(sortJson(value), null, 2)}\n`;
 }
 
-function portableRelativePath(sidecarDirectory: string, target: string): string {
+function portablePathReference(sidecarDirectory: string, target: string): PortablePathReference {
   const relative = path.relative(sidecarDirectory, target);
-  if (path.isAbsolute(relative)) return path.basename(target);
-  return (relative || path.basename(target)).split(path.sep).join("/");
+  if (path.isAbsolute(relative)) {
+    return {
+      path: path.basename(target),
+      semantics: "basename-only-resolve-by-sha256"
+    };
+  }
+  return {
+    path: (relative || path.basename(target)).split(path.sep).join("/"),
+    semantics: "relative-to-sidecar"
+  };
 }
 
 function markdownPath(target: string, alt: string): string {
@@ -460,9 +535,13 @@ function relativeMarkdown(target: string, alt: string): string {
   return `![${alt}](<${target}>)`;
 }
 
-function manifestInput(inspection: ImageInspection, sidecarDirectory: string): InputManifestRecord {
+function manifestInput(
+  inspection: ImageInspection,
+  reference: PortablePathReference
+): InputManifestRecord {
   return {
-    path: portableRelativePath(sidecarDirectory, inspection.path),
+    path: reference.path,
+    pathSemantics: reference.semantics,
     format: inspection.format,
     sha256: inspection.sha256,
     sizeBytes: inspection.sizeBytes,
@@ -485,9 +564,7 @@ async function finalizeGenerated(
     arguments_.allowedRoots,
     "Sidecar"
   );
-  if (arguments_.inputs.some((input) => input.path === outputPath)) {
-    throw new Error("Output path must not overwrite or alias any input image.");
-  }
+  await assertTargetsDoNotAliasInputs([outputPath, canonicalSidecarPath], arguments_.inputs);
   if (!arguments_.overwrite) {
     if (await pathExists(outputPath)) {
       throw new Error(`Output already exists; pass overwrite: true to replace it: ${outputPath}`);
@@ -508,17 +585,27 @@ async function finalizeGenerated(
       : sha256(stableJson(arguments_.inputs.map((input) => input.sha256)).trimEnd());
   const outputSha256 = sha256(arguments_.output);
   const sidecarDirectory = path.dirname(canonicalSidecarPath);
-  const relativeOutput = portableRelativePath(sidecarDirectory, outputPath);
+  const outputReference = portablePathReference(sidecarDirectory, outputPath);
+  const inputReferences = arguments_.inputs.map((input) =>
+    portablePathReference(sidecarDirectory, input.path)
+  );
+  const allInputsAreSidecarRelative = inputReferences.every(
+    (reference) => reference.semantics === "relative-to-sidecar"
+  );
   const manifest: Record<string, unknown> = {
     manifestVersion: "1.0",
     operation: arguments_.operation,
-    pathSemantics: "relative-to-sidecar",
+    pathSemantics: allInputsAreSidecarRelative
+      ? "relative-to-sidecar"
+      : "per-input; see inputs[].pathSemantics",
     paths: {
-      inputs: arguments_.inputs.map((input) => portableRelativePath(sidecarDirectory, input.path)),
-      output: relativeOutput,
+      inputs: inputReferences.map((reference) => reference.path),
+      output: outputReference.path,
       sidecar: path.basename(canonicalSidecarPath)
     },
-    inputs: arguments_.inputs.map((input) => manifestInput(input, sidecarDirectory)),
+    inputs: arguments_.inputs.map((input, index) =>
+      manifestInput(input, inputReferences[index] as PortablePathReference)
+    ),
     operationSpec: arguments_.operationSpec,
     hashes: {
       inputSha256,
@@ -539,7 +626,7 @@ async function finalizeGenerated(
       blurIsSecureRedaction: false,
       redactUsesOpaqueOverwrite: arguments_.usesRedact
     },
-    markdown: relativeMarkdown(relativeOutput, "AgentCallout output")
+    markdown: relativeMarkdown(outputReference.path, "AgentCallout output")
   };
   if (arguments_.parsedAnnotationSpec) {
     manifest.annotationSpec = arguments_.parsedAnnotationSpec;

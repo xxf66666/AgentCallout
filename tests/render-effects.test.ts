@@ -323,6 +323,6 @@ describe("Sharp annotation renderer", () => {
           ]
         }
       })
-    ).rejects.toThrow(/cannot fit|shorten it|larger canvas/u);
+    ).rejects.toThrow(/minimum supported font size \(6px\)/u);
   });
 });

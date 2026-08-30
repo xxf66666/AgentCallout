@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, symlink } from "node:fs/promises";
+import { link, mkdir, mkdtemp, readFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -202,7 +202,69 @@ describe("core image I/O and security", () => {
         allowedRoots: [temporaryDirectory]
       })
     ).rejects.toThrow(/must not overwrite|alias any input/u);
+
+    const originalBytes = await readFile(inputPath);
+    const hardLinkOutput = path.join(temporaryDirectory, "hard-link-output.png");
+    await link(inputPath, hardLinkOutput);
+    await expect(
+      createImagePreview({
+        inputPath,
+        outputPath: hardLinkOutput,
+        overwrite: true,
+        maxWidth: 20,
+        maxHeight: 20,
+        allowedRoots: [temporaryDirectory]
+      })
+    ).rejects.toThrow(/must not overwrite|alias any input/u);
+    expect(await readFile(inputPath)).toEqual(originalBytes);
+
+    const sidecarAttackOutput = path.join(temporaryDirectory, "sidecar-attack.png");
+    await link(inputPath, path.join(temporaryDirectory, "sidecar-attack.json"));
+    await expect(
+      createImagePreview({
+        inputPath,
+        outputPath: sidecarAttackOutput,
+        overwrite: true,
+        maxWidth: 20,
+        maxHeight: 20,
+        allowedRoots: [temporaryDirectory]
+      })
+    ).rejects.toThrow(/must not overwrite|alias any input/u);
+    expect(await readFile(inputPath)).toEqual(originalBytes);
     expect((await sharp(inputPath).metadata()).format).toBe("png");
+  });
+
+  it("marks cross-volume basename fallbacks for SHA-256 resolution", async () => {
+    if (
+      path.parse(process.cwd()).root.toLowerCase() ===
+      path.parse(temporaryDirectory).root.toLowerCase()
+    ) {
+      return;
+    }
+    const sourceDirectory = await mkdtemp(path.join(process.cwd(), ".agent-callout-cross-volume-"));
+    try {
+      const inputPath = path.join(sourceDirectory, "portable-source.png");
+      await writeGradient(inputPath, 40, 24);
+      const result = await createImagePreview({
+        inputPath,
+        outputPath: path.join(temporaryDirectory, "cross-volume-preview.png"),
+        maxWidth: 20,
+        maxHeight: 20,
+        allowedRoots: [sourceDirectory, temporaryDirectory]
+      });
+      const sidecarText = await readFile(result.sidecarPath, "utf8");
+      const sidecar = JSON.parse(sidecarText) as {
+        pathSemantics: string;
+        inputs: { path: string; pathSemantics: string; sha256: string }[];
+      };
+      expect(sidecar.pathSemantics).toBe("per-input; see inputs[].pathSemantics");
+      expect(sidecar.inputs[0]?.path).toBe("portable-source.png");
+      expect(sidecar.inputs[0]?.pathSemantics).toBe("basename-only-resolve-by-sha256");
+      expect(sidecar.inputs[0]?.sha256).toMatch(/^[0-9a-f]{64}$/u);
+      expect(sidecarText).not.toContain(sourceDirectory);
+    } finally {
+      await rm(sourceDirectory, { recursive: true, force: true });
+    }
   });
 
   it("reports the real Sharp/libvips and bundled font health", async () => {

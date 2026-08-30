@@ -397,10 +397,11 @@ async function renderTextSprite(
   maximumWidth: number,
   maximumHeight: number
 ): Promise<TextSprite> {
+  const minimumFontSize = 6;
   const safeMaximumWidth = Math.max(1, Math.floor(maximumWidth));
   const safeMaximumHeight = Math.max(1, Math.floor(maximumHeight));
   const requestedFontSize = style.fontSize;
-  let fontSize = Math.min(style.fontSize, Math.max(8, safeMaximumHeight));
+  let fontSize = Math.min(style.fontSize, Math.max(minimumFontSize, safeMaximumHeight));
   for (;;) {
     const desiredWidth = Math.min(
       safeMaximumWidth,
@@ -437,12 +438,12 @@ async function renderTextSprite(
         wasShrunk: fontSize < requestedFontSize
       };
     }
-    if (fontSize <= 8) {
+    if (fontSize <= minimumFontSize) {
       throw new Error(
-        `Text cannot fit within ${safeMaximumWidth}x${safeMaximumHeight} pixels even at 8px; shorten it, crop the image, or use a larger canvas.`
+        `Text cannot fit within ${safeMaximumWidth}x${safeMaximumHeight} pixels even at the minimum supported font size (${minimumFontSize}px); shorten it, crop the image, or use a larger canvas.`
       );
     }
-    fontSize = Math.max(8, fontSize - 2);
+    fontSize = Math.max(minimumFontSize, fontSize - 2);
   }
 }
 
