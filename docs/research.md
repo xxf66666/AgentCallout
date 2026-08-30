@@ -193,7 +193,7 @@ DOM selector 和 OCR 并非竞争定位的必要条件。它们应作为“定�
 
 因此最终采用：
 
-- **语言与运行时**：TypeScript，Node.js 20.9+。
+- **语言与运行时**：TypeScript，Node.js 20.10+。Sharp 元数据写 20.9+，但实测 Node 20.9 无法解析其 JSON import attributes；20.10 可运行。
 - **图片内核**：Sharp。
 - **形状渲染**：受控 SVG overlay；箭头使用显式 line/polygon，spotlight 使用全画布遮罩和目标孔洞。
 - **文字渲染**：Sharp Pango text sprite + 仓库捆绑 Noto Sans CJK SC，不依赖系统字体。

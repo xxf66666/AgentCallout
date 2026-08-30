@@ -23,7 +23,7 @@ Pillow 本身可靠，但会引入第二套运行时和打包链；node-canvas �
 
 ## 决定
 
-1. 项目使用 **TypeScript**，最低运行时为 **Node.js 20.9**，与 Sharp 当前预构建支持基线一致。
+1. 项目使用 **TypeScript**，最低运行时为 **Node.js 20.10**。Sharp 元数据声明 20.9，但 20.9 实测无法解析其 JSON import attributes；20.10 doctor 与 20.19 全 gate 通过。
 2. 建立不依赖 CLI 参数解析或 MCP transport 的 core；CLI 与 stdio MCP 只做输入适配、结果编码和错误边界，调用同一验证、布局、渲染及 manifest 逻辑。
 3. 使用 **Sharp** 完成解码、EXIF orientation 归一化、区域提取/blur、合成、固定参数 PNG 输出和重新解码。
 4. 矩形、椭圆、箭头、编号底形、highlight 与 spotlight 使用由程序生成的受控 SVG；不接受用户提供的原始 SVG。

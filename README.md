@@ -5,7 +5,7 @@
 ![AgentCallout 三组可再分发示例](examples/contact-sheet.png)
 
 > [!IMPORTANT]
-> Windows 上的源码 gate、GitHub CLI 安装、Claude Plugin、Codex 直接 MCP、真实 Agent 两轮批注和像素级 redact 均已验证。尚未完成的是 Node 20.9 下限、macOS/Linux、干净 clone 终验及最终版本卸载/重装。详见[兼容性与证据边界](docs/compatibility.md)。
+> Windows 上的源码 gate、GitHub CLI 安装、Claude Plugin、Codex 直接 MCP、真实 Agent 两轮批注、干净 clone、Node 20 和像素级 redact 均已验证。尚未完成的是 macOS/Linux。详见[兼容性与证据边界](docs/compatibility.md)。
 
 ## 为什么 Agent 需要它
 
@@ -40,12 +40,12 @@ CLI、MCP 和两种插件使用同一个内核；Skill 只负责教 Agent 完成
 
 ## 前置条件
 
-- Node.js `>=20.9.0`；当前本机验证版本为 Node `v24.18.1`。
+- Node.js `>=20.10.0`；Node `20.10.0` doctor、Node `20.19.5` 全 gate 和当前 Node `24.18.1` 均已验证。
 - npm；插件首次准备 Sharp 原生运行时时需要访问 npm registry。
 - 使用 GitHub 安装时需要 Git 和可访问的 GitHub HTTPS 网络。
 - Claude Code 或 Codex 仅在采用对应插件安装方式时需要。
 
-Windows 是首要目标。Node 20.9 下限、macOS 和 Linux 尚未完成项目级运行验证。
+Windows 是首要目标；macOS 和 Linux 尚未完成项目级运行验证。
 
 ## 安装到 Claude Code
 
@@ -92,6 +92,8 @@ codex mcp add agent-callout -- agent-callout mcp
 ```powershell
 npm install --global --install-links=true git+https://github.com/xxf66666/AgentCallout.git
 ```
+
+Windows 更新前先结束正在使用 AgentCallout 的 Codex 会话，否则运行中的 Sharp DLL 可能被锁定；MCP 注册本身无需删除。
 
 卸载能力：
 
@@ -326,9 +328,10 @@ npm run examples
 | 三组模拟示例                           | [VERIFIED（本地生成范围）](docs/compatibility.md) | 项目自身生成 PNG/sidecar，重复渲染确定性检查通过                                       |
 | Claude Code Marketplace 安装与真实调用 | [VERIFIED](docs/compatibility.md)                 | GitHub install/update、Skill/MCP 发现、两次图片预览和视觉评价通过；最终卸载/重装待收尾 |
 | Codex GitHub CLI + 直接 MCP            | [VERIFIED](docs/compatibility.md)                 | 两命令安装、真实 doctor/inspect/validate/两次 annotate 和两个模型可见预览通过          |
-| Node 20.9 下限、macOS、Linux           | [NOT VERIFIED](docs/compatibility.md)             | 目标支持范围，尚无项目级运行证据                                                       |
+| Node 20.10 / 20.19                     | [VERIFIED](docs/compatibility.md)                 | 20.10 doctor；20.19 的 52 tests、typecheck、build、dist 复现和 self-test 通过          |
+| macOS、Linux                           | [NOT VERIFIED](docs/compatibility.md)             | 目标支持范围，尚无项目级运行证据                                                       |
 
-当前本机事实：Sharp `0.35.4`、libvips `8.18.6`、Noto Sans CJK SC `2.004`；`npm run check:dist` 用临时目录重建并逐字节比较了 3 个 dist 文件。GitHub clean clone、Node 20.9 和非 Windows 平台仍不在这些证据内。
+当前本机事实：Sharp `0.35.4`、libvips `8.18.6`、Noto Sans CJK SC `2.004`；GitHub clean clone 和 Node 20.19 全 gate 通过，`npm run check:dist` 逐字节比较了 3 个 dist 文件。非 Windows 平台仍不在这些证据内。
 
 ## 安全与限制
 
@@ -346,13 +349,13 @@ npm run examples
 
 ## 已知限制
 
-- 最终 `0.1.2` 的 clean clone 与卸载后重装仍须完成；Claude 0.1.0 → 0.1.1 update 已验证。
+- Windows 更新全局 Codex CLI 前应关闭正在使用 AgentCallout 的 Codex 会话；运行中的 Sharp DLL 会阻止 npm 原子替换。
 - Claude Plugin 首次准备依赖、Codex GitHub 全局安装都需要 npm 网络；当前没有离线单文件可执行程序。
 - 自动排版是确定性启发式，不是全局最优。warning 表示必须视觉复核，不能静默忽略。
 - `validate_annotation_spec` 验证 schema 与坐标；极端长文字是否能在具体画布中排下，要到渲染阶段才能完全确定。
 - ImageContent 是受控预览，可能缩小；远程宿主不能假设可读取本机绝对路径。
 - MVP 不含 OCR、DOM selector 定位、系统截图快捷键、GUI、录屏或视频。
-- 输入限单帧 PNG/JPEG/WebP，输出固定 PNG；Node 20.9 下限及非 Windows 平台仍待验证。
+- 输入限单帧 PNG/JPEG/WebP，输出固定 PNG；非 Windows 平台仍待验证。
 - 安全 redact 依赖 Agent 选对区域；项目不会自动发现截图中的秘密。
 
 ## 路线图

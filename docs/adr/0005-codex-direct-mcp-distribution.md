@@ -44,7 +44,7 @@ Codex Plugin 保留为 **Skills-only** 可选包装，不声明本地 MCP Server
 - 加 `--install-links=true` 后 `agent-callout --version` 为 0.1.1，doctor/self-test 通过。
 - `codex mcp add` 后，真实 Codex Agent 调用 `doctor` 成功。
 - 同一 Agent 流程完成 inspect/validate，并两次调用 `annotate_image`；两个输出 hash 不同，两个 PNG ImageContent 预览均被模型确认可见。
-- CLI/MCP remove、npm uninstall 与最终版本重装仍须在发布收尾记录。
+- `codex mcp remove`、`npm uninstall --global`、命令/MCP 缺失确认及两命令重装均通过；可选 Skills-only Plugin 0.1.2 也完成 add 与显式 `$agent-callout` 调用。
 
 ## 证据
 

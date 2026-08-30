@@ -6,7 +6,7 @@
   "description": "Runtime dependencies for the AgentCallout local MCP plugin.",
   "license": "MIT",
   "engines": {
-    "node": ">=20.9.0"
+    "node": ">=20.10.0"
   },
   "dependencies": {
     "sharp": "0.35.4"

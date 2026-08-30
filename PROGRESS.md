@@ -4,8 +4,8 @@
 
 ## 当前状态
 
-- 阶段：发布候选提交、GitHub 直装与双客户端验收
-- GitHub：`https://github.com/xxf66666/AgentCallout`（公开仓库，当前账号具有管理员权限；待首次 push）
+- 阶段：MVP 发布收尾
+- GitHub：`https://github.com/xxf66666/AgentCallout`（公开仓库，`main` 已推送）
 - 本地分支：`main`
 - 阻塞：无
 
@@ -17,31 +17,32 @@
 - [x] 将本地仓库连接到正式 GitHub 远程
 - [x] 确认本机安装 Node.js、npm、pnpm、Git、GitHub CLI、Claude Code 和 Codex CLI
 - [x] 启动 Claude Code、Codex、MCP 与竞品的并行证据调研
-- [x] 完成 `docs/research.md`、四份 ADR、兼容性、安全和路线图基线
+- [x] 完成 `docs/research.md`、五份 ADR、兼容性、安全和路线图基线
 - [x] 完成 Windows Sharp 技术实验：中文/英文换行、箭头、highlight、blur、opaque redact、PNG/JPEG/WebP 和重解码
 - [x] 记录首个 Git 里程碑 `c71eed4`
 - [x] 用官方 scaffold 建立 Codex Plugin、Skill 和 repo marketplace，并通过初始结构校验
 - [x] 完成 AnnotationSpec v1、十类批注、自动排版和 Sharp 渲染/安全核心
 - [x] 完成 CLI、六工具 stdio MCP、128 KiB 受限预览和 doctor/self-test
 - [x] 捆绑 Noto Sans CJK SC 字体、OFL、hash 和幂等 Plugin runtime bootstrap
-- [x] 完成 Claude Code/Codex Plugin、Skill 与双 Marketplace 包装
+- [x] 完成 Claude Code Plugin；完成 Codex 直接 MCP 主路径和可选 Skills-only Plugin
 - [x] 生成并人工查看 `ui-bug`、`numbered-review`、`privacy` 三组示例
 - [x] 当前工作树完整 gate：format、lint、typecheck、52 tests、build、dist 复现通过
 - [x] 构建产物 CLI doctor、自检、stdio MCP 和 plugin bootstrap smoke 通过
 - [x] 记录实现里程碑 `541bafe`、`7bccda0`、`895237c`、`1151936`、`46ce988`
+- [x] GitHub `main` 推送并完成 Claude 两命令 Plugin 安装、更新、卸载和重装
+- [x] 完成 Codex 两命令 GitHub CLI + MCP 安装、更新、卸载和重装
+- [x] Claude/Codex 均完成 doctor、inspect 和两次 annotate；两个模型均确认两张预览可见
+- [x] Codex 可选 Skills-only Plugin 0.1.2 安装并由 `$agent-callout` 调用 MCP doctor
+- [x] GitHub clean clone 完成 `npm ci`、完整 gate、示例重生 clean diff、doctor 与 MCP smoke
+- [x] Node 20.10 doctor 与 Node 20.19 完整 gate 通过；生产依赖 audit 为 0 漏洞
 
 ## 进行中
 
-- [ ] 提交并推送发布候选到 GitHub `main`
-- [ ] 按 README 从 GitHub 安装 Claude Code 与 Codex Plugin
-- [ ] 完成真实 Agent 调用、查看结果和二次渲染
+- [ ] 提交最终验证文档、创建版本标签并推送
 
 ## 待完成
 
-- [ ] Claude Code 和 Codex 实际调用及一次二次修正
-- [ ] 干净克隆验收
-- [ ] GitHub 直装、升级、重复安装与卸载验证
-- [ ] 最终验证文档、版本标签和 GitHub 推送
+- [ ] 非 Windows 平台回归（不阻塞 Windows-first MVP）
 
 ## 验证日志
 
@@ -55,3 +56,7 @@
 | 2026-08-30 | CLI/MCP smoke                        | doctor/self-test、opaque redact 像素、stdio initialize、六工具发现和结构化 doctor 通过                |
 | 2026-08-30 | Plugin bootstrap                     | 首次固定依赖安装成功，第二次幂等跳过；Plugin MCP doctor 通过                                          |
 | 2026-08-30 | 三组示例                             | 重复渲染 hash 一致、无 warning、sidecar 无绝对开发机路径；privacy redact 为单一不透明 RGBA            |
+| 2026-08-30 | Claude Code 2.1.251                  | GitHub install/update/uninstall/reinstall；doctor + 两次 annotate；预览可见，输出 hash 已复核         |
+| 2026-08-30 | Codex CLI 0.151.0                    | GitHub CLI + mcp add/remove/reinstall；doctor/inspect/validate + 两次 annotate；预览可见              |
+| 2026-08-30 | Clean clone                          | `npm ci`、verify、examples clean diff、doctor、MCP smoke；commit `40208ad`                            |
+| 2026-08-30 | Node 20 / audit                      | 20.10 doctor；20.19 52 tests/typecheck/build/dist/self-test；官方 registry production audit 0 漏洞    |

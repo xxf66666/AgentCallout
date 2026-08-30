@@ -46,7 +46,7 @@ Codex 的两命令 runtime 安装和可选 Skills-only Plugin 见 ADR-0005。
 
 ## 验证状态
 
-Claude Code 2.1.251 已从 GitHub 完成 marketplace add、plugin install、0.1.0 → 0.1.1 update、Skill/MCP 发现、doctor 和两次图片批注调用；两个预览均进入模型。独立 bootstrap 首次安装与幂等跳过也已验证。Claude 卸载/重装、干净 clone 和非 Windows 仍需单独记录。
+Claude Code 2.1.251 已从 GitHub 完成 marketplace add、plugin install、0.1.0 → 0.1.1 → 0.1.2 update、Skill/MCP 发现、doctor、两次图片批注调用、完整 uninstall/marketplace remove 和 0.1.2 重装；两个预览均进入模型。独立 bootstrap 首次安装与幂等跳过也已验证。非 Windows 仍需单独记录。
 
 ## 证据
 

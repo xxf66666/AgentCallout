@@ -25,7 +25,7 @@ MVP 只解决一个闭环：Agent 对用户已有的截图执行 `inspect → �
 
 ### 核心与数据模型
 
-- TypeScript + Node.js 20.9+；Sharp 负责图片解码、合成、blur 和 PNG 输出。
+- TypeScript + Node.js 20.10+；Sharp 负责图片解码、合成、blur 和 PNG 输出。
 - 受控 SVG 只绘制几何图形；文字使用捆绑 Noto Sans CJK SC，经 Sharp/Pango 生成独立 sprite。
 - 版本化 AnnotationSpec，包含稳定 annotation ID、左上角原点、像素与 `0..1` 归一化坐标、样式、输入/spec hash 和边界校验。
 - 确定性的上/右/下/左 callout 候选评分，处理画布越界、目标遮挡和已放置标签碰撞；无法理想排版时返回 warning，不能静默丢弃。
