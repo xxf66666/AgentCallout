@@ -1,6 +1,6 @@
 {
   "name": "agent-callout",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Give AI agents a pen for existing screenshots.",
   "author": {
     "name": "AgentCallout contributors",
@@ -11,5 +11,5 @@
   "license": "MIT",
   "keywords": ["screenshot", "annotation", "mcp", "redaction"],
   "skills": "./skills/",
-  "mcpServers": "./.mcp.json"
+  "mcpServers": "./.claude-mcp.json"
 }
