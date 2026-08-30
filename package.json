@@ -1,0 +1,74 @@
+{
+  "name": "agent-callout",
+  "version": "0.1.0",
+  "description": "Give AI agents a pen for screenshots.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xxf66666/AgentCallout.git"
+  },
+  "homepage": "https://github.com/xxf66666/AgentCallout#readme",
+  "bugs": {
+    "url": "https://github.com/xxf66666/AgentCallout/issues"
+  },
+  "keywords": [
+    "mcp",
+    "screenshot",
+    "annotation",
+    "claude-code",
+    "codex",
+    "redaction"
+  ],
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "bin": {
+    "agent-callout": "dist/cli.js"
+  },
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist/",
+    "assets/fonts/",
+    "LICENSE",
+    "NOTICE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check:dist": "node scripts/check-dist.mjs",
+    "doctor": "node dist/cli.js doctor",
+    "examples": "tsx scripts/generate-examples.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "mcp": "node dist/mcp.js",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build && npm run check:dist"
+  },
+  "dependencies": {
+    "sharp": "0.35.4"
+  },
+  "devDependencies": {
+    "@cfworker/json-schema": "4.1.1",
+    "@eslint/js": "9.39.5",
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "@types/node": "20.19.43",
+    "@vitest/coverage-v8": "4.1.11",
+    "commander": "14.0.2",
+    "esbuild": "0.28.2",
+    "eslint": "9.39.5",
+    "globals": "17.11.0",
+    "prettier": "3.9.6",
+    "tsx": "4.23.12",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.68.0",
+    "vitest": "4.1.11",
+    "zod": "4.5.4"
+  }
+}

@@ -1,0 +1,9 @@
+coverage/
+dist/
+node_modules/
+plugins/agent-callout/dist/
+assets/fonts/*.otf
+examples/**/*.png
+examples/**/*.jpg
+examples/**/*.webp
+
