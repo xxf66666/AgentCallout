@@ -1,0 +1,119 @@
+{
+  "annotationCount": 0,
+  "hashes": {
+    "inputSha256": "f3e74b3eed88cc0d216d4790fdf5e690bb230cac6724e197088ec530247738d8",
+    "outputSha256": "aff20ad21f9aa4486049e264b464ac1f138026f429118879df3a7897d08805b5",
+    "specSha256": "f3a45165247b799e48ccfe6b821d8c6f88070d3c1678eef6023329b306f5badf"
+  },
+  "inputs": [
+    {
+      "dimensions": {
+        "height": 640,
+        "width": 1000
+      },
+      "format": "png",
+      "orientation": null,
+      "path": "ui-bug/output.png",
+      "pathSemantics": "relative-to-sidecar",
+      "sha256": "5f303dc0ea825e65104564727d3dd838494d34d26990af809d1e121ca8250da4",
+      "sizeBytes": 39253,
+      "storedDimensions": {
+        "height": 640,
+        "width": 1000
+      }
+    },
+    {
+      "dimensions": {
+        "height": 700,
+        "width": 1100
+      },
+      "format": "png",
+      "orientation": null,
+      "path": "numbered-review/output.png",
+      "pathSemantics": "relative-to-sidecar",
+      "sha256": "f0a9c150b8cf950a0ed43d752e567cf394533f45060b93028fc4507bfec4aad5",
+      "sizeBytes": 48777,
+      "storedDimensions": {
+        "height": 700,
+        "width": 1100
+      }
+    },
+    {
+      "dimensions": {
+        "height": 600,
+        "width": 1000
+      },
+      "format": "png",
+      "orientation": null,
+      "path": "privacy/output.png",
+      "pathSemantics": "relative-to-sidecar",
+      "sha256": "10010378ad6c845017e3bac8d701f5c4cfb1973f0369fee42769f5ada1e76733",
+      "sizeBytes": 42769,
+      "storedDimensions": {
+        "height": 600,
+        "width": 1000
+      }
+    }
+  ],
+  "manifestVersion": "1.0",
+  "markdown": "![AgentCallout output](<contact-sheet.png>)",
+  "operation": "contact-sheet",
+  "operationSpec": {
+    "background": "#f3f4f6",
+    "cellHeight": 300,
+    "cellWidth": 420,
+    "columns": 3,
+    "labels": false,
+    "padding": 10
+  },
+  "originalDimensions": [
+    {
+      "height": 640,
+      "width": 1000
+    },
+    {
+      "height": 700,
+      "width": 1100
+    },
+    {
+      "height": 600,
+      "width": 1000
+    }
+  ],
+  "outputDimensions": {
+    "height": 320,
+    "width": 1300
+  },
+  "pathSemantics": "relative-to-sidecar",
+  "paths": {
+    "inputs": [
+      "ui-bug/output.png",
+      "numbered-review/output.png",
+      "privacy/output.png"
+    ],
+    "output": "contact-sheet.png",
+    "sidecar": "contact-sheet.json"
+  },
+  "renderer": {
+    "font": {
+      "family": "Noto Sans CJK SC",
+      "file": "NotoSansCJKsc-Regular.otf",
+      "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+      "version": "Version 2.004;hotconv 1.0.118;makeotfexe 2.5.65603"
+    },
+    "libvips": "8.18.6",
+    "name": "sharp-svg-pango",
+    "sharp": "0.35.4",
+    "version": "0.1.0"
+  },
+  "security": {
+    "blurIsSecureRedaction": false,
+    "exifOrientationApplied": true,
+    "metadataStripped": true,
+    "outputReDecoded": true,
+    "redactUsesOpaqueOverwrite": false
+  },
+  "usesBlur": false,
+  "usesRedact": false,
+  "warnings": []
+}

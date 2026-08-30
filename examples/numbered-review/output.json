@@ -1,0 +1,276 @@
+{
+  "annotationCount": 3,
+  "annotationSpec": {
+    "annotations": [
+      {
+        "id": "review-1",
+        "number": 1,
+        "placement": "bottom",
+        "style": {
+          "backgroundColor": "#B91C1C",
+          "fontSize": 22
+        },
+        "target": {
+          "x": 455,
+          "y": 246
+        },
+        "text": "一次通过率低于目标",
+        "type": "numbered-callout"
+      },
+      {
+        "id": "review-2",
+        "number": 2,
+        "placement": "left",
+        "style": {
+          "backgroundColor": "#C2410C",
+          "fontSize": 22
+        },
+        "target": {
+          "x": 825,
+          "y": 190
+        },
+        "text": "告警缺少责任人",
+        "type": "numbered-callout"
+      },
+      {
+        "id": "review-3",
+        "number": 3,
+        "placement": "top",
+        "style": {
+          "backgroundColor": "#1D4ED8",
+          "fontSize": 22
+        },
+        "target": {
+          "x": 915,
+          "y": 445
+        },
+        "text": "趋势峰值需要说明",
+        "type": "numbered-callout"
+      }
+    ],
+    "coordinateSpace": "pixel",
+    "version": "1.0"
+  },
+  "hashes": {
+    "inputSha256": "5c4210154b98ac51af5a095fd59df369c0616e3d1a5b66af9c1878b351124493",
+    "outputSha256": "f0a9c150b8cf950a0ed43d752e567cf394533f45060b93028fc4507bfec4aad5",
+    "specSha256": "dc9ea33b968cc8198bd9e603ce74e1d933639f0808a44743a6e857ae65b64fb0"
+  },
+  "inputs": [
+    {
+      "dimensions": {
+        "height": 700,
+        "width": 1100
+      },
+      "format": "png",
+      "orientation": null,
+      "path": "input.png",
+      "pathSemantics": "relative-to-sidecar",
+      "sha256": "5c4210154b98ac51af5a095fd59df369c0616e3d1a5b66af9c1878b351124493",
+      "sizeBytes": 35436,
+      "storedDimensions": {
+        "height": 700,
+        "width": 1100
+      }
+    }
+  ],
+  "manifestVersion": "1.0",
+  "markdown": "![AgentCallout output](<output.png>)",
+  "operation": "annotate",
+  "operationSpec": {
+    "annotations": [
+      {
+        "id": "review-1",
+        "number": 1,
+        "placement": "bottom",
+        "style": {
+          "backgroundColor": "#B91C1C",
+          "fontSize": 22
+        },
+        "target": {
+          "x": 455,
+          "y": 246
+        },
+        "text": "一次通过率低于目标",
+        "type": "numbered-callout"
+      },
+      {
+        "id": "review-2",
+        "number": 2,
+        "placement": "left",
+        "style": {
+          "backgroundColor": "#C2410C",
+          "fontSize": 22
+        },
+        "target": {
+          "x": 825,
+          "y": 190
+        },
+        "text": "告警缺少责任人",
+        "type": "numbered-callout"
+      },
+      {
+        "id": "review-3",
+        "number": 3,
+        "placement": "top",
+        "style": {
+          "backgroundColor": "#1D4ED8",
+          "fontSize": 22
+        },
+        "target": {
+          "x": 915,
+          "y": 445
+        },
+        "text": "趋势峰值需要说明",
+        "type": "numbered-callout"
+      }
+    ],
+    "coordinateSpace": "pixel",
+    "version": "1.0"
+  },
+  "originalDimensions": {
+    "height": 700,
+    "width": 1100
+  },
+  "outputDimensions": {
+    "height": 700,
+    "width": 1100
+  },
+  "pathSemantics": "relative-to-sidecar",
+  "paths": {
+    "inputs": [
+      "input.png"
+    ],
+    "output": "output.png",
+    "sidecar": "output.json"
+  },
+  "renderer": {
+    "font": {
+      "family": "Noto Sans CJK SC",
+      "file": "NotoSansCJKsc-Regular.otf",
+      "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+      "version": "Version 2.004;hotconv 1.0.118;makeotfexe 2.5.65603"
+    },
+    "libvips": "8.18.6",
+    "name": "sharp-svg-pango",
+    "sharp": "0.35.4",
+    "version": "0.1.0"
+  },
+  "resolvedAnnotations": [
+    {
+      "anchor": {
+        "x": 455,
+        "y": 262
+      },
+      "box": {
+        "height": 42,
+        "width": 218,
+        "x": 346,
+        "y": 262
+      },
+      "fontSize": 22,
+      "id": "review-1",
+      "marker": {
+        "center": {
+          "x": 455,
+          "y": 246
+        },
+        "radius": 16
+      },
+      "number": 1,
+      "placement": "bottom",
+      "target": {
+        "height": 4,
+        "width": 4,
+        "x": 453,
+        "y": 244
+      },
+      "targetAnchor": {
+        "x": 455,
+        "y": 248
+      },
+      "text": "一次通过率低于目标",
+      "type": "numbered-callout"
+    },
+    {
+      "anchor": {
+        "x": 809,
+        "y": 190
+      },
+      "box": {
+        "height": 42,
+        "width": 173,
+        "x": 636,
+        "y": 169
+      },
+      "fontSize": 22,
+      "id": "review-2",
+      "marker": {
+        "center": {
+          "x": 825,
+          "y": 190
+        },
+        "radius": 16
+      },
+      "number": 2,
+      "placement": "left",
+      "target": {
+        "height": 4,
+        "width": 4,
+        "x": 823,
+        "y": 188
+      },
+      "targetAnchor": {
+        "x": 823,
+        "y": 190
+      },
+      "text": "告警缺少责任人",
+      "type": "numbered-callout"
+    },
+    {
+      "anchor": {
+        "x": 915,
+        "y": 429
+      },
+      "box": {
+        "height": 42,
+        "width": 195,
+        "x": 818,
+        "y": 387
+      },
+      "fontSize": 22,
+      "id": "review-3",
+      "marker": {
+        "center": {
+          "x": 915,
+          "y": 445
+        },
+        "radius": 16
+      },
+      "number": 3,
+      "placement": "top",
+      "target": {
+        "height": 4,
+        "width": 4,
+        "x": 913,
+        "y": 443
+      },
+      "targetAnchor": {
+        "x": 916,
+        "y": 443
+      },
+      "text": "趋势峰值需要说明",
+      "type": "numbered-callout"
+    }
+  ],
+  "security": {
+    "blurIsSecureRedaction": false,
+    "exifOrientationApplied": true,
+    "metadataStripped": true,
+    "outputReDecoded": true,
+    "redactUsesOpaqueOverwrite": false
+  },
+  "usesBlur": false,
+  "usesRedact": false,
+  "warnings": []
+}

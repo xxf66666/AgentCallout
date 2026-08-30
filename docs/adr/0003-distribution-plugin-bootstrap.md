@@ -1,6 +1,6 @@
 # ADR-0003：Git marketplace、插件与 Sharp runtime bootstrap
 
-- 状态：已接受；真实安装验收待完成
+- 状态：已接受；manifest/bootstrap 已验证，GitHub 客户端安装待完成
 - 日期：2026-08-30
 - 关联：[决策索引](../decisions.md)、[Claude 调研](../research.md#8-claude-code-专项调研)、[Codex 调研](../research.md#9-codex-专项调研)
 
@@ -10,13 +10,13 @@ MVP 必须从 GitHub 在 Claude Code 与 Codex 中直接安装，不能依赖 np
 
 ## 考虑过的方案
 
-| 方案 | 优点 | 取舍/结论 |
-| --- | --- | --- |
-| npm/npx 唯一入口 | 命令短、生态成熟 | 依赖 registry 发布权限，不满足 GitHub 必须独立可用；可以后附加，不能作为 MVP 唯一路径 |
-| clone + build + `mcp add` | 机制透明 | 超过两条主要命令，用户需管理绝对路径和更新，不作为主体验 |
-| 为每个平台发布独立 executable | 用户无需 Node 依赖安装 | Sharp 原生资源、签名和多平台 release 流程扩大 MVP；保留为路线图 |
-| 分别维护两套插件/renderer | 可针对宿主定制 | 漂移和测试成本翻倍，违反共享内核目标 |
-| **同仓库双 marketplace + 共享插件 payload** | 两条命令、可带 Skill/MCP、无 npm 发布权限 | 需要提交 dist，并为 Codex 处理运行时依赖；采用 |
+| 方案                                        | 优点                                      | 取舍/结论                                                                             |
+| ------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------- |
+| npm/npx 唯一入口                            | 命令短、生态成熟                          | 依赖 registry 发布权限，不满足 GitHub 必须独立可用；可以后附加，不能作为 MVP 唯一路径 |
+| clone + build + `mcp add`                   | 机制透明                                  | 超过两条主要命令，用户需管理绝对路径和更新，不作为主体验                              |
+| 为每个平台发布独立 executable               | 用户无需 Node 依赖安装                    | Sharp 原生资源、签名和多平台 release 流程扩大 MVP；保留为路线图                       |
+| 分别维护两套插件/renderer                   | 可针对宿主定制                            | 漂移和测试成本翻倍，违反共享内核目标                                                  |
+| **同仓库双 marketplace + 共享插件 payload** | 两条命令、可带 Skill/MCP、无 npm 发布权限 | 需要提交 dist，并为 Codex 处理运行时依赖；采用                                        |
 
 ## 决定
 
@@ -60,4 +60,3 @@ codex plugin add agent-callout@agent-callout
 - [Codex Build plugins](https://learn.chatgpt.com/docs/build-plugins)与[插件打包文档](https://developers.openai.com/plugins/build/plugins)
 - [Sharp 平台依赖与安装说明](https://sharp.pixelplumbing.com/install/)
 - [调研中的分发风险与客户端差异](../research.md#54-分发相邻影响)
-

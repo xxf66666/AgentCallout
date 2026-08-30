@@ -1,0 +1,262 @@
+{
+  "annotationCount": 3,
+  "annotationSpec": {
+    "annotations": [
+      {
+        "id": "invalid-field",
+        "rect": {
+          "height": 84,
+          "width": 650,
+          "x": 110,
+          "y": 258
+        },
+        "style": {
+          "cornerRadius": 12,
+          "strokeColor": "#E53935",
+          "strokeWidth": 6
+        },
+        "type": "rectangle"
+      },
+      {
+        "id": "save-arrow",
+        "start": {
+          "x": 605,
+          "y": 472
+        },
+        "style": {
+          "arrowHeadSize": 22,
+          "strokeColor": "#E53935",
+          "strokeWidth": 7
+        },
+        "target": {
+          "x": 842,
+          "y": 527
+        },
+        "type": "arrow"
+      },
+      {
+        "id": "save-note",
+        "placement": "left",
+        "style": {
+          "backgroundColor": "#B91C1C",
+          "fontSize": 25,
+          "padding": 14
+        },
+        "target": {
+          "height": 58,
+          "width": 135,
+          "x": 775,
+          "y": 498
+        },
+        "text": "点击后没有响应",
+        "type": "callout"
+      }
+    ],
+    "coordinateSpace": "pixel",
+    "version": "1.0"
+  },
+  "hashes": {
+    "inputSha256": "e90be19c00948046cc113562214832d6cfc4243b9bb2c4cf7c17b67dca7b544d",
+    "outputSha256": "5f303dc0ea825e65104564727d3dd838494d34d26990af809d1e121ca8250da4",
+    "specSha256": "5fd7a4c2c97457ff907d49d645bfd08426027e06ec756daf8e1be634549ba533"
+  },
+  "inputs": [
+    {
+      "dimensions": {
+        "height": 640,
+        "width": 1000
+      },
+      "format": "png",
+      "orientation": null,
+      "path": "input.png",
+      "pathSemantics": "relative-to-sidecar",
+      "sha256": "e90be19c00948046cc113562214832d6cfc4243b9bb2c4cf7c17b67dca7b544d",
+      "sizeBytes": 34318,
+      "storedDimensions": {
+        "height": 640,
+        "width": 1000
+      }
+    }
+  ],
+  "manifestVersion": "1.0",
+  "markdown": "![AgentCallout output](<output.png>)",
+  "operation": "annotate",
+  "operationSpec": {
+    "annotations": [
+      {
+        "id": "invalid-field",
+        "rect": {
+          "height": 84,
+          "width": 650,
+          "x": 110,
+          "y": 258
+        },
+        "style": {
+          "cornerRadius": 12,
+          "strokeColor": "#E53935",
+          "strokeWidth": 6
+        },
+        "type": "rectangle"
+      },
+      {
+        "id": "save-arrow",
+        "start": {
+          "x": 605,
+          "y": 472
+        },
+        "style": {
+          "arrowHeadSize": 22,
+          "strokeColor": "#E53935",
+          "strokeWidth": 7
+        },
+        "target": {
+          "x": 842,
+          "y": 527
+        },
+        "type": "arrow"
+      },
+      {
+        "id": "save-note",
+        "placement": "left",
+        "style": {
+          "backgroundColor": "#B91C1C",
+          "fontSize": 25,
+          "padding": 14
+        },
+        "target": {
+          "height": 58,
+          "width": 135,
+          "x": 775,
+          "y": 498
+        },
+        "text": "点击后没有响应",
+        "type": "callout"
+      }
+    ],
+    "coordinateSpace": "pixel",
+    "version": "1.0"
+  },
+  "originalDimensions": {
+    "height": 640,
+    "width": 1000
+  },
+  "outputDimensions": {
+    "height": 640,
+    "width": 1000
+  },
+  "pathSemantics": "relative-to-sidecar",
+  "paths": {
+    "inputs": [
+      "input.png"
+    ],
+    "output": "output.png",
+    "sidecar": "output.json"
+  },
+  "renderer": {
+    "font": {
+      "family": "Noto Sans CJK SC",
+      "file": "NotoSansCJKsc-Regular.otf",
+      "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+      "version": "Version 2.004;hotconv 1.0.118;makeotfexe 2.5.65603"
+    },
+    "libvips": "8.18.6",
+    "name": "sharp-svg-pango",
+    "sharp": "0.35.4",
+    "version": "0.1.0"
+  },
+  "resolvedAnnotations": [
+    {
+      "id": "invalid-field",
+      "rect": {
+        "height": 84,
+        "width": 650,
+        "x": 110,
+        "y": 258
+      },
+      "style": {
+        "arrowHeadSize": 12,
+        "backgroundColor": "#d92d20",
+        "blurSigma": 10,
+        "cornerRadius": 12,
+        "fillColor": "#00000000",
+        "fontSize": 24,
+        "lineHeight": 1.25,
+        "maxWidth": 360,
+        "opacity": 1,
+        "padding": 10,
+        "strokeColor": "#e53935",
+        "strokeWidth": 6,
+        "textColor": "#ffffff"
+      },
+      "type": "rectangle"
+    },
+    {
+      "end": {
+        "x": 842,
+        "y": 527
+      },
+      "id": "save-arrow",
+      "start": {
+        "x": 605,
+        "y": 472
+      },
+      "style": {
+        "arrowHeadSize": 22,
+        "backgroundColor": "#d92d20",
+        "blurSigma": 10,
+        "cornerRadius": 6,
+        "fillColor": "#00000000",
+        "fontSize": 24,
+        "lineHeight": 1.25,
+        "maxWidth": 360,
+        "opacity": 1,
+        "padding": 10,
+        "strokeColor": "#e53935",
+        "strokeWidth": 7,
+        "textColor": "#ffffff"
+      },
+      "target": {
+        "x": 842,
+        "y": 527
+      },
+      "type": "arrow"
+    },
+    {
+      "anchor": {
+        "x": 761,
+        "y": 527
+      },
+      "box": {
+        "height": 53,
+        "width": 201,
+        "x": 560,
+        "y": 501
+      },
+      "fontSize": 25,
+      "id": "save-note",
+      "placement": "left",
+      "target": {
+        "height": 58,
+        "width": 135,
+        "x": 775,
+        "y": 498
+      },
+      "targetAnchor": {
+        "x": 775,
+        "y": 528
+      },
+      "text": "点击后没有响应",
+      "type": "callout"
+    }
+  ],
+  "security": {
+    "blurIsSecureRedaction": false,
+    "exifOrientationApplied": true,
+    "metadataStripped": true,
+    "outputReDecoded": true,
+    "redactUsesOpaqueOverwrite": false
+  },
+  "usesBlur": false,
+  "usesRedact": false,
+  "warnings": []
+}

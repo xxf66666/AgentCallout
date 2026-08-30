@@ -14,24 +14,24 @@
 
 权重来自 MVP 的不可变目标和交付约束，用于避免按个人偏好选型；具体分数见各 ADR。
 
-| 准则 | 权重 | 含义 |
-| --- | ---: | --- |
-| Agent 实际可用性 | 25 | 能形成 `inspect → annotate → 查看 → 修正` 闭环 |
-| Claude Code / Codex 安装体验 | 20 | GitHub 直装、主要命令不超过两条、无需手写大段配置 |
-| Windows 可靠性 | 15 | Windows 是首要验收平台，原生依赖须可预测 |
-| 稳定性与安全性 | 15 | 确定性输出、真实 redact、受控路径与结果降级 |
-| 实现速度 | 10 | 能在 MVP 内完成真实功能而非脚手架 |
-| 维护成本 | 10 | 少运行时、少重复实现、版本可固定 |
-| 跨平台扩展 | 5 | 不把内核绑定到 Windows 或某一个 Agent |
+| 准则                         | 权重 | 含义                                              |
+| ---------------------------- | ---: | ------------------------------------------------- |
+| Agent 实际可用性             |   25 | 能形成 `inspect → annotate → 查看 → 修正` 闭环    |
+| Claude Code / Codex 安装体验 |   20 | GitHub 直装、主要命令不超过两条、无需手写大段配置 |
+| Windows 可靠性               |   15 | Windows 是首要验收平台，原生依赖须可预测          |
+| 稳定性与安全性               |   15 | 确定性输出、真实 redact、受控路径与结果降级       |
+| 实现速度                     |   10 | 能在 MVP 内完成真实功能而非脚手架                 |
+| 维护成本                     |   10 | 少运行时、少重复实现、版本可固定                  |
+| 跨平台扩展                   |    5 | 不把内核绑定到 Windows 或某一个 Agent             |
 
 ## 已接受决策
 
-| ID | 决策 | 主要取舍 | 验证状态 | 记录 |
-| --- | --- | --- | --- | --- |
-| D-001 | 使用 **TypeScript + Node.js 20.9+**；以 **Sharp** 解码、合成、blur 和输出；受控 SVG 绘制几何，Sharp/Pango text sprite 绘制文字；捆绑 **Noto Sans CJK SC Regular**；CLI 与 MCP 共用同一 core | 增加约 15.7 MB 字体和 Sharp 平台依赖，换取单一技术栈、确定中文字体和 Windows 预构建支持 | Windows 最小实验已验证 Sharp 路径；捆绑字体、干净安装和跨平台仍待验证 | [ADR-0001](adr/0001-core-runtime-and-renderer.md) |
-| D-002 | 采用版本化、可重放的 **AnnotationSpec**，显式稳定 ID，支持左上原点的像素/0..1 标准化坐标；callout 用确定性候选评分排版，失败不隐藏而返回 warning | 启发式不保证全局最优，但比手工位置更适合 Agent 重试，也比全局求解器更容易解释和测试 | Schema、布局 golden、长中文/英文及多 callout 测试待实现 | [ADR-0002](adr/0002-annotation-spec-and-layout.md) |
-| D-003 | Claude Code 和 Codex 都以仓库内 **Git marketplace/plugin** 为主入口；提交已构建的自有 JavaScript；Codex 通过幂等 bootstrap 在首次启动时安装并验证锁定的 Sharp runtime | 不依赖 npm 发布权限且可携带 Skill/MCP；代价是仓库含构建产物、首次启动可能联网并须维护平台依赖缓存 | 官方格式和本机 CLI 已调研；插件实际安装、首次启动、升级和卸载仍待验证 | [ADR-0003](adr/0003-distribution-plugin-bootstrap.md) |
-| D-004 | MCP 结果以同一 manifest 为事实源；纯结构化工具返回 `structuredContent + TextContent`。图片工具对兼容客户端返回 `structuredContent + TextContent + ImageContent`，但对 **Codex 0.151** 省略 `structuredContent`，以规避其结构化结果优先导致图片不进入模型上下文的问题 | 保住 Agent 看图闭环；代价是图片工具不能依赖协议层 output schema，且须维护版本化客户端兼容测试 | MCP 协议形态和 Codex 0.151 转换路径已调研；真实 Codex 图片调用与二次渲染仍待验证 | [ADR-0004](adr/0004-mcp-result-compatibility.md) |
+| ID    | 决策                                                                                                                                                                                                           | 主要取舍                                                                                          | 验证状态                                                                        | 记录                                                  |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| D-001 | 使用 **TypeScript + Node.js 20.9+**；以 **Sharp** 解码、合成、blur 和输出；受控 SVG 绘制几何，Sharp/Pango text sprite 绘制文字；捆绑 **Noto Sans CJK SC Regular**；CLI 与 MCP 共用同一 core                    | 增加约 15.7 MB 字体和 Sharp 平台依赖，换取单一技术栈、确定中文字体和 Windows 预构建支持           | Windows 正式 core、捆绑字体、doctor 和示例已验证；干净安装和跨平台仍待验证      | [ADR-0001](adr/0001-core-runtime-and-renderer.md)     |
+| D-002 | 采用版本化、可重放的 **AnnotationSpec**，显式稳定 ID，支持左上原点的像素/0..1 标准化坐标；callout 用确定性候选评分排版，失败不隐藏而返回 warning                                                               | 启发式不保证全局最优，但比手工位置更适合 Agent 重试，也比全局求解器更容易解释和测试               | Schema、布局、长中文/英文及多 callout 自动化已通过；密集全局最优仍属路线图      | [ADR-0002](adr/0002-annotation-spec-and-layout.md)    |
+| D-003 | Claude Code 和 Codex 都以仓库内 **Git marketplace/plugin** 为主入口；提交已构建的自有 JavaScript；Codex 通过幂等 bootstrap 在首次启动时安装并验证锁定的 Sharp runtime                                          | 不依赖 npm 发布权限且可携带 Skill/MCP；代价是仓库含构建产物、首次启动可能联网并须维护平台依赖缓存 | manifest 与 standalone 首次/重复 bootstrap 已验证；客户端安装、升级和卸载待验证 | [ADR-0003](adr/0003-distribution-plugin-bootstrap.md) |
+| D-004 | MCP 结果以同一 manifest 为事实源；纯结构化工具返回 `structuredContent + TextContent`；所有图片工具统一返回 `JSON TextContent + ImageContent` 并省略 `structuredContent`，规避 Codex 0.151 的结构化结果优先问题 | 保住 Agent 看图闭环且不依赖客户端识别；代价是图片工具不能依赖协议层 output schema                 | stdio/SDK 结果形态与预览已验证；真实 Codex/Claude 图片调用和二次渲染仍待验证    | [ADR-0004](adr/0004-mcp-result-compatibility.md)      |
 
 ## 明确不进入本轮决策的事项
 
@@ -42,11 +42,11 @@
 
 ## 必须关闭的验证项
 
-1. 使用仓库捆绑字体完成中文、英文、标点和换行测试，并记录字体 hash。
-2. 在 Windows 干净目录执行 clone、依赖 bootstrap、build、doctor 和真实图片生成。
-3. 从 Git marketplace 分别安装 Claude Code 与 Codex 插件，验证 Skill/MCP 发现、首次启动、更新和卸载。
-4. 通过 MCP 完成 `inspect_image`、`crop_image`、`validate_annotation_spec` 和 `annotate_image` 的真实调用。
-5. 在 Codex 0.151 证明兼容分支确实让 ImageContent 进入可视上下文并完成一次修改后重渲染；未完成前只能标记为 **PARTIALLY VERIFIED**。
+1. [x] 使用仓库捆绑字体完成中文、英文、标点和换行测试，并记录字体 hash。
+2. [ ] 在 Windows 干净目录执行 clone、依赖 bootstrap、build、doctor 和真实图片生成。
+3. [ ] 从 Git marketplace 分别安装 Claude Code 与 Codex 插件，验证 Skill/MCP 发现、首次启动、更新和卸载。
+4. [ ] 通过真实客户端完成 `inspect_image`、`crop_image`、`validate_annotation_spec` 和 `annotate_image` 调用。
+5. [ ] 在 Codex 0.151 证明 ImageContent 进入可视上下文并完成一次修改后重渲染；未完成前只能标记为 **PARTIALLY VERIFIED**。
 
 ## 证据入口
 
@@ -56,4 +56,3 @@
 - [有边界调研：Codex](research.md#9-codex-专项调研)
 - [MCP Tools 规范](https://modelcontextprotocol.io/specification/2026-07-28/server/tools)
 - [Sharp 安装要求](https://sharp.pixelplumbing.com/install/)
-

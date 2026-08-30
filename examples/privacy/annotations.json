@@ -1,0 +1,60 @@
+{
+  "version": "1.0",
+  "coordinateSpace": "pixel",
+  "annotations": [
+    {
+      "id": "email-note",
+      "style": {
+        "backgroundColor": "#0F766E",
+        "fontSize": 20
+      },
+      "type": "callout",
+      "target": {
+        "x": 255,
+        "y": 250,
+        "width": 500,
+        "height": 44
+      },
+      "text": "普通隐私：视觉弱化",
+      "placement": "right"
+    },
+    {
+      "id": "token-note",
+      "style": {
+        "backgroundColor": "#B91C1C",
+        "fontSize": 20
+      },
+      "type": "callout",
+      "target": {
+        "x": 255,
+        "y": 372,
+        "width": 515,
+        "height": 46
+      },
+      "text": "Token：不可恢复遮挡",
+      "placement": "top"
+    },
+    {
+      "id": "email-blur",
+      "type": "blur",
+      "rect": {
+        "x": 255,
+        "y": 250,
+        "width": 500,
+        "height": 44
+      },
+      "sigma": 12
+    },
+    {
+      "id": "token-redact",
+      "type": "redact",
+      "rect": {
+        "x": 255,
+        "y": 372,
+        "width": 515,
+        "height": 46
+      },
+      "color": "#111827"
+    }
+  ]
+}

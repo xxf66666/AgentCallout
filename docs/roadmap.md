@@ -4,20 +4,20 @@
 
 ## 范围总览
 
-| 能力 | MVP 0.1：已有截图批注 | Next 0.2：定位适配器 | Later |
-| --- | --- | --- | --- |
-| PNG/JPEG/WebP 已有截图输入 | **是** | 维护 | 维护 |
-| rectangle、ellipse、arrow、text/callout、numbered callout | **是** | 改进布局 | 编辑器交互 |
-| highlight、spotlight、blur、安全 redact | **是** | 改进检测与验证 | 更多视觉效果 |
-| 像素/归一化坐标、sidecar、hash、warning、可重放 | **是** | 适配器继续输出同一 spec | 跨媒体 spec |
-| CLI + 本地 stdio MCP | **是** | 维护兼容 | 更多宿主集成 |
-| Claude Code/Codex GitHub 直接安装 | **是** | 持续回归 | 更多 Agent |
-| OCR 文字定位 | **否** | **可选本地 adapter** | 语言/版面扩展 |
-| Playwright/DOM selector 定位 | **否** | **可选 DOM adapter** | 更多 UI 框架 |
-| 完整桌面 GUI | **否** | 否 | **以后** |
-| 系统截图快捷键/桌面捕屏 | **否** | 否 | **以后** |
-| GIF/录屏/视频编辑 | **否** | 否 | **以后** |
-| 云同步、账号、计费 | **否** | 否 | 未承诺 |
+| 能力                                                      | MVP 0.1：已有截图批注 | Next 0.2：定位适配器    | Later         |
+| --------------------------------------------------------- | --------------------- | ----------------------- | ------------- |
+| PNG/JPEG/WebP 已有截图输入                                | **是**                | 维护                    | 维护          |
+| rectangle、ellipse、arrow、text/callout、numbered callout | **是**                | 改进布局                | 编辑器交互    |
+| highlight、spotlight、blur、安全 redact                   | **是**                | 改进检测与验证          | 更多视觉效果  |
+| 像素/归一化坐标、sidecar、hash、warning、可重放           | **是**                | 适配器继续输出同一 spec | 跨媒体 spec   |
+| CLI + 本地 stdio MCP                                      | **是**                | 维护兼容                | 更多宿主集成  |
+| Claude Code/Codex GitHub 直接安装                         | **是**                | 持续回归                | 更多 Agent    |
+| OCR 文字定位                                              | **否**                | **可选本地 adapter**    | 语言/版面扩展 |
+| Playwright/DOM selector 定位                              | **否**                | **可选 DOM adapter**    | 更多 UI 框架  |
+| 完整桌面 GUI                                              | **否**                | 否                      | **以后**      |
+| 系统截图快捷键/桌面捕屏                                   | **否**                | 否                      | **以后**      |
+| GIF/录屏/视频编辑                                         | **否**                | 否                      | **以后**      |
+| 云同步、账号、计费                                        | **否**                | 否                      | 未承诺        |
 
 ## MVP 0.1：给 Agent 一支“截图批注笔”
 

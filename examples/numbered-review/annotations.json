@@ -1,0 +1,51 @@
+{
+  "version": "1.0",
+  "coordinateSpace": "pixel",
+  "annotations": [
+    {
+      "id": "review-1",
+      "style": {
+        "backgroundColor": "#B91C1C",
+        "fontSize": 22
+      },
+      "type": "numbered-callout",
+      "target": {
+        "x": 455,
+        "y": 246
+      },
+      "text": "一次通过率低于目标",
+      "number": 1,
+      "placement": "bottom"
+    },
+    {
+      "id": "review-2",
+      "style": {
+        "backgroundColor": "#C2410C",
+        "fontSize": 22
+      },
+      "type": "numbered-callout",
+      "target": {
+        "x": 825,
+        "y": 190
+      },
+      "text": "告警缺少责任人",
+      "number": 2,
+      "placement": "left"
+    },
+    {
+      "id": "review-3",
+      "style": {
+        "backgroundColor": "#1D4ED8",
+        "fontSize": 22
+      },
+      "type": "numbered-callout",
+      "target": {
+        "x": 915,
+        "y": 445
+      },
+      "text": "趋势峰值需要说明",
+      "number": 3,
+      "placement": "top"
+    }
+  ]
+}

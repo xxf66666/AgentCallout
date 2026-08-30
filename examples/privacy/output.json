@@ -1,0 +1,293 @@
+{
+  "annotationCount": 4,
+  "annotationSpec": {
+    "annotations": [
+      {
+        "id": "email-note",
+        "placement": "right",
+        "style": {
+          "backgroundColor": "#0F766E",
+          "fontSize": 20
+        },
+        "target": {
+          "height": 44,
+          "width": 500,
+          "x": 255,
+          "y": 250
+        },
+        "text": "普通隐私：视觉弱化",
+        "type": "callout"
+      },
+      {
+        "id": "token-note",
+        "placement": "top",
+        "style": {
+          "backgroundColor": "#B91C1C",
+          "fontSize": 20
+        },
+        "target": {
+          "height": 46,
+          "width": 515,
+          "x": 255,
+          "y": 372
+        },
+        "text": "Token：不可恢复遮挡",
+        "type": "callout"
+      },
+      {
+        "id": "email-blur",
+        "rect": {
+          "height": 44,
+          "width": 500,
+          "x": 255,
+          "y": 250
+        },
+        "sigma": 12,
+        "type": "blur"
+      },
+      {
+        "color": "#111827",
+        "id": "token-redact",
+        "rect": {
+          "height": 46,
+          "width": 515,
+          "x": 255,
+          "y": 372
+        },
+        "type": "redact"
+      }
+    ],
+    "coordinateSpace": "pixel",
+    "version": "1.0"
+  },
+  "hashes": {
+    "inputSha256": "5e8f4d735df796430072b297600cff9fdf5608c2c136808ed8dcc5bbb5c0ed1e",
+    "outputSha256": "10010378ad6c845017e3bac8d701f5c4cfb1973f0369fee42769f5ada1e76733",
+    "specSha256": "b7690c8033e8fa946f3a139f37c7a227754e80e6e1851fe2439613c1e813b7ab"
+  },
+  "inputs": [
+    {
+      "dimensions": {
+        "height": 600,
+        "width": 1000
+      },
+      "format": "png",
+      "orientation": null,
+      "path": "input.png",
+      "pathSemantics": "relative-to-sidecar",
+      "sha256": "5e8f4d735df796430072b297600cff9fdf5608c2c136808ed8dcc5bbb5c0ed1e",
+      "sizeBytes": 32741,
+      "storedDimensions": {
+        "height": 600,
+        "width": 1000
+      }
+    }
+  ],
+  "manifestVersion": "1.0",
+  "markdown": "![AgentCallout output](<output.png>)",
+  "operation": "annotate",
+  "operationSpec": {
+    "annotations": [
+      {
+        "id": "email-note",
+        "placement": "right",
+        "style": {
+          "backgroundColor": "#0F766E",
+          "fontSize": 20
+        },
+        "target": {
+          "height": 44,
+          "width": 500,
+          "x": 255,
+          "y": 250
+        },
+        "text": "普通隐私：视觉弱化",
+        "type": "callout"
+      },
+      {
+        "id": "token-note",
+        "placement": "top",
+        "style": {
+          "backgroundColor": "#B91C1C",
+          "fontSize": 20
+        },
+        "target": {
+          "height": 46,
+          "width": 515,
+          "x": 255,
+          "y": 372
+        },
+        "text": "Token：不可恢复遮挡",
+        "type": "callout"
+      },
+      {
+        "id": "email-blur",
+        "rect": {
+          "height": 44,
+          "width": 500,
+          "x": 255,
+          "y": 250
+        },
+        "sigma": 12,
+        "type": "blur"
+      },
+      {
+        "color": "#111827",
+        "id": "token-redact",
+        "rect": {
+          "height": 46,
+          "width": 515,
+          "x": 255,
+          "y": 372
+        },
+        "type": "redact"
+      }
+    ],
+    "coordinateSpace": "pixel",
+    "version": "1.0"
+  },
+  "originalDimensions": {
+    "height": 600,
+    "width": 1000
+  },
+  "outputDimensions": {
+    "height": 600,
+    "width": 1000
+  },
+  "pathSemantics": "relative-to-sidecar",
+  "paths": {
+    "inputs": [
+      "input.png"
+    ],
+    "output": "output.png",
+    "sidecar": "output.json"
+  },
+  "renderer": {
+    "font": {
+      "family": "Noto Sans CJK SC",
+      "file": "NotoSansCJKsc-Regular.otf",
+      "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+      "version": "Version 2.004;hotconv 1.0.118;makeotfexe 2.5.65603"
+    },
+    "libvips": "8.18.6",
+    "name": "sharp-svg-pango",
+    "sharp": "0.35.4",
+    "version": "0.1.0"
+  },
+  "resolvedAnnotations": [
+    {
+      "anchor": {
+        "x": 769,
+        "y": 272
+      },
+      "box": {
+        "height": 40,
+        "width": 199,
+        "x": 769,
+        "y": 252
+      },
+      "fontSize": 20,
+      "id": "email-note",
+      "placement": "right",
+      "target": {
+        "height": 44,
+        "width": 500,
+        "x": 255,
+        "y": 250
+      },
+      "targetAnchor": {
+        "x": 755,
+        "y": 272
+      },
+      "text": "普通隐私：视觉弱化",
+      "type": "callout"
+    },
+    {
+      "anchor": {
+        "x": 513,
+        "y": 358
+      },
+      "box": {
+        "height": 40,
+        "width": 216,
+        "x": 405,
+        "y": 318
+      },
+      "fontSize": 20,
+      "id": "token-note",
+      "placement": "top",
+      "target": {
+        "height": 46,
+        "width": 515,
+        "x": 255,
+        "y": 372
+      },
+      "targetAnchor": {
+        "x": 513,
+        "y": 372
+      },
+      "text": "Token：不可恢复遮挡",
+      "type": "callout"
+    },
+    {
+      "id": "email-blur",
+      "rect": {
+        "height": 44,
+        "width": 500,
+        "x": 255,
+        "y": 250
+      },
+      "style": {
+        "arrowHeadSize": 12,
+        "backgroundColor": "#d92d20",
+        "blurSigma": 12,
+        "cornerRadius": 6,
+        "fillColor": "#00000000",
+        "fontSize": 24,
+        "lineHeight": 1.25,
+        "maxWidth": 360,
+        "opacity": 1,
+        "padding": 10,
+        "strokeColor": "#ff3b30",
+        "strokeWidth": 0,
+        "textColor": "#ffffff"
+      },
+      "type": "blur"
+    },
+    {
+      "id": "token-redact",
+      "rect": {
+        "height": 46,
+        "width": 515,
+        "x": 255,
+        "y": 372
+      },
+      "style": {
+        "arrowHeadSize": 12,
+        "backgroundColor": "#d92d20",
+        "blurSigma": 10,
+        "cornerRadius": 6,
+        "fillColor": "#111827",
+        "fontSize": 24,
+        "lineHeight": 1.25,
+        "maxWidth": 360,
+        "opacity": 1,
+        "padding": 10,
+        "strokeColor": "#ff3b30",
+        "strokeWidth": 0,
+        "textColor": "#ffffff"
+      },
+      "type": "redact"
+    }
+  ],
+  "security": {
+    "blurIsSecureRedaction": false,
+    "exifOrientationApplied": true,
+    "metadataStripped": true,
+    "outputReDecoded": true,
+    "redactUsesOpaqueOverwrite": true
+  },
+  "usesBlur": true,
+  "usesRedact": true,
+  "warnings": []
+}

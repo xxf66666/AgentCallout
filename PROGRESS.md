@@ -4,8 +4,8 @@
 
 ## 当前状态
 
-- 阶段：仓库与环境审计、官方能力调研、技术验证
-- GitHub：`https://github.com/xxf66666/AgentCallout`（公开空仓库，当前账号具有管理员权限）
+- 阶段：发布候选提交、GitHub 直装与双客户端验收
+- GitHub：`https://github.com/xxf66666/AgentCallout`（公开仓库，当前账号具有管理员权限；待首次 push）
 - 本地分支：`main`
 - 阻塞：无
 
@@ -17,31 +17,41 @@
 - [x] 将本地仓库连接到正式 GitHub 远程
 - [x] 确认本机安装 Node.js、npm、pnpm、Git、GitHub CLI、Claude Code 和 Codex CLI
 - [x] 启动 Claude Code、Codex、MCP 与竞品的并行证据调研
+- [x] 完成 `docs/research.md`、四份 ADR、兼容性、安全和路线图基线
+- [x] 完成 Windows Sharp 技术实验：中文/英文换行、箭头、highlight、blur、opaque redact、PNG/JPEG/WebP 和重解码
+- [x] 记录首个 Git 里程碑 `c71eed4`
+- [x] 用官方 scaffold 建立 Codex Plugin、Skill 和 repo marketplace，并通过初始结构校验
+- [x] 完成 AnnotationSpec v1、十类批注、自动排版和 Sharp 渲染/安全核心
+- [x] 完成 CLI、六工具 stdio MCP、128 KiB 受限预览和 doctor/self-test
+- [x] 捆绑 Noto Sans CJK SC 字体、OFL、hash 和幂等 Plugin runtime bootstrap
+- [x] 完成 Claude Code/Codex Plugin、Skill 与双 Marketplace 包装
+- [x] 生成并人工查看 `ui-bug`、`numbered-review`、`privacy` 三组示例
+- [x] 当前工作树完整 gate：format、lint、typecheck、52 tests、build、dist 复现通过
+- [x] 构建产物 CLI doctor、自检、stdio MCP 和 plugin bootstrap smoke 通过
+- [x] 记录实现里程碑 `541bafe`、`7bccda0`、`895237c`、`1151936`、`46ce988`
 
 ## 进行中
 
-- [ ] 形成 `docs/research.md` 的有边界调研结论
-- [ ] 对候选渲染技术完成中文、箭头、文字框和隐私遮挡实验
-- [ ] 确定最少步骤的 Claude Code 与 Codex GitHub 安装路径
+- [ ] 提交并推送发布候选到 GitHub `main`
+- [ ] 按 README 从 GitHub 安装 Claude Code 与 Codex Plugin
+- [ ] 完成真实 Agent 调用、查看结果和二次渲染
 
 ## 待完成
 
-- [ ] 架构、兼容性、安全和路线图文档
-- [ ] AnnotationSpec 与验证器
-- [ ] 图片检查、裁剪、批注渲染和自动排版
-- [ ] CLI 与本地 stdio MCP Server
-- [ ] Claude Code 与 Codex Skill/Plugin 包装
-- [ ] 安装、升级、卸载、dry-run、备份与 doctor/self-test
-- [ ] 单元、集成、像素安全、确定性和安装测试
-- [ ] `ui-bug`、`numbered-review`、`privacy` 三组真实生成示例
 - [ ] Claude Code 和 Codex 实际调用及一次二次修正
 - [ ] 干净克隆验收
-- [ ] Git 里程碑提交和 GitHub 推送
+- [ ] GitHub 直装、升级、重复安装与卸载验证
+- [ ] 最终验证文档、版本标签和 GitHub 推送
 
 ## 验证日志
 
-| 时间 | 检查 | 结果 |
-| --- | --- | --- |
-| 2026-08-30 | `gh repo view xxf66666/AgentCallout` | 仓库存在、公开、空仓库、管理员权限 |
-| 2026-08-30 | 本机工具链 | Node `v24.18.1`、npm `11.16.0`、pnpm `11.19.0`、Claude Code `2.1.251`、Codex CLI `0.151.0` |
-
+| 时间       | 检查                                 | 结果                                                                                                  |
+| ---------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| 2026-08-30 | `gh repo view xxf66666/AgentCallout` | 仓库存在、公开、空仓库、管理员权限                                                                    |
+| 2026-08-30 | 本机工具链                           | Node `v24.18.1`、npm `11.16.0`、pnpm `11.19.0`、Claude Code `2.1.251`、Codex CLI `0.151.0`            |
+| 2026-08-30 | Sharp 技术实验                       | PNG/JPEG/WebP 解码、中文/英文换行、箭头、blur、redact、PNG 重解码通过；redact 区域为单一不透明 RGB 值 |
+| 2026-08-30 | Plugin/Skill 初始校验                | `quick_validate.py`、`validate_plugin.py`、`claude plugin validate --strict` 通过；尚未安装或调用     |
+| 2026-08-30 | 完整仓库 gate                        | Prettier、ESLint、TypeScript、Vitest `52/52`、build、3 份 dist 逐字节复现全部通过                     |
+| 2026-08-30 | CLI/MCP smoke                        | doctor/self-test、opaque redact 像素、stdio initialize、六工具发现和结构化 doctor 通过                |
+| 2026-08-30 | Plugin bootstrap                     | 首次固定依赖安装成功，第二次幂等跳过；Plugin MCP doctor 通过                                          |
+| 2026-08-30 | 三组示例                             | 重复渲染 hash 一致、无 warning、sidecar 无绝对开发机路径；privacy redact 为单一不透明 RGBA            |

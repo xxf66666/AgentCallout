@@ -12,13 +12,15 @@ AnnotationSpec is AgentCallout's strict, replayable description of annotations o
 }
 ```
 
-| Field             | Required | Value                                                      |
-| ----------------- | -------- | ---------------------------------------------------------- |
-| `version`         | yes      | Exactly `"1.0"`. Other versions are rejected.              |
-| `coordinateSpace` | no       | `"pixel"` or `"normalized"`; defaults to `"pixel"`.        |
-| `annotations`     | yes      | Annotation objects in paint order. The array may be empty. |
+| Field             | Required | Value                                                                |
+| ----------------- | -------- | -------------------------------------------------------------------- |
+| `version`         | yes      | Exactly `"1.0"`. Other versions are rejected.                        |
+| `coordinateSpace` | no       | `"pixel"` or `"normalized"`; defaults to `"pixel"`.                  |
+| `annotations`     | yes      | Up to 200 annotation objects in paint order. The array may be empty. |
 
 Root, annotation, geometry, and style objects are strict: unknown fields are rejected. Annotation order is significant and is retained during parsing, resolution, and canonicalization.
+
+The combined `text` length across `text`, `callout`, and `numbered-callout` annotations must not exceed 100,000 UTF-16 code units. This bounds validation and renderer work before image allocation.
 
 Every annotation accepts these common fields:
 
