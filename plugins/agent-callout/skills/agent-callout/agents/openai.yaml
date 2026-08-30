@@ -1,0 +1,8 @@
+interface:
+  display_name: "AgentCallout"
+  short_description: "Annotate screenshots for reviews and reports"
+  brand_color: "#E53935"
+  default_prompt: "Use $agent-callout to inspect, annotate, review, and return a Markdown-ready screenshot."
+
+policy:
+  allow_implicit_invocation: true

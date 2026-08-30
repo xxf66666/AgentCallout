@@ -6,4 +6,5 @@ assets/fonts/*.otf
 examples/**/*.png
 examples/**/*.jpg
 examples/**/*.webp
-
+examples/**/output.json
+examples/contact-sheet.json

@@ -467,7 +467,13 @@ export function createAgentCalloutMcpServer(options: AgentCalloutMcpServerOption
         openWorldHint: false
       }
     },
-    async () => safeToolCall(async () => structuredToolResult(await getCoreDoctorReport()))
+    async () =>
+      safeToolCall(async () =>
+        structuredToolResult({
+          ...(await getCoreDoctorReport()),
+          mcp: { maxPreviewBytes: MAX_PREVIEW_BYTES }
+        })
+      )
   );
 
   return server;

@@ -1,0 +1,39 @@
+{
+  "name": "agent-callout",
+  "version": "0.1.0",
+  "description": "Give AI agents a pen for existing screenshots.",
+  "author": {
+    "name": "AgentCallout contributors",
+    "url": "https://github.com/xxf66666/AgentCallout"
+  },
+  "homepage": "https://github.com/xxf66666/AgentCallout#readme",
+  "repository": "https://github.com/xxf66666/AgentCallout",
+  "license": "MIT",
+  "keywords": ["screenshot", "annotation", "mcp", "redaction"],
+  "skills": "./skills/",
+  "mcpServers": {
+    "agent-callout": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${PLUGIN_ROOT}/bootstrap.mjs"],
+      "cwd": "${PLUGIN_ROOT}",
+      "startup_timeout_sec": 120,
+      "tool_timeout_sec": 120
+    }
+  },
+  "interface": {
+    "displayName": "AgentCallout",
+    "shortDescription": "Annotate screenshots for reviews and reports",
+    "longDescription": "Inspect and annotate existing screenshots with callouts, arrows, numbered findings, highlights, spotlight, blur, and irreversible redaction. Outputs a PNG, replayable JSON sidecar, hashes, warnings, and Markdown.",
+    "developerName": "AgentCallout contributors",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "websiteURL": "https://github.com/xxf66666/AgentCallout",
+    "defaultPrompt": [
+      "Annotate this screenshot and return Markdown-ready evidence.",
+      "Number the three issues in this screenshot and explain them.",
+      "Redact the token, blur the email, and verify the output."
+    ],
+    "brandColor": "#E53935"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "agent-callout",
+  "interface": {
+    "displayName": "AgentCallout"
+  },
+  "plugins": [
+    {
+      "name": "agent-callout",
+      "source": {
+        "source": "local",
+        "path": "./plugins/agent-callout"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

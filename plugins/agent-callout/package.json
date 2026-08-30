@@ -1,0 +1,14 @@
+{
+  "name": "agent-callout-plugin-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Runtime dependencies for the AgentCallout local MCP plugin.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "dependencies": {
+    "sharp": "0.35.4"
+  }
+}

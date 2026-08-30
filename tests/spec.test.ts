@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   ANNOTATION_TYPES,
+  MAX_ANNOTATIONS,
+  MAX_TOTAL_TEXT_LENGTH,
   annotationSpecSchema,
   canonicalizeSpec,
   parseAnnotationSpec,
@@ -279,6 +281,26 @@ describe("coordinate resolution", () => {
     });
     expect(result.success).toBe(false);
     expect(result.error?.issues[0]?.message).toContain("between 0 and 1");
+  });
+
+  it("bounds annotation count and aggregate text size", () => {
+    const rectangle = { type: "rectangle" as const, rect: { x: 0, y: 0, width: 1, height: 1 } };
+    expect(() =>
+      parseAnnotationSpec({
+        version: "1.0",
+        annotations: Array.from({ length: MAX_ANNOTATIONS + 1 }, () => rectangle)
+      })
+    ).toThrow();
+    expect(() =>
+      parseAnnotationSpec({
+        version: "1.0",
+        annotations: Array.from({ length: 11 }, () => ({
+          type: "text",
+          position: { x: 0, y: 0 },
+          text: "x".repeat(Math.ceil(MAX_TOTAL_TEXT_LENGTH / 11))
+        }))
+      })
+    ).toThrow(/Total annotation text/);
   });
 
   it("uses identical geometry for Chinese and English callout text", () => {

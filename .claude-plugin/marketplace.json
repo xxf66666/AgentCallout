@@ -1,0 +1,24 @@
+{
+  "name": "agent-callout",
+  "description": "AgentCallout screenshot annotation tools and workflow.",
+  "owner": {
+    "name": "AgentCallout contributors",
+    "url": "https://github.com/xxf66666/AgentCallout"
+  },
+  "plugins": [
+    {
+      "name": "agent-callout",
+      "source": "./plugins/agent-callout",
+      "description": "Give AI agents a pen for existing screenshots.",
+      "version": "0.1.0",
+      "author": {
+        "name": "AgentCallout contributors"
+      },
+      "homepage": "https://github.com/xxf66666/AgentCallout",
+      "repository": "https://github.com/xxf66666/AgentCallout",
+      "license": "MIT",
+      "category": "developer-tools",
+      "tags": ["screenshots", "annotation", "mcp", "documentation", "testing"]
+    }
+  ]
+}

@@ -46,6 +46,7 @@
     "format:check": "prettier --check .",
     "lint": "eslint .",
     "mcp": "node dist/mcp.js",
+    "smoke:mcp": "node scripts/smoke-mcp.mjs dist/mcp.js",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",

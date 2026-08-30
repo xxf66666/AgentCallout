@@ -1,6 +1,8 @@
 import { z } from "zod";
 
 export const ANNOTATION_SPEC_VERSION = "1.0" as const;
+export const MAX_ANNOTATIONS = 200;
+export const MAX_TOTAL_TEXT_LENGTH = 100_000;
 
 export const ANNOTATION_TYPES = [
   "rectangle",
@@ -218,13 +220,21 @@ const rawAnnotationSpecSchema = z
   .object({
     version: z.literal(ANNOTATION_SPEC_VERSION),
     coordinateSpace: z.enum(["pixel", "normalized"]).default("pixel"),
-    annotations: z.array(annotationUnionSchema)
+    annotations: z.array(annotationUnionSchema).max(MAX_ANNOTATIONS)
   })
   .strict()
   .superRefine((spec, context) => {
     const seenIds = new Map<string, number>();
+    let totalTextLength = 0;
 
     for (const [index, annotation] of spec.annotations.entries()) {
+      if (
+        annotation.type === "text" ||
+        annotation.type === "callout" ||
+        annotation.type === "numbered-callout"
+      ) {
+        totalTextLength += annotation.text.length;
+      }
       if (annotation.id !== undefined) {
         const previousIndex = seenIds.get(annotation.id);
         if (previousIndex !== undefined) {
@@ -254,6 +264,14 @@ const rawAnnotationSpecSchema = z
           path: ["annotations", index, "style", "opacity"]
         });
       }
+    }
+
+    if (totalTextLength > MAX_TOTAL_TEXT_LENGTH) {
+      context.addIssue({
+        code: "custom",
+        message: `Total annotation text must not exceed ${MAX_TOTAL_TEXT_LENGTH} characters`,
+        path: ["annotations"]
+      });
     }
   });
 

@@ -6,6 +6,8 @@ import path from "node:path";
 import sharp, { type Metadata, type OverlayOptions } from "sharp";
 
 import {
+  MAX_ANNOTATIONS,
+  MAX_TOTAL_TEXT_LENGTH,
   canonicalizeSpec,
   parseAnnotationSpec,
   resolveAnnotationSpec,
@@ -96,6 +98,12 @@ export interface CoreDoctorCheck {
 
 export interface CoreDoctorReport {
   ok: boolean;
+  limits: {
+    maxFileBytes: number;
+    maxPixels: number;
+    maxAnnotations: number;
+    maxTotalTextLength: number;
+  };
   runtime: {
     node: string;
     platform: NodeJS.Platform;
@@ -1043,6 +1051,12 @@ export async function getCoreDoctorReport(): Promise<CoreDoctorReport> {
   }
   return {
     ok: checks.length > 0 && checks.every((check) => check.ok),
+    limits: {
+      maxFileBytes: DEFAULT_IMAGE_LIMITS.maxFileBytes,
+      maxPixels: DEFAULT_IMAGE_LIMITS.maxPixels,
+      maxAnnotations: MAX_ANNOTATIONS,
+      maxTotalTextLength: MAX_TOTAL_TEXT_LENGTH
+    },
     runtime: {
       node: process.version,
       platform: process.platform,

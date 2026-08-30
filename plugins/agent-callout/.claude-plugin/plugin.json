@@ -1,0 +1,15 @@
+{
+  "name": "agent-callout",
+  "version": "0.1.0",
+  "description": "Give AI agents a pen for existing screenshots.",
+  "author": {
+    "name": "AgentCallout contributors",
+    "url": "https://github.com/xxf66666/AgentCallout"
+  },
+  "homepage": "https://github.com/xxf66666/AgentCallout#readme",
+  "repository": "https://github.com/xxf66666/AgentCallout",
+  "license": "MIT",
+  "keywords": ["screenshot", "annotation", "mcp", "redaction"],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json"
+}

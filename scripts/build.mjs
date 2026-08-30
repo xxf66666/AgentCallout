@@ -1,4 +1,4 @@
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
@@ -40,6 +40,7 @@ const shared = {
   legalComments: "eof",
   logLevel: "info",
   metafile: false,
+  minifyWhitespace: true,
   outdir,
   platform: "node",
   sourcemap: false,
@@ -65,6 +66,12 @@ await build({
   ...shared,
   entryPoints: { index: "src/index.ts" }
 });
+
+for (const file of ["cli.js", "mcp.js", "index.js"]) {
+  const outputPath = join(outdir, file);
+  const source = await readFile(outputPath, "utf8");
+  await writeFile(outputPath, source.replace(/[ \t]+$/gmu, ""), "utf8");
+}
 
 if (!customOutdir) {
   await new Promise((resolvePromise, rejectPromise) => {

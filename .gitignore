@@ -1,5 +1,4 @@
 node_modules/
-dist/
 coverage/
 .codegraph/
 .DS_Store
@@ -7,4 +6,3 @@ coverage/
 *.tmp
 *.bak
 .agent-callout/
-

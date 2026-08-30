@@ -273,6 +273,12 @@ describe("core image I/O and security", () => {
     expect(report.renderer?.sharp).toBe(sharp.versions.sharp);
     expect(report.renderer?.libvips).toBe(sharp.versions.vips);
     expect(report.renderer?.font.sha256).toBe(BUNDLED_FONT_SHA256);
+    expect(report.limits).toMatchObject({
+      maxFileBytes: 50 * 1024 * 1024,
+      maxPixels: 40_000_000,
+      maxAnnotations: 200,
+      maxTotalTextLength: 100_000
+    });
     expect(report.checks.find((check) => check.name === "text-render")?.ok).toBe(true);
   });
 });

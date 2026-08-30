@@ -120,6 +120,13 @@ describe("AgentCallout MCP server", () => {
     })) as CallToolResult;
     expect(validated.isError).not.toBe(true);
     expect(validated.structuredContent).toMatchObject({ valid: true });
+
+    const doctor = (await client.callTool({ name: "doctor", arguments: {} })) as CallToolResult;
+    expect(doctor.structuredContent).toMatchObject({
+      ok: true,
+      limits: { maxPixels: 40_000_000, maxAnnotations: 200 },
+      mcp: { maxPreviewBytes: 128 * 1024 }
+    });
   });
 
   test("image tools omit structuredContent and return a decodable bounded PNG preview", async () => {
