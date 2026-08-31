@@ -94,6 +94,8 @@ describe("AgentCallout MCP server", () => {
     }
 
     const revise = listed.tools.find((tool) => tool.name === "revise_annotation");
+    expect(revise?.description).toContain('"op":"set"');
+    expect(revise?.description).toContain('never "replace"');
     expect(revise?.inputSchema.properties).toHaveProperty("parentSidecarPath");
     expect(revise?.inputSchema.properties).toHaveProperty("edits");
     expect(revise?.inputSchema.properties).toHaveProperty("inputPath");
@@ -179,6 +181,7 @@ describe("AgentCallout MCP server", () => {
 
     const doctor = (await client.callTool({ name: "doctor", arguments: {} })) as CallToolResult;
     expect(doctor.structuredContent).toMatchObject({
+      product: { name: "agent-callout", version: "0.2.0" },
       ok: true,
       limits: { maxPixels: 40_000_000, maxAnnotations: 200 },
       mcp: { maxPreviewBytes: 64 * 1024, maxPreviewDimension: 512, previewDetail: "low" }

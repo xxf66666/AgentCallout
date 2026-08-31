@@ -143,7 +143,9 @@ const annotateInputSchema = z
 const reviseAnnotationInputSchema = z
   .object({
     parentSidecarPath: pathSchema.describe("Annotate sidecar to validate and revise."),
-    edits: annotationRevisionEditsSchema.describe("Ordered add/set/remove edits."),
+    edits: annotationRevisionEditsSchema.describe(
+      'Ordered edits. Each edits[].op must be exactly "add", "set", or "remove". To fully replace an existing stable ID, use {"op":"set","id":"...","annotation":{...}}; never use op "replace".'
+    ),
     inputPath: pathSchema
       .describe("Moved original image whose SHA-256 matches the parent sidecar.")
       .optional()
@@ -577,7 +579,7 @@ export function createAgentCalloutMcpServer(options: AgentCalloutMcpServerOption
     {
       title: "Revise annotation",
       description:
-        "Validate an annotate sidecar, create its next append-only .revN pair, and return a changed-region preview when bounded.",
+        'Validate an annotate sidecar, create its next append-only .revN pair, and return a changed-region preview when bounded. edits[].op must be exactly "add", "set", or "remove"; use {"op":"set","id":"...","annotation":{...}} for a full same-ID replacement, never "replace".',
       inputSchema: reviseAnnotationInputSchema,
       annotations: {
         readOnlyHint: false,
@@ -670,7 +672,8 @@ export function createAgentCalloutMcpServer(options: AgentCalloutMcpServerOption
     "doctor",
     {
       title: "Doctor",
-      description: "Report the local renderer, Sharp/libvips, font, and runtime health.",
+      description:
+        "Report the AgentCallout product version plus local renderer, Sharp/libvips, font, and runtime health.",
       inputSchema: doctorInputSchema,
       outputSchema: structuredOutputSchema,
       annotations: {
@@ -683,6 +686,7 @@ export function createAgentCalloutMcpServer(options: AgentCalloutMcpServerOption
     async () =>
       safeToolCall(async () =>
         structuredToolResult({
+          product: { name: "agent-callout", version: AGENT_CALLOUT_VERSION },
           ...(await getCoreDoctorReport()),
           mcp: {
             maxPreviewBytes: MAX_PREVIEW_BYTES,
