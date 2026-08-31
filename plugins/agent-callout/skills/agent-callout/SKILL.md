@@ -27,6 +27,7 @@ Turn an existing screenshot into a reproducible annotated PNG and JSON sidecar. 
 - Use `rectangle` or `ellipse` to bound a target.
 - Use `arrow` when the destination matters more than an area.
 - Use `callout` for explanatory text and `numbered-callout` for ordered review findings.
+- In 1.1, a numbered marker is attached to the target-facing outside edge of its label and a visible leader connects the marker boundary to the target boundary. Do not move the target merely to position the marker; `target` must continue to identify the reviewed content.
 - For 1.1, start with `docs-light`; use root `defaults` for repeated dimensions and `tone` for semantic color. Omit tone or use `neutral`/`info` for ordinary explanations. Reserve `danger` for actual errors or risks and `classic-red` for an explicitly requested legacy-red visual.
 - Use `highlight` to tint a region; use `spotlight` to dim everything outside the focus.
 - Use `blur` only for visual de-emphasis. It is not safe redaction.
@@ -36,7 +37,7 @@ Turn an existing screenshot into a reproducible annotated PNG and JSON sidecar. 
 
 - Keep callout text short and let AgentCallout wrap it. Prefer multiple focused callouts over one large paragraph.
 - Prefer preset/defaults/tone over repeating full style objects. Use annotation `style` only for a deliberate local override.
-- Inspect long-text wrapping plus numbered-marker outline, fill, number contrast, and target visibility in the final preview.
+- Inspect long-text wrapping plus numbered-marker outline, fill, number contrast, target visibility, and the complete exposed leader in the final preview. On an unconstrained canvas the leader should expose at least 24px; any shorter/invisible leader, reduced or clipped stroke, marker-overlap, clamp, or occupied-callout warning requires revision or an explicit limitation in the final response.
 - Preserve warnings in the final response. A layout warning means the result needs visual review, not silent acceptance.
 - Never hand-edit a sidecar hash or claim that blur removed the underlying pixels.
 - Do not overwrite the source image. Use a new output path for each materially different revision.

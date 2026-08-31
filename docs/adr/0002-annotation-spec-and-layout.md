@@ -38,6 +38,14 @@ Agent 需要保存、修改并重放批注，而不是只执行一次性的绘�
 5. 若无零冲突位置，仍选择代价最低的可见位置，并返回包含 annotation ID 与冲突原因的 warning；绝不静默删除批注。
 6. 用户明确给定位置时尊重其意图，但仍执行边界验证并报告 warning/error。
 
+### 1.1 编号引线
+
+- 1.0 编号批注继续走既有重放路径：marker 仍以 target 为圆心，候选间距、绘制顺序与 resolved 数据不变。
+- 1.1 不增加公开输入字段，而是在 resolved sidecar 中分别记录业务 `target`、`label`、`marker` 与 `leader`。marker 位于 label 朝向 target 的外侧，圆的绘制外边界与 label 相切；leader 从 marker 绘制外边界连接到 point target 或矩形 target 边界。
+- 1.1 候选沿用固定的上、右、下、左次序与确定性评分，但 occupied/overflow 评分使用包含 label/marker 绘制外沿与 leader corridor 的朝向性组合占位，并将已解析的 leader bounds 带入后续批注。可行时为外露 leader 预留至少 24px，并按 `leader → label → marker` 合成，避免引线穿过文字或编号。
+- 靠边、小画布或密集批注无法满足间距/分离时，仍返回可解码结果，并以 annotation ID 标识 clamp、冲突或可见长度不足；不得静默隐藏退化。
+- 在计划中的 v0.1.3 renderer version 正式升级前，1.1 编号 resolved 几何按 sidecar 中记录的 renderer/font metadata 解释；不得把不同 renderer build 生成的预发布 1.1 sidecar 宣称为像素等价。1.0 冻结重放边界不受此说明影响。
+
 ## 后果
 
 同一 spec 可由 CLI、MCP、Skill 和未来 locator adapter 共用，Agent 能只修改一个稳定 ID 后重渲染。确定性候选序和明确 warning 使布局测试、缺陷复现与审计简单。
@@ -46,7 +54,7 @@ Agent 需要保存、修改并重放批注，而不是只执行一次性的绘�
 
 ## 验证状态
 
-已通过：严格 Schema、像素/normalized 转换、越界、中文/英文长文本、多个 callout、稳定编号、相同输入重复 hash、布局 warning、十类渲染与像素断言。密集场景的全局最优和非 Windows golden 仍属于后续验证范围。
+已通过：严格 Schema、像素/normalized 转换、越界、中文/英文长文本、多个 callout、稳定编号、相同输入重复 hash、布局 warning、十类渲染与像素断言；1.1 编号批注另覆盖 point/rect、auto/四方向、marker/target 分离、至少 24px 像素可见杆、公共入口 resolved 几何一致及 1.0 完整 resolved/golden 回放。密集场景的全局最优和非 Windows golden 仍属于后续验证范围。
 
 ## 证据
 

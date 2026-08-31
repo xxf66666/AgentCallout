@@ -56,6 +56,10 @@ Points resolve to the nearest pixel; normalized points scale against `imageWidth
 
 For callouts, omit `placement` or use `auto` first. Other values are `top`, `right`, `bottom`, and `left`. Prefer a rectangular target when its bounds are known.
 
+For a 1.1 `numbered-callout`, keep `target` on the reviewed point or rectangle. The renderer separately resolves the label, attaches the marker immediately outside the label edge facing that target, and connects the painted marker boundary to the point or rectangular boundary. It reserves at least 24px of exposed leader when the canvas and occupied annotations permit. The sidecar records `target`, `marker`, `label`, and `leader`; these are audit output only and remain invalid as input fields. Version 1.0 deliberately retains its original target-centered marker and paint order.
+
+Until the planned v0.1.3 renderer-version bump, treat pre-release 1.1 numbered geometry as renderer-version-dependent. Check the sidecar renderer/font metadata and regenerate plus visually review under a changed renderer; do not claim cross-build pixel equivalence. Frozen 1.0 replay remains unchanged.
+
 ## Style without repetition
 
 Every field resolves independently in this order:
@@ -108,7 +112,7 @@ Version 1.1 resolves marker colors independently. When authoring a 1.1 revision 
 2. Construct a strict spec without comments, paths, timestamps, selector metadata, or arbitrary fields.
 3. Validate and resolve it against the actual image size.
 4. Treat wholly outside or empty geometry as an error. Review every clamp or layout warning.
-5. Render and inspect label wrapping, marker contrast, target visibility, and callout overlap.
+5. Render and inspect label wrapping, marker contrast, target visibility, callout overlap, and the full numbered leader. A 1.1 warning about a leader shorter than 24px or invisible, a reduced/clipped stroke, marker/target overlap, marker/label overlap, or occupied geometry means the placement is degraded and must not be silently accepted.
 6. Revise coordinates or placement as needed while preserving annotation order and IDs.
 
 Canonicalization inserts schema defaults and generated IDs, uppercases hex colors, sorts object keys, and preserves annotation order. Version 1.1 also inserts `preset: "docs-light"`; version 1.0 canonical output remains unchanged. Pixel-identical replay additionally requires the same source image, renderer, fonts, and platform.

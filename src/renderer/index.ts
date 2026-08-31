@@ -5,7 +5,12 @@ import { fileURLToPath } from "node:url";
 
 import sharp, { type OverlayOptions, type PngOptions } from "sharp";
 
-import { placeCallout } from "../layout/index.js";
+import {
+  circleOverlapsTarget,
+  connectCircleToTarget,
+  placeCallout,
+  type CardinalPlacement
+} from "../layout/index.js";
 
 export const RENDERER_NAME = "sharp-svg-pango";
 export const RENDERER_VERSION = "0.1.2";
@@ -47,6 +52,7 @@ export interface RendererVersions {
 export interface RenderAnnotationsOptions {
   fontPath?: string;
   limitInputPixels?: number;
+  specVersion?: "1.0" | "1.1";
 }
 
 export interface RenderAnnotationsResult {
@@ -110,8 +116,54 @@ interface TextSprite {
   wasShrunk: boolean;
 }
 
+export interface PaintedSegment {
+  start: PixelPoint;
+  end: PixelPoint;
+  strokeWidth: number;
+}
+
+interface OccupiedGeometry {
+  annotationId: string;
+  rects: PixelRect[];
+  segments: PaintedSegment[];
+}
+
+interface NumberedGeometryCandidate {
+  placement: CardinalPlacement;
+  placementOrder: number;
+  faceOrder: number;
+  box: PixelRect;
+  paintedLabelBox: PixelRect;
+  marker: {
+    center: PixelPoint;
+    radius: number;
+    paintedRadius: number;
+    strokeWidth: number;
+    labelSide: CardinalPlacement;
+  };
+  markerBox: PixelRect;
+  leader: { start: PixelPoint; end: PixelPoint; length: number };
+  leaderBox?: PixelRect;
+  leaderSegment?: PaintedSegment;
+  collisionIds: string[];
+  decorationOverflow: boolean;
+  hardCollisionCount: number;
+  labelTargetOverlap: boolean;
+  markerLabelOverlap: boolean;
+  markerTargetOverlap: boolean;
+  labelClipped: boolean;
+  markerClipped: boolean;
+  leaderClipped: boolean;
+  placementWarnings: string[];
+  placementScore: number;
+  markerWasClamped: boolean;
+  preferredFace: CardinalPlacement;
+}
+
 const DEFAULT_STROKE = "#ff2d20";
 const DEFAULT_TEXT = "#ffffff";
+const MINIMUM_VISIBLE_NUMBERED_LEADER = 24;
+const NUMBERED_LEADER_RENDERING_ALLOWANCE = 2;
 const DEFAULT_BACKGROUND = "#d7263d";
 const TRANSPARENT = "#00000000";
 const SAFE_NAMED_COLORS = new Set([
@@ -226,6 +278,35 @@ function rectFrom(value: unknown): PixelRect | undefined {
     : { x, y, width, height };
 }
 
+function targetFrom(value: unknown, index: number): PixelPoint | PixelRect | undefined {
+  if (value === undefined) return undefined;
+  const record = asRecord(value);
+  if (!record) {
+    throw new Error(`Annotation at index ${index} target must be a point or rectangle object.`);
+  }
+  const hasWidth = Object.prototype.hasOwnProperty.call(record, "width");
+  const hasHeight = Object.prototype.hasOwnProperty.call(record, "height");
+  if (hasWidth !== hasHeight) {
+    throw new Error(
+      `Annotation at index ${index} target must contain both width and height, or neither.`
+    );
+  }
+  const expectedKeys = hasWidth ? ["height", "width", "x", "y"] : ["x", "y"];
+  if (Object.keys(record).sort().join(",") !== expectedKeys.join(",")) {
+    throw new Error(
+      `Annotation at index ${index} target must contain only ${hasWidth ? "x, y, width, and height" : "x and y"}.`
+    );
+  }
+  const target = hasWidth ? rectFrom(record) : pointFrom(record);
+  if (!target) {
+    throw new Error(`Annotation at index ${index} target coordinates must be finite numbers.`);
+  }
+  if (isPixelRect(target) && (target.width <= 0 || target.height <= 0)) {
+    throw new Error(`Annotation at index ${index} target width and height must be positive.`);
+  }
+  return target;
+}
+
 function normalizeType(value: unknown): RenderableAnnotation["type"] | undefined {
   if (typeof value !== "string") return undefined;
   const type = value.trim().replaceAll("_", "-").toLowerCase();
@@ -268,7 +349,7 @@ function normalizeAnnotation(value: unknown, index: number): RenderableAnnotatio
   }
   const geometry = asRecord(annotation.geometry) ?? {};
   const targetValue = annotation.target ?? geometry.target;
-  const target = rectFrom(targetValue) ?? pointFrom(targetValue);
+  const target = targetFrom(targetValue, index);
   const rawNumber = finite(annotation.number ?? geometry.number);
   const text = annotation.text ?? geometry.text;
   const result: RenderableAnnotation = {
@@ -385,6 +466,10 @@ function arrowBody(start: PixelPoint, end: PixelPoint, style: RenderStyle): stri
   return `<path d="M ${svgNumber(start.x)} ${svgNumber(start.y)} L ${svgNumber(end.x)} ${svgNumber(end.y)}" fill="none" stroke="${style.strokeColor}" stroke-opacity="${svgNumber(style.opacity)}" stroke-width="${svgNumber(style.strokeWidth)}" stroke-linecap="round"/><path d="M ${svgNumber(end.x)} ${svgNumber(end.y)} L ${svgNumber(first.x)} ${svgNumber(first.y)} L ${svgNumber(second.x)} ${svgNumber(second.y)} Z" fill="${style.strokeColor}" fill-opacity="${svgNumber(style.opacity)}"/>`;
 }
 
+function leaderBody(start: PixelPoint, end: PixelPoint, style: RenderStyle): string {
+  return `<path d="M ${svgNumber(start.x)} ${svgNumber(start.y)} L ${svgNumber(end.x)} ${svgNumber(end.y)}" fill="none" stroke="${style.strokeColor}" stroke-opacity="${svgNumber(style.opacity)}" stroke-width="${svgNumber(style.strokeWidth)}" stroke-linecap="round"/>`;
+}
+
 function spotlightBody(width: number, height: number, rect: PixelRect, style: RenderStyle): string {
   const pathData = `M 0 0 H ${width} V ${height} H 0 Z M ${svgNumber(rect.x)} ${svgNumber(rect.y)} H ${svgNumber(rect.x + rect.width)} V ${svgNumber(rect.y + rect.height)} H ${svgNumber(rect.x)} Z`;
   return `<path d="${pathData}" fill="${style.fillColor === TRANSPARENT ? "#000000A6" : style.fillColor}" fill-opacity="${svgNumber(style.opacity)}" fill-rule="evenodd" clip-rule="evenodd"/>`;
@@ -472,6 +557,194 @@ function clampLabelBox(rect: PixelRect, width: number, height: number, margin: n
     width: Math.min(rect.width, Math.max(1, width - margin * 2)),
     height: Math.min(rect.height, Math.max(1, height - margin * 2))
   };
+}
+
+function rectsOverlap(left: PixelRect, right: PixelRect): boolean {
+  return (
+    Math.min(left.x + left.width, right.x + right.width) > Math.max(left.x, right.x) &&
+    Math.min(left.y + left.height, right.y + right.height) > Math.max(left.y, right.y)
+  );
+}
+
+function unionRects(rects: readonly PixelRect[]): PixelRect {
+  const first = rects[0];
+  if (!first) throw new Error("Cannot union an empty rectangle list.");
+  const left = Math.min(...rects.map((rect) => rect.x));
+  const top = Math.min(...rects.map((rect) => rect.y));
+  const right = Math.max(...rects.map((rect) => rect.x + rect.width));
+  const bottom = Math.max(...rects.map((rect) => rect.y + rect.height));
+  return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
+function inflateRect(rect: PixelRect, amount: number): PixelRect {
+  return {
+    x: rect.x - amount,
+    y: rect.y - amount,
+    width: rect.width + amount * 2,
+    height: rect.height + amount * 2
+  };
+}
+
+function rectInsideCanvas(rect: PixelRect, width: number, height: number): boolean {
+  return (
+    rect.x >= 0 && rect.y >= 0 && rect.x + rect.width <= width && rect.y + rect.height <= height
+  );
+}
+
+function segmentBounds(start: PixelPoint, end: PixelPoint, strokeWidth: number): PixelRect {
+  const halfStroke = Math.max(0.5, strokeWidth / 2);
+  return {
+    x: Math.min(start.x, end.x) - halfStroke,
+    y: Math.min(start.y, end.y) - halfStroke,
+    width: Math.abs(end.x - start.x) + halfStroke * 2,
+    height: Math.abs(end.y - start.y) + halfStroke * 2
+  };
+}
+
+export function paintedSegmentIntersectsRect(segment: PaintedSegment, rect: PixelRect): boolean {
+  if (
+    segment.strokeWidth <= 0 ||
+    (segment.start.x === segment.end.x && segment.start.y === segment.end.y)
+  ) {
+    return false;
+  }
+  const expanded = inflateRect(rect, segment.strokeWidth / 2);
+  const deltaX = segment.end.x - segment.start.x;
+  const deltaY = segment.end.y - segment.start.y;
+  let minimum = 0;
+  let maximum = 1;
+  for (const [direction, distance] of [
+    [-deltaX, segment.start.x - expanded.x],
+    [deltaX, expanded.x + expanded.width - segment.start.x],
+    [-deltaY, segment.start.y - expanded.y],
+    [deltaY, expanded.y + expanded.height - segment.start.y]
+  ] as const) {
+    if (direction === 0) {
+      if (distance < 0) return false;
+      continue;
+    }
+    const ratio = distance / direction;
+    if (direction < 0) {
+      if (ratio > maximum) return false;
+      minimum = Math.max(minimum, ratio);
+    } else {
+      if (ratio < minimum) return false;
+      maximum = Math.min(maximum, ratio);
+    }
+  }
+  return minimum <= maximum;
+}
+
+function pointToSegmentDistance(point: PixelPoint, segment: PaintedSegment): number {
+  const deltaX = segment.end.x - segment.start.x;
+  const deltaY = segment.end.y - segment.start.y;
+  const denominator = deltaX * deltaX + deltaY * deltaY;
+  if (denominator === 0) return Math.hypot(point.x - segment.start.x, point.y - segment.start.y);
+  const ratio = Math.min(
+    1,
+    Math.max(
+      0,
+      ((point.x - segment.start.x) * deltaX + (point.y - segment.start.y) * deltaY) / denominator
+    )
+  );
+  return Math.hypot(
+    point.x - (segment.start.x + deltaX * ratio),
+    point.y - (segment.start.y + deltaY * ratio)
+  );
+}
+
+function segmentCenterlinesIntersect(left: PaintedSegment, right: PaintedSegment): boolean {
+  const cross = (first: PixelPoint, second: PixelPoint, third: PixelPoint): number =>
+    (second.x - first.x) * (third.y - first.y) - (second.y - first.y) * (third.x - first.x);
+  const first = cross(left.start, left.end, right.start);
+  const second = cross(left.start, left.end, right.end);
+  const third = cross(right.start, right.end, left.start);
+  const fourth = cross(right.start, right.end, left.end);
+  return (
+    Math.max(Math.min(left.start.x, left.end.x), Math.min(right.start.x, right.end.x)) <=
+      Math.min(Math.max(left.start.x, left.end.x), Math.max(right.start.x, right.end.x)) &&
+    Math.max(Math.min(left.start.y, left.end.y), Math.min(right.start.y, right.end.y)) <=
+      Math.min(Math.max(left.start.y, left.end.y), Math.max(right.start.y, right.end.y)) &&
+    ((first <= 0 && second >= 0) || (first >= 0 && second <= 0)) &&
+    ((third <= 0 && fourth >= 0) || (third >= 0 && fourth <= 0))
+  );
+}
+
+function paintedSegmentsIntersect(left: PaintedSegment, right: PaintedSegment): boolean {
+  if (
+    left.strokeWidth <= 0 ||
+    right.strokeWidth <= 0 ||
+    (left.start.x === left.end.x && left.start.y === left.end.y) ||
+    (right.start.x === right.end.x && right.start.y === right.end.y)
+  ) {
+    return false;
+  }
+  if (left.end.x === right.end.x && left.end.y === right.end.y) {
+    const leftVector = {
+      x: left.start.x - left.end.x,
+      y: left.start.y - left.end.y
+    };
+    const rightVector = {
+      x: right.start.x - right.end.x,
+      y: right.start.y - right.end.y
+    };
+    if (Math.abs(leftVector.x * rightVector.y - leftVector.y * rightVector.x) > 0.001) {
+      return false;
+    }
+  }
+  if (segmentCenterlinesIntersect(left, right)) return true;
+  const distance = Math.min(
+    pointToSegmentDistance(left.start, right),
+    pointToSegmentDistance(left.end, right),
+    pointToSegmentDistance(right.start, left),
+    pointToSegmentDistance(right.end, left)
+  );
+  return distance <= (left.strokeWidth + right.strokeWidth) / 2;
+}
+
+function geometryIntersectsOccupied(
+  rects: readonly PixelRect[],
+  segment: PaintedSegment | undefined,
+  occupied: OccupiedGeometry
+): boolean {
+  if (rects.some((rect) => occupied.rects.some((other) => rectsOverlap(rect, other)))) {
+    return true;
+  }
+  if (segment && occupied.rects.some((rect) => paintedSegmentIntersectsRect(segment, rect))) {
+    return true;
+  }
+  if (
+    occupied.segments.some((other) =>
+      rects.some((rect) => paintedSegmentIntersectsRect(other, rect))
+    )
+  ) {
+    return true;
+  }
+  return segment
+    ? occupied.segments.some((other) => paintedSegmentsIntersect(segment, other))
+    : false;
+}
+
+function colorHasVisibleAlpha(color: string): boolean {
+  if (color === "transparent") return false;
+  const alpha = /^#[0-9a-f]{8}$/iu.test(color)
+    ? color.slice(-2)
+    : /^#[0-9a-f]{4}$/iu.test(color)
+      ? color.slice(-1).repeat(2)
+      : "ff";
+  return Number.parseInt(alpha, 16) > 0;
+}
+
+function visibleStrokeWidth(style: RenderStyle, strokeColor = style.strokeColor): number {
+  const serializedWidth = Number(style.strokeWidth.toFixed(3));
+  const serializedOpacity = Number(style.opacity.toFixed(3));
+  return serializedWidth > 0 && serializedOpacity > 0 && colorHasVisibleAlpha(strokeColor)
+    ? serializedWidth
+    : 0;
+}
+
+function hasVisibleStroke(style: RenderStyle): boolean {
+  return visibleStrokeWidth(style) > 0;
 }
 
 async function renderCallout(
@@ -615,6 +888,579 @@ async function renderNumberMarker(
   return { buffer: rendered, center, radius, radiusReduced: radius < desiredRadius };
 }
 
+function numberedMarkerRadius(
+  annotation: RenderableAnnotation,
+  fittedFontSize: number,
+  width: number,
+  height: number
+): {
+  radius: number;
+  paintedRadius: number;
+  radiusReduced: boolean;
+  strokeWidth: number;
+  strokeWidthReduced: boolean;
+} {
+  const desiredRadius = Math.max(6, Math.round(fittedFontSize * 0.72));
+  const maximumPaintedRadius = Math.max(1, (Math.min(width, height) - 2) / 2);
+  const clearanceRadius = Math.max(4, Math.floor(Math.min(width, height) / 6));
+  const maximumRadius = Math.max(1, Math.min(Math.floor(maximumPaintedRadius), clearanceRadius));
+  const radius = Math.min(desiredRadius, maximumRadius);
+  const maximumStrokeWidth = Math.min(
+    Math.max(0, (maximumPaintedRadius - radius) * 2),
+    Math.max(1, Math.min(8, radius))
+  );
+  const markerStrokeColor = annotation.style.markerStrokeColor ?? annotation.style.strokeColor;
+  const requestedStrokeWidth = visibleStrokeWidth(annotation.style, markerStrokeColor);
+  const strokeWidth = Math.min(requestedStrokeWidth, maximumStrokeWidth);
+  return {
+    radius,
+    paintedRadius: radius + strokeWidth / 2,
+    radiusReduced: radius < desiredRadius,
+    strokeWidth,
+    strokeWidthReduced: strokeWidth < requestedStrokeWidth
+  };
+}
+
+function orderedMarkerFaces(
+  placement: CardinalPlacement,
+  box: PixelRect,
+  target: PixelRect
+): {
+  candidates: { face: CardinalPlacement; boundary: PixelPoint; distance: number }[];
+  preferredFace: CardinalPlacement;
+} {
+  const targetCenter = {
+    x: target.x + target.width / 2,
+    y: target.y + target.height / 2
+  };
+  const preferredFace: CardinalPlacement =
+    placement === "top"
+      ? "bottom"
+      : placement === "right"
+        ? "left"
+        : placement === "bottom"
+          ? "top"
+          : "right";
+  const candidates: { face: CardinalPlacement; boundary: PixelPoint; distance: number }[] = [
+    {
+      face: "top",
+      boundary: { x: Math.min(box.x + box.width, Math.max(box.x, targetCenter.x)), y: box.y },
+      distance: 0
+    },
+    {
+      face: "right",
+      boundary: {
+        x: box.x + box.width,
+        y: Math.min(box.y + box.height, Math.max(box.y, targetCenter.y))
+      },
+      distance: 0
+    },
+    {
+      face: "bottom",
+      boundary: {
+        x: Math.min(box.x + box.width, Math.max(box.x, targetCenter.x)),
+        y: box.y + box.height
+      },
+      distance: 0
+    },
+    {
+      face: "left",
+      boundary: { x: box.x, y: Math.min(box.y + box.height, Math.max(box.y, targetCenter.y)) },
+      distance: 0
+    }
+  ];
+  for (const candidate of candidates) {
+    candidate.distance = Math.hypot(
+      candidate.boundary.x - targetCenter.x,
+      candidate.boundary.y - targetCenter.y
+    );
+  }
+  candidates.sort((left, right) => {
+    if (left.distance !== right.distance) return left.distance - right.distance;
+    if (left.face === preferredFace) return -1;
+    if (right.face === preferredFace) return 1;
+    return (
+      ["top", "right", "bottom", "left"].indexOf(left.face) -
+      ["top", "right", "bottom", "left"].indexOf(right.face)
+    );
+  });
+  return { candidates, preferredFace };
+}
+
+function markerCenterForLabel(
+  placement: CardinalPlacement,
+  box: PixelRect,
+  target: PixelRect,
+  paintedRadius: number,
+  width: number,
+  height: number,
+  faceOverride?: CardinalPlacement
+): {
+  center: PixelPoint;
+  face: CardinalPlacement;
+  preferredFace: CardinalPlacement;
+  wasClamped: boolean;
+} {
+  const ordered = orderedMarkerFaces(placement, box, target);
+  const selected =
+    ordered.candidates.find((candidate) => candidate.face === faceOverride) ??
+    ordered.candidates[0];
+  if (selected === undefined) throw new Error("Numbered marker face selection failed.");
+  const center =
+    selected.face === "top"
+      ? { x: selected.boundary.x, y: box.y - paintedRadius }
+      : selected.face === "right"
+        ? { x: box.x + box.width + paintedRadius, y: selected.boundary.y }
+        : selected.face === "bottom"
+          ? { x: selected.boundary.x, y: box.y + box.height + paintedRadius }
+          : { x: box.x - paintedRadius, y: selected.boundary.y };
+  const clampCoordinate = (value: number, extent: number): number => {
+    const minimum = paintedRadius + 1;
+    const maximum = extent - paintedRadius - 1;
+    return minimum <= maximum ? Math.min(maximum, Math.max(minimum, value)) : (extent - 1) / 2;
+  };
+  const clamped = {
+    x: clampCoordinate(center.x, width),
+    y: clampCoordinate(center.y, height)
+  };
+  return {
+    center: clamped,
+    face: selected.face,
+    preferredFace: ordered.preferredFace,
+    wasClamped: clamped.x !== center.x || clamped.y !== center.y
+  };
+}
+
+function compareNumberedGeometryCandidates(
+  left: NumberedGeometryCandidate,
+  right: NumberedGeometryCandidate
+): number {
+  const leftScore = [
+    left.hardCollisionCount,
+    left.collisionIds.length,
+    left.decorationOverflow ? 1 : 0,
+    left.leader.length < MINIMUM_VISIBLE_NUMBERED_LEADER ? 1 : 0,
+    left.placementOrder,
+    left.faceOrder,
+    left.placementScore
+  ];
+  const rightScore = [
+    right.hardCollisionCount,
+    right.collisionIds.length,
+    right.decorationOverflow ? 1 : 0,
+    right.leader.length < MINIMUM_VISIBLE_NUMBERED_LEADER ? 1 : 0,
+    right.placementOrder,
+    right.faceOrder,
+    right.placementScore
+  ];
+  for (let index = 0; index < leftScore.length; index += 1) {
+    const difference = (leftScore[index] ?? 0) - (rightScore[index] ?? 0);
+    if (difference !== 0) return difference;
+  }
+  return 0;
+}
+
+async function renderNumberMarkerAt(
+  base: Buffer,
+  annotation: RenderableAnnotation,
+  number: number,
+  center: PixelPoint,
+  radius: number,
+  strokeWidth: number,
+  width: number,
+  height: number,
+  fontPath: string
+): Promise<Buffer> {
+  const markerStyle: RenderStyle = {
+    ...annotation.style,
+    strokeColor: annotation.style.markerStrokeColor ?? annotation.style.strokeColor,
+    fillColor: annotation.style.markerFillColor ?? annotation.style.backgroundColor,
+    strokeWidth,
+    opacity: annotation.style.opacity
+  };
+  const markerRect = {
+    x: center.x - radius,
+    y: center.y - radius,
+    width: radius * 2,
+    height: radius * 2
+  };
+  const textStyle = {
+    ...annotation.style,
+    textColor: annotation.style.markerTextColor ?? annotation.style.textColor,
+    fontSize: Math.max(6, radius),
+    maxWidth: radius * 2
+  };
+  const sprite = await renderTextSprite(
+    String(number),
+    textStyle,
+    fontPath,
+    radius * 2,
+    radius * 2
+  );
+  const geometry = controlledSvg(width, height, ellipseBody(markerRect, markerStyle));
+  return compositeStable(base, [
+    { input: geometry, left: 0, top: 0 },
+    {
+      input: sprite.buffer,
+      left: Math.round(center.x - sprite.width / 2),
+      top: Math.round(center.y - sprite.height / 2)
+    }
+  ]);
+}
+
+async function renderVersion11NumberedCallout(
+  base: Buffer,
+  annotation: RenderableAnnotation,
+  number: number,
+  width: number,
+  height: number,
+  fontPath: string,
+  occupiedGroups: readonly OccupiedGeometry[],
+  warnings: string[]
+): Promise<{
+  buffer: Buffer;
+  box: PixelRect;
+  paintedLabelBox: PixelRect;
+  leaderBox?: PixelRect;
+  markerBox: PixelRect;
+  occupiedGeometry: OccupiedGeometry;
+  resolved: Record<string, unknown>;
+}> {
+  const rawTarget = annotation.target ?? annotation.rect ?? annotation.position;
+  if (!rawTarget) throw new Error(`Numbered callout ${annotation.id} is missing a target.`);
+  const safeTarget = isPixelRect(rawTarget)
+    ? integerRect(rawTarget, width, height)
+    : pointInCanvas(rawTarget, width, height);
+  const layoutTarget = isPixelRect(safeTarget)
+    ? safeTarget
+    : integerRect({ x: safeTarget.x - 2, y: safeTarget.y - 2, width: 4, height: 4 }, width, height);
+  const text = annotation.text ?? "";
+  const margin = Math.min(4, Math.max(1, Math.floor((Math.min(width, height) - 1) / 4)));
+  const maximumLabelWidth = Math.max(1, width - margin * 2);
+  const maximumLabelHeight = Math.max(1, height - margin * 2);
+  const minimumTextExtent = Math.min(12, maximumLabelWidth, maximumLabelHeight);
+  const maximumPadding = Math.max(
+    0,
+    Math.floor((Math.min(maximumLabelWidth, maximumLabelHeight) - minimumTextExtent) / 2)
+  );
+  const requestedPadding = Math.round(annotation.style.padding);
+  const padding = Math.min(requestedPadding, maximumPadding);
+  const maximumTextWidth = Math.max(
+    1,
+    Math.min(annotation.style.maxWidth, maximumLabelWidth - padding * 2)
+  );
+  const maximumTextHeight = Math.max(1, maximumLabelHeight - padding * 2);
+  const sprite = await renderTextSprite(
+    text,
+    annotation.style,
+    fontPath,
+    maximumTextWidth,
+    maximumTextHeight
+  );
+  if (sprite.wasShrunk) {
+    warnings.push(
+      `Numbered callout ${annotation.id} font size was reduced from ${annotation.style.fontSize}px to ${sprite.fontSize}px to keep all text inside the canvas.`
+    );
+  }
+  if (padding < requestedPadding) {
+    warnings.push(
+      `Numbered callout ${annotation.id} padding was reduced from ${requestedPadding}px to ${padding}px to fit the canvas.`
+    );
+  }
+  const markerSize = numberedMarkerRadius(annotation, sprite.fontSize, width, height);
+  const requestedLabelStrokeWidth = visibleStrokeWidth(annotation.style);
+  const labelStrokeWidth = Math.min(requestedLabelStrokeWidth, margin * 2);
+  const labelStrokeOutset = labelStrokeWidth / 2;
+  const maximumLeaderStrokeWidth = Math.max(1, Math.min(8, markerSize.radius));
+  const requestedLeaderStrokeWidth = visibleStrokeWidth(annotation.style);
+  const leaderStrokeWidth = Math.min(requestedLeaderStrokeWidth, maximumLeaderStrokeWidth);
+  const leaderStyle = { ...annotation.style, strokeWidth: leaderStrokeWidth };
+  const desiredGap =
+    labelStrokeOutset +
+    markerSize.paintedRadius * 2 +
+    MINIMUM_VISIBLE_NUMBERED_LEADER +
+    NUMBERED_LEADER_RENDERING_ALLOWANCE;
+  const labelWidth = Math.min(maximumLabelWidth, sprite.width + padding * 2);
+  const labelHeight = Math.min(maximumLabelHeight, sprite.height + padding * 2);
+  const leaderIsVisible = hasVisibleStroke(leaderStyle);
+  const requestedPlacement = annotation.placement ?? "auto";
+  const automaticOrder = ["top", "right", "bottom", "left"] as const;
+  const placements: readonly CardinalPlacement[] =
+    requestedPlacement === "auto" ? automaticOrder : [requestedPlacement];
+  const geometryCandidates: NumberedGeometryCandidate[] = [];
+  for (const [placementOrder, placement] of placements.entries()) {
+    const placed = placeCallout({
+      canvas: { width, height },
+      target: layoutTarget,
+      box: { width: labelWidth, height: labelHeight },
+      occupied: [],
+      placement,
+      margin,
+      gap: desiredGap,
+      facingDecorationDepth: desiredGap,
+      facingDecorationSpan: (markerSize.paintedRadius + labelStrokeOutset) * 2
+    });
+    const paintedLabelBox = inflateRect(placed.box, labelStrokeOutset);
+    const orderedFaces = orderedMarkerFaces(placement, paintedLabelBox, layoutTarget);
+    for (const [faceOrder, face] of orderedFaces.candidates.entries()) {
+      const markerPlacement = markerCenterForLabel(
+        placement,
+        paintedLabelBox,
+        layoutTarget,
+        markerSize.paintedRadius,
+        width,
+        height,
+        face.face
+      );
+      const marker = {
+        center: markerPlacement.center,
+        radius: markerSize.radius,
+        paintedRadius: markerSize.paintedRadius,
+        strokeWidth: markerSize.strokeWidth,
+        labelSide: markerPlacement.face
+      };
+      const markerBox = {
+        x: marker.center.x - marker.paintedRadius,
+        y: marker.center.y - marker.paintedRadius,
+        width: marker.paintedRadius * 2,
+        height: marker.paintedRadius * 2
+      };
+      const paintedMarker = { center: marker.center, radius: marker.paintedRadius };
+      const boundaryLeader = connectCircleToTarget(paintedMarker, safeTarget);
+      const labelTargetOverlap = rectsOverlap(paintedLabelBox, layoutTarget);
+      const markerLabelOverlap = circleOverlapsTarget(paintedMarker, paintedLabelBox);
+      const markerTargetOverlap = circleOverlapsTarget(paintedMarker, safeTarget);
+      const hasLeader =
+        leaderIsVisible &&
+        !labelTargetOverlap &&
+        !markerLabelOverlap &&
+        !markerTargetOverlap &&
+        boundaryLeader.length > 0;
+      const leader = hasLeader
+        ? boundaryLeader
+        : { start: { ...boundaryLeader.end }, end: boundaryLeader.end, length: 0 };
+      const leaderSegment = hasLeader
+        ? { start: leader.start, end: leader.end, strokeWidth: leaderStrokeWidth }
+        : undefined;
+      const leaderBox = leaderSegment
+        ? segmentBounds(leaderSegment.start, leaderSegment.end, leaderSegment.strokeWidth)
+        : undefined;
+      const collisionIds = occupiedGroups
+        .filter((group) =>
+          geometryIntersectsOccupied([paintedLabelBox, markerBox], leaderSegment, group)
+        )
+        .map((group) => group.annotationId);
+      const labelClipped = !rectInsideCanvas(paintedLabelBox, width, height);
+      const markerClipped = !rectInsideCanvas(markerBox, width, height);
+      const leaderClipped = leaderBox ? !rectInsideCanvas(leaderBox, width, height) : false;
+      const decorationOverflow =
+        labelClipped ||
+        markerClipped ||
+        leaderClipped ||
+        placed.warnings.some((warning) => warning.includes("decoration footprint overflowed"));
+      geometryCandidates.push({
+        placement,
+        placementOrder,
+        faceOrder,
+        box: placed.box,
+        paintedLabelBox,
+        marker,
+        markerBox,
+        leader,
+        ...(leaderBox ? { leaderBox } : {}),
+        ...(leaderSegment ? { leaderSegment } : {}),
+        collisionIds,
+        decorationOverflow,
+        hardCollisionCount:
+          Number(labelTargetOverlap) + Number(markerLabelOverlap) + Number(markerTargetOverlap),
+        labelTargetOverlap,
+        markerLabelOverlap,
+        markerTargetOverlap,
+        labelClipped,
+        markerClipped,
+        leaderClipped,
+        placementWarnings: placed.warnings,
+        placementScore: placed.score.total,
+        markerWasClamped: markerPlacement.wasClamped,
+        preferredFace: markerPlacement.preferredFace
+      });
+    }
+  }
+  const chosen = geometryCandidates.reduce((best, candidate) =>
+    compareNumberedGeometryCandidates(candidate, best) < 0 ? candidate : best
+  );
+  warnings.push(
+    ...chosen.placementWarnings
+      .filter(
+        (warning) =>
+          !warning.includes("overlaps its target") && !warning.includes("occupied callout")
+      )
+      .map((warning) => `Numbered callout ${annotation.id}: ${warning}`)
+  );
+  if (chosen.markerWasClamped) {
+    warnings.push(
+      `Numbered callout ${annotation.id} marker was shifted to keep it inside the canvas.`
+    );
+  }
+  if (chosen.marker.labelSide !== chosen.preferredFace) {
+    warnings.push(
+      `Numbered callout ${annotation.id} marker moved to the ${chosen.marker.labelSide} label edge to avoid a final-geometry collision.`
+    );
+  }
+  if (markerSize.radiusReduced) {
+    warnings.push(`Numbered callout ${annotation.id} marker radius was reduced to fit the canvas.`);
+  }
+  if (markerSize.strokeWidthReduced) {
+    warnings.push(
+      `Numbered callout ${annotation.id} marker stroke width was reduced from ${annotation.style.strokeWidth}px to ${Number(markerSize.strokeWidth.toFixed(1))}px to fit the canvas.`
+    );
+  }
+  if (labelStrokeWidth < requestedLabelStrokeWidth) {
+    warnings.push(
+      `Numbered callout ${annotation.id} label stroke width was reduced from ${requestedLabelStrokeWidth}px to ${labelStrokeWidth}px to fit the canvas.`
+    );
+  }
+  if (leaderStrokeWidth < requestedLeaderStrokeWidth) {
+    warnings.push(
+      `Numbered callout ${annotation.id} leader stroke width was reduced from ${requestedLeaderStrokeWidth}px to ${leaderStrokeWidth}px to preserve target visibility.`
+    );
+  }
+  if (chosen.decorationOverflow) {
+    warnings.push(
+      `Numbered callout ${annotation.id} final facing decoration footprint overflowed the canvas; no in-canvas candidate was available.`
+    );
+  }
+  if (chosen.labelClipped) {
+    warnings.push(
+      `Numbered callout ${annotation.id} painted label border was clipped by the canvas.`
+    );
+  }
+  if (chosen.markerClipped) {
+    warnings.push(`Numbered callout ${annotation.id} painted marker was clipped by the canvas.`);
+  }
+  if (chosen.leaderClipped) {
+    warnings.push(`Numbered callout ${annotation.id} painted leader was clipped by the canvas.`);
+  }
+  if (chosen.markerLabelOverlap) {
+    warnings.push(
+      `Numbered callout ${annotation.id} marker could not remain outside its label while staying inside the canvas.`
+    );
+  }
+  if (chosen.markerTargetOverlap) {
+    warnings.push(
+      `Numbered callout ${annotation.id} marker overlaps its target because the requested placement cannot provide separate geometry.`
+    );
+  }
+  if (chosen.labelTargetOverlap) {
+    warnings.push(
+      `Numbered callout ${annotation.id} label overlaps its target and hides the leader; a separate target-facing segment was not available.`
+    );
+  }
+  if (chosen.collisionIds.length > 0) {
+    warnings.push(
+      `Numbered callout ${annotation.id} final label, marker, or leader geometry intersects ${chosen.collisionIds.length} occupied annotation${chosen.collisionIds.length === 1 ? "" : "s"}; no collision-free candidate was available.`
+    );
+  }
+  if (!leaderIsVisible) {
+    warnings.push(
+      `Numbered callout ${annotation.id} leader is invisible because its resolved stroke width, opacity, or color alpha is zero.`
+    );
+  }
+  if (chosen.leader.length + 0.001 < MINIMUM_VISIBLE_NUMBERED_LEADER) {
+    warnings.push(
+      `Numbered callout ${annotation.id} has only ${Number(chosen.leader.length.toFixed(1))}px of visible leader; ${MINIMUM_VISIBLE_NUMBERED_LEADER}px was not available.`
+    );
+  }
+
+  let rendered: Buffer = base;
+  if (chosen.leaderSegment) {
+    rendered = await compositeStable(rendered, [
+      {
+        input: controlledSvg(
+          width,
+          height,
+          leaderBody(chosen.leader.start, chosen.leader.end, leaderStyle)
+        ),
+        left: 0,
+        top: 0
+      }
+    ]);
+  }
+  const backgroundStyle: RenderStyle = {
+    ...annotation.style,
+    fillColor: annotation.style.backgroundColor,
+    strokeWidth: labelStrokeWidth,
+    opacity: annotation.style.opacity
+  };
+  rendered = await compositeStable(rendered, [
+    {
+      input: controlledSvg(
+        width,
+        height,
+        rectangleBody(chosen.box, backgroundStyle, annotation.style.cornerRadius)
+      ),
+      left: 0,
+      top: 0
+    },
+    {
+      input: sprite.buffer,
+      left: Math.max(0, Math.round(chosen.box.x + padding)),
+      top: Math.max(0, Math.round(chosen.box.y + padding))
+    }
+  ]);
+  rendered = await renderNumberMarkerAt(
+    rendered,
+    annotation,
+    number,
+    chosen.marker.center,
+    chosen.marker.radius,
+    chosen.marker.strokeWidth,
+    width,
+    height,
+    fontPath
+  );
+  return {
+    buffer: rendered,
+    box: chosen.box,
+    paintedLabelBox: chosen.paintedLabelBox,
+    ...(chosen.leaderBox ? { leaderBox: chosen.leaderBox } : {}),
+    markerBox: chosen.markerBox,
+    occupiedGeometry: {
+      annotationId: annotation.id,
+      rects: [chosen.paintedLabelBox, chosen.markerBox],
+      segments: chosen.leaderSegment ? [chosen.leaderSegment] : []
+    },
+    resolved: {
+      id: annotation.id,
+      type: annotation.type,
+      target: safeTarget,
+      box: chosen.box,
+      anchor: chosen.leader.start,
+      targetAnchor: chosen.leader.end,
+      placement: chosen.placement,
+      text,
+      fontSize: sprite.fontSize,
+      number,
+      marker: { ...chosen.marker, bounds: chosen.markerBox },
+      label: {
+        box: chosen.box,
+        paintedBounds: chosen.paintedLabelBox,
+        placement: chosen.placement,
+        text,
+        fontSize: sprite.fontSize,
+        padding,
+        strokeWidth: labelStrokeWidth
+      },
+      leader: {
+        ...chosen.leader,
+        ...(chosen.leaderBox ? { bounds: chosen.leaderBox } : {}),
+        strokeWidth: leaderStrokeWidth
+      },
+      style: annotation.style
+    }
+  };
+}
+
 export async function resolveBundledFontPath(): Promise<string> {
   bundledFontPathPromise ??= (async () => {
     const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -723,6 +1569,10 @@ export async function renderAnnotations(
   options: RenderAnnotationsOptions = {}
 ): Promise<RenderAnnotationsResult> {
   const limitInputPixels = options.limitInputPixels ?? 40_000_000;
+  const specVersion: unknown = options.specVersion === undefined ? "1.0" : options.specVersion;
+  if (specVersion !== "1.0" && specVersion !== "1.1") {
+    throw new Error(`Unsupported renderer AnnotationSpec version: ${String(specVersion)}.`);
+  }
   const normalized = await sharp(input, { failOn: "error", limitInputPixels })
     .autoOrient()
     .toColourspace("srgb")
@@ -735,6 +1585,7 @@ export async function renderAnnotations(
   const warnings: string[] = [];
   const resolvedAnnotations: Record<string, unknown>[] = [];
   const occupied: PixelRect[] = [];
+  const occupiedGroups: OccupiedGeometry[] = [];
   let current: Buffer<ArrayBufferLike> = normalized.data;
   let usesBlur = false;
   let usesRedact = false;
@@ -888,6 +1739,7 @@ export async function renderAnnotations(
       });
       current = await compositeStable(current, overlays);
       occupied.push(box);
+      occupiedGroups.push({ annotationId: annotation.id, rects: [box], segments: [] });
       resolvedAnnotations.push({
         id: annotation.id,
         type: annotation.type,
@@ -901,6 +1753,28 @@ export async function renderAnnotations(
 
     if (annotation.type === "numbered-callout") {
       const number = annotation.number ?? index + 1;
+      if (specVersion === "1.1") {
+        const callout = await renderVersion11NumberedCallout(
+          current,
+          annotation,
+          number,
+          width,
+          height,
+          fontPath,
+          occupiedGroups,
+          warnings
+        );
+        current = callout.buffer;
+        const occupiedRects = [
+          callout.paintedLabelBox,
+          callout.markerBox,
+          ...(callout.leaderBox ? [callout.leaderBox] : [])
+        ];
+        occupied.push(unionRects(occupiedRects));
+        occupiedGroups.push(callout.occupiedGeometry);
+        resolvedAnnotations.push(callout.resolved);
+        continue;
+      }
       const marker = await renderNumberMarker(current, annotation, number, width, height, fontPath);
       const requestedMarkerPoint = targetPoint(
         annotation.target ?? annotation.rect ?? annotation.position
@@ -926,6 +1800,7 @@ export async function renderAnnotations(
         height: marker.radius * 2
       };
       occupied.push(markerBox);
+      occupiedGroups.push({ annotationId: annotation.id, rects: [markerBox], segments: [] });
       current = marker.buffer;
       if ((annotation.text ?? "").length > 0) {
         const callout = await renderCallout(
@@ -938,7 +1813,11 @@ export async function renderAnnotations(
           warnings
         );
         current = callout.buffer;
-        if (callout.box) occupied.push(callout.box);
+        if (callout.box) {
+          occupied.push(callout.box);
+          const group = occupiedGroups.at(-1);
+          if (group?.annotationId === annotation.id) group.rects.push(callout.box);
+        }
         resolvedAnnotations.push({
           ...callout.resolved,
           number,
@@ -965,7 +1844,10 @@ export async function renderAnnotations(
       warnings
     );
     current = callout.buffer;
-    if (callout.box) occupied.push(callout.box);
+    if (callout.box) {
+      occupied.push(callout.box);
+      occupiedGroups.push({ annotationId: annotation.id, rects: [callout.box], segments: [] });
+    }
     resolvedAnnotations.push(callout.resolved);
   }
 

@@ -7,6 +7,11 @@ import { afterEach, beforeEach, describe, expect, test } from "vitest";
 
 import type { CliIo, CliWritable } from "../src/cli/index.js";
 import { runCli } from "../src/cli/index.js";
+import { annotateImage } from "../src/core/index.js";
+import {
+  NUMBERED_CALLOUT_CANVAS,
+  NUMBERED_CALLOUT_V11_SPEC
+} from "./fixtures/numbered-callout-v11.js";
 
 class BufferWriter implements CliWritable {
   public value = "";
@@ -205,6 +210,71 @@ describe("AgentCallout CLI", () => {
       annotations: [{ id: "cli-info", tone: "info" }]
     });
     expect(sidecar.resolvedAnnotations[0]?.style).toMatchObject({ strokeColor: "#2563eb" });
+  });
+
+  test("matches core numbered target/marker/label/leader geometry through the CLI", async () => {
+    const publicInputPath = join(directory, "公共入口输入.png");
+    await sharp({
+      create: { ...NUMBERED_CALLOUT_CANVAS, channels: 3, background: "white" }
+    })
+      .png()
+      .toFile(publicInputPath);
+    const outputPath = join(directory, "cli-numbered.png");
+    const capture = captureIo();
+    expect(
+      await runCli(
+        [
+          "node",
+          "agent-callout",
+          "annotate",
+          publicInputPath,
+          "--spec-json",
+          JSON.stringify(NUMBERED_CALLOUT_V11_SPEC),
+          "--output",
+          outputPath,
+          "--allow-root",
+          directory,
+          "--json"
+        ],
+        capture.io
+      )
+    ).toBe(0);
+    const generated = JSON.parse(capture.stdout.value) as {
+      sidecarPath: string;
+      warnings: string[];
+    };
+    const direct = await annotateImage({
+      inputPath: publicInputPath,
+      outputPath: join(directory, "core-numbered.png"),
+      spec: NUMBERED_CALLOUT_V11_SPEC,
+      allowedRoots: [directory]
+    });
+    const cliSidecar = JSON.parse(await readFile(generated.sidecarPath, "utf8")) as {
+      resolvedAnnotations: Record<string, unknown>[];
+    };
+    const coreSidecar = JSON.parse(await readFile(direct.sidecarPath, "utf8")) as {
+      resolvedAnnotations: Record<string, unknown>[];
+    };
+
+    expect(capture.stderr.value).toBe("");
+    expect(generated.warnings).toEqual([]);
+    expect(cliSidecar.resolvedAnnotations).toEqual(coreSidecar.resolvedAnnotations);
+    const resolved = cliSidecar.resolvedAnnotations[0] as
+      | {
+          target?: unknown;
+          marker?: { center?: unknown; radius?: unknown };
+          label?: { box?: unknown; placement?: unknown };
+          leader?: { start?: unknown; end?: unknown; length?: unknown };
+        }
+      | undefined;
+    expect(resolved?.target).toEqual(NUMBERED_CALLOUT_V11_SPEC.annotations[0].target);
+    expect(typeof resolved?.marker?.center).toBe("object");
+    expect(typeof resolved?.marker?.radius).toBe("number");
+    expect(typeof resolved?.label?.box).toBe("object");
+    expect(resolved?.label?.placement).toBe("left");
+    expect(typeof resolved?.leader?.start).toBe("object");
+    expect(typeof resolved?.leader?.end).toBe("object");
+    expect(typeof resolved?.leader?.length).toBe("number");
   });
 
   test("crop and contact-sheet create decodable outputs", async () => {

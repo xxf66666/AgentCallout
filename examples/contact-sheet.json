@@ -1,8 +1,8 @@
 {
   "annotationCount": 0,
   "hashes": {
-    "inputSha256": "5b6914cc35f56aa795ff42cbe8d6ac487cc315889a1aa010d59e26285a3dff81",
-    "outputSha256": "ef29442adb6a085218663965c426c3f9570c6680e2c4cecad7fd4043c8bb067b",
+    "inputSha256": "6e5317fe86e7fc4ff65511de729ae75769e0cde4a3dc33aa30c67c6a95170601",
+    "outputSha256": "82f6f37cb6f2d63e059e0edcab4ee997bd417aba85ce52f7a6f9f318a2250b54",
     "specSha256": "f3a45165247b799e48ccfe6b821d8c6f88070d3c1678eef6023329b306f5badf"
   },
   "inputs": [
@@ -31,8 +31,8 @@
       "orientation": null,
       "path": "numbered-review/output.png",
       "pathSemantics": "relative-to-sidecar",
-      "sha256": "21e426c854bf47d99a593ab2cb2523d3ab63ab8afbb42188ec3ff8f11b5dc721",
-      "sizeBytes": 48495,
+      "sha256": "ab32f6458acd099f454301f02fee31f7a1bea2230e5531c7249f5d681f1561bc",
+      "sizeBytes": 48450,
       "storedDimensions": {
         "height": 700,
         "width": 1100

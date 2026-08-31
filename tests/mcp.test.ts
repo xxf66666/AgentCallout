@@ -9,7 +9,12 @@ import { ListRootsRequestSchema, type CallToolResult } from "@modelcontextprotoc
 import sharp from "sharp";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 
+import { annotateImage } from "../src/core/index.js";
 import { createAgentCalloutMcpServer } from "../src/mcp/index.js";
+import {
+  NUMBERED_CALLOUT_CANVAS,
+  NUMBERED_CALLOUT_V11_SPEC
+} from "./fixtures/numbered-callout-v11.js";
 
 describe("AgentCallout MCP server", () => {
   let directory: string;
@@ -86,6 +91,9 @@ describe("AgentCallout MCP server", () => {
     expect(advertisedSpec).toContain('"danger"');
     expect(advertisedSpec).toContain('"markerFillColor"');
     expect(advertisedSpec).toContain('"maxWidth"');
+    expect(advertisedSpec).not.toContain('"leader"');
+    expect(advertisedSpec).not.toContain('"label"');
+    expect(advertisedSpec).not.toContain('"marker"');
     for (const type of [
       "rectangle",
       "ellipse",
@@ -206,6 +214,57 @@ describe("AgentCallout MCP server", () => {
       maxWidth: 48,
       markerFillColor: "#2563eb"
     });
+  });
+
+  test("matches core numbered target/marker/label/leader geometry through MCP", async () => {
+    const publicInputPath = join(directory, "mcp-public-input.png");
+    await sharp({
+      create: { ...NUMBERED_CALLOUT_CANVAS, channels: 3, background: "white" }
+    })
+      .png()
+      .toFile(publicInputPath);
+    const direct = await annotateImage({
+      inputPath: publicInputPath,
+      outputPath: join(directory, "mcp-core-numbered.png"),
+      spec: NUMBERED_CALLOUT_V11_SPEC,
+      allowedRoots: [directory]
+    });
+    const outputPath = join(directory, "mcp-numbered.png");
+    const annotated = (await client.callTool({
+      name: "annotate_image",
+      arguments: { inputPath: publicInputPath, outputPath, spec: NUMBERED_CALLOUT_V11_SPEC }
+    })) as CallToolResult;
+    const text = annotated.content.find((item) => item.type === "text");
+    const result = (text?.type === "text" ? JSON.parse(text.text) : undefined) as
+      { sidecarPath?: string; warnings?: string[] } | undefined;
+    if (result?.sidecarPath === undefined) throw new Error("Missing MCP numbered sidecar path.");
+    const mcpSidecar = JSON.parse(await readFile(result.sidecarPath, "utf8")) as {
+      resolvedAnnotations: Record<string, unknown>[];
+    };
+    const coreSidecar = JSON.parse(await readFile(direct.sidecarPath, "utf8")) as {
+      resolvedAnnotations: Record<string, unknown>[];
+    };
+
+    expect(annotated.isError).not.toBe(true);
+    expect(annotated.content.some((item) => item.type === "image")).toBe(true);
+    expect(result.warnings).toEqual([]);
+    expect(mcpSidecar.resolvedAnnotations).toEqual(coreSidecar.resolvedAnnotations);
+    const resolved = mcpSidecar.resolvedAnnotations[0] as
+      | {
+          target?: unknown;
+          marker?: { center?: unknown; radius?: unknown };
+          label?: { box?: unknown; placement?: unknown };
+          leader?: { start?: unknown; end?: unknown; length?: unknown };
+        }
+      | undefined;
+    expect(resolved?.target).toEqual(NUMBERED_CALLOUT_V11_SPEC.annotations[0].target);
+    expect(typeof resolved?.marker?.center).toBe("object");
+    expect(typeof resolved?.marker?.radius).toBe("number");
+    expect(typeof resolved?.label?.box).toBe("object");
+    expect(resolved?.label?.placement).toBe("left");
+    expect(typeof resolved?.leader?.start).toBe("object");
+    expect(typeof resolved?.leader?.end).toBe("object");
+    expect(typeof resolved?.leader?.length).toBe("number");
   });
 
   test("image tools omit structuredContent and return a decodable bounded PNG preview", async () => {

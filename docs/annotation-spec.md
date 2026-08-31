@@ -141,6 +141,16 @@ Draws an ellipse fitted inside `rect`.
 
 This has the same target, text, and placement behavior as `callout`, plus an integer `number` from 1 through 9,999.
 
+Numbered geometry is versioned without adding public input fields:
+
+- Version 1.0 preserves the legacy replay path byte-for-byte: the marker remains centered on the target and the existing fixed-gap label/leader composition is unchanged.
+- Version 1.1 treats `target`, `marker`, `label`, and `leader` as separate resolved geometry. The marker sits immediately outside the label edge that faces the target. The leader runs from the painted outer marker boundary to the exact point target or the boundary of a rectangular target, so neither the marker nor its number covers the reviewed content.
+- On a feasible canvas, the exposed 1.1 leader is at least 24 pixels. Placement scoring reserves the painted label/marker bounds and leader corridor. Edge clamping, very small canvases, dense occupied layouts, invisible leader styles, and strokes too wide for the canvas remain deterministic; when visibility or separation cannot be met, the renderer keeps the output decodable and emits a warning containing the annotation ID.
+
+The 1.1 sidecar records `target`, `marker` (including painted bounds), `label`, and `leader` (start, end, and exposed length). These are resolved output fields, not AnnotationSpec input fields; supplying `marker`, `label`, or `leader` in an input annotation is still rejected as an unknown field.
+
+Until the planned v0.1.3 renderer-version bump, this 1.1 numbered geometry is renderer-version-dependent. A pre-release 1.1 sidecar is not a promise of pixel-equivalent replay under a different renderer build: retain and check the sidecar's renderer/font metadata, then regenerate and visually review it. This caveat does not apply to the frozen 1.0 replay path.
+
 ### `highlight`
 
 ```json
@@ -393,6 +403,6 @@ Do not rewrite a stored 1.0 sidecar merely to adopt new colors; replay it as 1.0
 
 Version 1.0 has no `marker*` fields: a `numbered-callout` marker takes its outline from the resolved `strokeColor`, its fill from the resolved `backgroundColor`, and its number from the resolved `textColor`. Version 1.1 resolves those marker colors independently. When converting a custom 1.0 numbered callout and preserving its marker appearance matters, copy those former resolved values explicitly to `markerStrokeColor`, `markerFillColor`, and `markerTextColor`, respectively, in the 1.1 revision. Omit them when intentionally adopting the selected 1.1 preset/tone marker palette, and never add them to a 1.0 spec because 1.0 rejects those fields.
 
-The callout layout algorithm, candidate order, and fixed leader gap are the same in both versions. `maxWidth` can change wrapping and therefore the size and selected position of a 1.1 label, but it does not introduce a different layout algorithm.
+Plain `callout` layout keeps the existing candidate order and fixed leader gap in both versions. A 1.1 `numbered-callout` uses the same deterministic candidate scoring with a larger marker-aware footprint and boundary-to-boundary leader clearance; 1.0 retains the old numbered gap and paint order. `maxWidth` can still change wrapping and therefore the selected label position.
 
 Validate a spec before rendering, resolve it against the inspected image dimensions, retain its warnings, and save the canonical or sidecar representation needed for replay.

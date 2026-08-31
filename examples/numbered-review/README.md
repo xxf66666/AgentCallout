@@ -1,6 +1,6 @@
 # Numbered review
 
-A synthetic operations dashboard showing neutral, warning, and info tones without defaulting ordinary findings to red.
+A synthetic operations dashboard showing visible boundary-to-boundary numbered leaders without covering reviewed targets.
 
 ## Generate
 

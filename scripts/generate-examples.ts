@@ -6,7 +6,12 @@ import { fileURLToPath } from "node:url";
 import sharp, { type OverlayOptions } from "sharp";
 
 import { annotateImage, createContactSheet } from "../src/core/index.js";
-import { STABLE_PNG_OPTIONS, resolveBundledFontPath } from "../src/renderer/index.js";
+import { circleOverlapsTarget } from "../src/layout/index.js";
+import {
+  BUNDLED_FONT_SHA256,
+  STABLE_PNG_OPTIONS,
+  resolveBundledFontPath
+} from "../src/renderer/index.js";
 import { parseAnnotationSpec } from "../src/spec/index.js";
 
 interface TextItem {
@@ -28,6 +33,39 @@ interface ExampleDefinition {
   text: TextItem[];
   spec: unknown;
 }
+
+interface ResolvedNumberedExample {
+  id: string;
+  type: "numbered-callout";
+  target: { x: number; y: number; width?: number; height?: number };
+  marker: {
+    center: { x: number; y: number };
+    radius: number;
+    paintedRadius: number;
+    bounds: { x: number; y: number; width: number; height: number };
+  };
+  label: {
+    box: { x: number; y: number; width: number; height: number };
+    paintedBounds: { x: number; y: number; width: number; height: number };
+  };
+  leader: {
+    start: { x: number; y: number };
+    end: { x: number; y: number };
+    length: number;
+    bounds: { x: number; y: number; width: number; height: number };
+  };
+}
+
+const UNAFFECTED_BASELINE_HASHES = {
+  "ui-bug": {
+    output: "bb3d3b9faf8c249b3fefafb44b74c8a579c13868a2a191d544cf0511c5a46bf6",
+    sidecar: "212de7d22b7ed2f799e55a66482d49840a562fc44a390de6aea8407112d02bcd"
+  },
+  privacy: {
+    output: "c3e52a99d622a3c5cad5eda7c7a0e86bcca0d5e5a543e29f3961476032c727b6",
+    sidecar: "dea550c2d1972453b744670686b3335bc576498744e47119e2a1366151acaedb"
+  }
+} as const;
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(scriptDirectory, "..");
@@ -172,7 +210,7 @@ const definitions: ExampleDefinition[] = [
     slug: "numbered-review",
     title: "Numbered review",
     description:
-      "A synthetic operations dashboard showing neutral, warning, and info tones without defaulting ordinary findings to red.",
+      "A synthetic operations dashboard showing visible boundary-to-boundary numbered leaders without covering reviewed targets.",
     width: 1100,
     height: 700,
     svgBody: `
@@ -371,6 +409,78 @@ for (const definition of definitions) {
     throw new Error(`${definition.slug} emitted warnings: ${second.warnings.join(" | ")}`);
   }
 
+  const sidecarSha256 = createHash("sha256").update(secondSidecar).digest("hex");
+  const isVerifiedWindowsBaseline =
+    process.platform === "win32" &&
+    second.renderer.name === "sharp-svg-pango" &&
+    second.renderer.version === "0.1.2" &&
+    second.renderer.sharp === "0.35.4" &&
+    second.renderer.libvips === "8.18.6" &&
+    second.renderer.font.sha256 === BUNDLED_FONT_SHA256;
+  if (
+    isVerifiedWindowsBaseline &&
+    (definition.slug === "ui-bug" || definition.slug === "privacy")
+  ) {
+    const baseline = UNAFFECTED_BASELINE_HASHES[definition.slug];
+    if (second.outputSha256 !== baseline.output || sidecarSha256 !== baseline.sidecar) {
+      throw new Error(
+        `${definition.slug} changed outside the numbered-callout scope: PNG ${second.outputSha256}, sidecar ${sidecarSha256}.`
+      );
+    }
+  }
+
+  if (definition.slug === "numbered-review") {
+    const sidecar = JSON.parse(secondSidecar.toString("utf8")) as {
+      outputDimensions: { width: number; height: number };
+      resolvedAnnotations: ResolvedNumberedExample[];
+    };
+    for (const annotation of sidecar.resolvedAnnotations) {
+      if (annotation.type !== "numbered-callout") continue;
+      if (annotation.leader.length < 24) {
+        throw new Error(
+          `${annotation.id} has only ${annotation.leader.length}px of visible numbered leader.`
+        );
+      }
+      if (
+        circleOverlapsTarget(
+          { center: annotation.marker.center, radius: annotation.marker.paintedRadius },
+          annotation.target
+        )
+      ) {
+        throw new Error(`${annotation.id} marker overlaps its reviewed target.`);
+      }
+      if (
+        circleOverlapsTarget(
+          { center: annotation.marker.center, radius: annotation.marker.paintedRadius },
+          annotation.label.paintedBounds
+        )
+      ) {
+        throw new Error(`${annotation.id} painted marker overlaps its painted label.`);
+      }
+      const { bounds } = annotation.marker;
+      const box = annotation.label.paintedBounds;
+      const leaderBounds = annotation.leader.bounds;
+      if (
+        bounds.x < 0 ||
+        bounds.y < 0 ||
+        bounds.x + bounds.width > sidecar.outputDimensions.width ||
+        bounds.y + bounds.height > sidecar.outputDimensions.height ||
+        box.x < 0 ||
+        box.y < 0 ||
+        box.x + box.width > sidecar.outputDimensions.width ||
+        box.y + box.height > sidecar.outputDimensions.height ||
+        leaderBounds.x < 0 ||
+        leaderBounds.y < 0 ||
+        leaderBounds.x + leaderBounds.width > sidecar.outputDimensions.width ||
+        leaderBounds.y + leaderBounds.height > sidecar.outputDimensions.height
+      ) {
+        throw new Error(
+          `${annotation.id} marker, label, or leader escaped the numbered-review canvas.`
+        );
+      }
+    }
+  }
+
   if (definition.slug === "privacy") {
     const redact = { x: 255, y: 372, width: 515, height: 46 };
     const raw = await sharp(second.outputPath).removeAlpha().raw().toBuffer({
@@ -395,7 +505,7 @@ for (const definition of definitions) {
     example: definition.slug,
     annotations: parsedSpec.annotations.length,
     outputSha256: second.outputSha256,
-    sidecarSha256: createHash("sha256").update(secondSidecar).digest("hex"),
+    sidecarSha256,
     warnings: second.warnings
   });
 }

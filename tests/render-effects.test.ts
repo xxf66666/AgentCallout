@@ -6,6 +6,37 @@ import sharp from "sharp";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { annotateImage, validateSpecForImage } from "../src/core/index.js";
+import { circleOverlapsTarget } from "../src/layout/index.js";
+import { paintedSegmentIntersectsRect, renderAnnotations } from "../src/renderer/index.js";
+import {
+  NUMBERED_CALLOUT_CANVAS,
+  NUMBERED_CALLOUT_V11_SPEC
+} from "./fixtures/numbered-callout-v11.js";
+
+interface ResolvedNumberedCallout {
+  target: { x: number; y: number; width?: number; height?: number };
+  box: { x: number; y: number; width: number; height: number };
+  marker: {
+    center: { x: number; y: number };
+    radius: number;
+    paintedRadius: number;
+    labelSide?: "top" | "right" | "bottom" | "left";
+    bounds: { x: number; y: number; width: number; height: number };
+  };
+  label: {
+    box: { x: number; y: number; width: number; height: number };
+    paintedBounds: { x: number; y: number; width: number; height: number };
+    placement: "top" | "right" | "bottom" | "left";
+    fontSize?: number;
+  };
+  leader: {
+    start: { x: number; y: number };
+    end: { x: number; y: number };
+    length: number;
+    bounds?: { x: number; y: number; width: number; height: number };
+    strokeWidth?: number;
+  };
+}
 
 async function writePattern(filePath: string, width: number, height: number): Promise<void> {
   const pixels = Buffer.alloc(width * height * 3);
@@ -28,6 +59,45 @@ async function rgbAt(filePath: string, x: number, y: number): Promise<[number, n
   return [raw.data[offset] ?? -1, raw.data[offset + 1] ?? -1, raw.data[offset + 2] ?? -1];
 }
 
+async function resolvedNumberedCallout(sidecarPath: string): Promise<ResolvedNumberedCallout> {
+  const sidecar = JSON.parse(await readFile(sidecarPath, "utf8")) as {
+    resolvedAnnotations: ResolvedNumberedCallout[];
+  };
+  const resolved = sidecar.resolvedAnnotations[0];
+  if (resolved === undefined) throw new Error("Missing resolved numbered callout.");
+  return resolved;
+}
+
+function markerOverlapsTarget(resolved: ResolvedNumberedCallout): boolean {
+  const { center, paintedRadius } = resolved.marker;
+  const target = resolved.target;
+  if (target.width === undefined || target.height === undefined) {
+    return Math.hypot(center.x - target.x, center.y - target.y) < paintedRadius;
+  }
+  const closestX = Math.min(target.x + target.width, Math.max(target.x, center.x));
+  const closestY = Math.min(target.y + target.height, Math.max(target.y, center.y));
+  return Math.hypot(center.x - closestX, center.y - closestY) < paintedRadius;
+}
+
+function expectPointOnTargetBoundary(resolved: ResolvedNumberedCallout): void {
+  const target = resolved.target;
+  if (target.width === undefined || target.height === undefined) {
+    expect(resolved.leader.end.x).toBeCloseTo(target.x, 6);
+    expect(resolved.leader.end.y).toBeCloseTo(target.y, 6);
+    return;
+  }
+  const end = resolved.leader.end;
+  const onVerticalEdge =
+    (Math.abs(end.x - target.x) <= 2 || Math.abs(end.x - (target.x + target.width)) <= 2) &&
+    end.y >= target.y - 2 &&
+    end.y <= target.y + target.height + 2;
+  const onHorizontalEdge =
+    (Math.abs(end.y - target.y) <= 2 || Math.abs(end.y - (target.y + target.height)) <= 2) &&
+    end.x >= target.x - 2 &&
+    end.x <= target.x + target.width + 2;
+  expect(onVerticalEdge || onHorizontalEdge).toBe(true);
+}
+
 describe("Sharp annotation renderer", () => {
   let temporaryDirectory: string;
 
@@ -37,6 +107,50 @@ describe("Sharp annotation renderer", () => {
 
   afterEach(async () => {
     await rm(temporaryDirectory, { recursive: true, force: true });
+  });
+
+  it("uses stroke-aware segment/rectangle intersection instead of a diagonal AABB", () => {
+    const segment = { start: { x: 10, y: 10 }, end: { x: 90, y: 90 }, strokeWidth: 4 };
+
+    expect(paintedSegmentIntersectsRect(segment, { x: 10, y: 80, width: 8, height: 8 })).toBe(
+      false
+    );
+    expect(paintedSegmentIntersectsRect(segment, { x: 48, y: 48, width: 4, height: 4 })).toBe(true);
+  });
+
+  it("rejects malformed direct-renderer targets and unsupported runtime spec versions", async () => {
+    for (const specVersion of ["1.2", null, 1]) {
+      await expect(
+        renderAnnotations(Buffer.alloc(0), [], { specVersion } as never)
+      ).rejects.toThrow(/Unsupported renderer AnnotationSpec version/u);
+    }
+
+    const input = await sharp({
+      create: { width: 80, height: 60, channels: 3, background: "white" }
+    })
+      .png()
+      .toBuffer();
+    await expect(renderAnnotations(input, [])).resolves.toMatchObject({ width: 80, height: 60 });
+    for (const target of [
+      { x: 40, y: 30, width: 8 },
+      { x: 40, y: 30, stray: true }
+    ]) {
+      await expect(
+        renderAnnotations(
+          input,
+          [
+            {
+              id: "bad-runtime-target",
+              type: "numbered-callout",
+              target,
+              text: "bad",
+              number: 1
+            }
+          ],
+          { specVersion: "1.1" }
+        )
+      ).rejects.toThrow(/target must contain|target must contain only/u);
+    }
   });
 
   it("renders all ten annotation types with bounded Chinese/English callouts", async () => {
@@ -212,11 +326,681 @@ describe("Sharp annotation renderer", () => {
     const sidecar = JSON.parse(await readFile(result.sidecarPath, "utf8")) as {
       resolvedAnnotations: { style?: Record<string, unknown> }[];
     };
+    expect(sidecar.resolvedAnnotations).toEqual([
+      {
+        id: "legacy-box",
+        rect: { height: 90, width: 145, x: 255, y: 140 },
+        style: {
+          arrowHeadSize: 12,
+          backgroundColor: "#d92d20",
+          blurSigma: 10,
+          cornerRadius: 6,
+          fillColor: "#00000000",
+          fontSize: 24,
+          lineHeight: 1.25,
+          maxWidth: 360,
+          opacity: 1,
+          padding: 10,
+          strokeColor: "#ff3b30",
+          strokeWidth: 3,
+          textColor: "#ffffff"
+        },
+        type: "rectangle"
+      },
+      {
+        anchor: { x: 266, y: 180 },
+        box: { height: 47, width: 253, x: 13, y: 157 },
+        fontSize: 24,
+        id: "legacy-note",
+        marker: { center: { x: 320, y: 180 }, radius: 17 },
+        number: 2,
+        placement: "left",
+        target: { height: 60, width: 80, x: 280, y: 150 },
+        targetAnchor: { x: 280, y: 181 },
+        text: "旧版红色批注 / legacy",
+        type: "numbered-callout"
+      },
+      {
+        box: { height: 44, width: 115, x: 24, y: 250 },
+        fontSize: 24,
+        id: "legacy-text",
+        position: { x: 24, y: 250 },
+        text: "重放基线",
+        type: "text"
+      }
+    ]);
     const legacyStyle = sidecar.resolvedAnnotations[0]?.style ?? {};
     expect(legacyStyle).not.toHaveProperty("markerStrokeColor");
     expect(legacyStyle).not.toHaveProperty("markerFillColor");
     expect(legacyStyle).not.toHaveProperty("markerTextColor");
     expect(sidecar.resolvedAnnotations[1]).not.toHaveProperty("style");
+  });
+
+  it("keeps 1.1 point/rect targets visible across all numbered placements", async () => {
+    const inputPath = path.join(temporaryDirectory, "numbered geometry source.png");
+    await sharp({ create: { width: 720, height: 480, channels: 3, background: "white" } })
+      .png()
+      .toFile(inputPath);
+    const targets = [
+      { name: "point", value: { x: 360, y: 240 } },
+      { name: "rect", value: { x: 330, y: 210, width: 60, height: 60 } }
+    ] as const;
+    const placements = ["auto", "top", "right", "bottom", "left"] as const;
+
+    for (const target of targets) {
+      for (const placement of placements) {
+        const expectedPlacement = placement === "auto" ? "top" : placement;
+        const result = await annotateImage({
+          inputPath,
+          outputPath: path.join(temporaryDirectory, `${target.name}-${placement}.png`),
+          allowedRoots: [temporaryDirectory],
+          spec: {
+            version: "1.1",
+            defaults: { fontSize: 14, maxWidth: 120, padding: 6 },
+            annotations: [
+              {
+                id: `${target.name}-${placement}`,
+                type: "numbered-callout",
+                target: target.value,
+                text: "Visible leader",
+                number: 3,
+                placement,
+                style: { strokeColor: "#0A7A42", strokeWidth: 3 }
+              }
+            ]
+          }
+        });
+        const resolved = await resolvedNumberedCallout(result.sidecarPath);
+        const markerDistance = Math.hypot(
+          resolved.leader.start.x - resolved.marker.center.x,
+          resolved.leader.start.y - resolved.marker.center.y
+        );
+
+        expect(result.warnings).toEqual([]);
+        expect(resolved.label.placement).toBe(expectedPlacement);
+        expect(resolved.label.box).toEqual(resolved.box);
+        const paintedLabelOverlap =
+          Math.max(
+            0,
+            Math.min(
+              resolved.label.paintedBounds.x + resolved.label.paintedBounds.width,
+              resolved.marker.bounds.x + resolved.marker.bounds.width
+            ) - Math.max(resolved.label.paintedBounds.x, resolved.marker.bounds.x)
+          ) *
+          Math.max(
+            0,
+            Math.min(
+              resolved.label.paintedBounds.y + resolved.label.paintedBounds.height,
+              resolved.marker.bounds.y + resolved.marker.bounds.height
+            ) - Math.max(resolved.label.paintedBounds.y, resolved.marker.bounds.y)
+          );
+        expect(paintedLabelOverlap).toBe(0);
+        expect(resolved.leader.length).toBeGreaterThanOrEqual(24);
+        expect(markerDistance).toBeCloseTo(resolved.marker.paintedRadius, 6);
+        expect(
+          Math.hypot(
+            resolved.leader.end.x - resolved.leader.start.x,
+            resolved.leader.end.y - resolved.leader.start.y
+          )
+        ).toBeCloseTo(resolved.leader.length, 6);
+        expectPointOnTargetBoundary(resolved);
+        expect(markerOverlapsTarget(resolved)).toBe(false);
+        expect(resolved.box.x).toBeGreaterThanOrEqual(0);
+        expect(resolved.box.y).toBeGreaterThanOrEqual(0);
+        expect(resolved.box.x + resolved.box.width).toBeLessThanOrEqual(720);
+        expect(resolved.box.y + resolved.box.height).toBeLessThanOrEqual(480);
+        expect(resolved.marker.bounds.x).toBeGreaterThanOrEqual(0);
+        expect(resolved.marker.bounds.y).toBeGreaterThanOrEqual(0);
+        expect(resolved.marker.bounds.x + resolved.marker.bounds.width).toBeLessThanOrEqual(720);
+        expect(resolved.marker.bounds.y + resolved.marker.bounds.height).toBeLessThanOrEqual(480);
+
+        switch (expectedPlacement) {
+          case "top":
+            expect(resolved.marker.center.y).toBe(
+              resolved.label.paintedBounds.y +
+                resolved.label.paintedBounds.height +
+                resolved.marker.paintedRadius
+            );
+            break;
+          case "right":
+            expect(resolved.marker.center.x).toBe(
+              resolved.label.paintedBounds.x - resolved.marker.paintedRadius
+            );
+            break;
+          case "bottom":
+            expect(resolved.marker.center.y).toBe(
+              resolved.label.paintedBounds.y - resolved.marker.paintedRadius
+            );
+            break;
+          case "left":
+            expect(resolved.marker.center.x).toBe(
+              resolved.label.paintedBounds.x +
+                resolved.label.paintedBounds.width +
+                resolved.marker.paintedRadius
+            );
+            break;
+        }
+
+        const raw = await sharp(result.outputPath)
+          .removeAlpha()
+          .raw()
+          .toBuffer({ resolveWithObject: true });
+        const leaderDistance = Math.hypot(
+          resolved.leader.end.x - resolved.leader.start.x,
+          resolved.leader.end.y - resolved.leader.start.y
+        );
+        let visibleStrokeSamples = 0;
+        for (let distance = 1; distance < Math.floor(leaderDistance); distance += 1) {
+          const ratio = distance / leaderDistance;
+          const x = Math.round(
+            resolved.leader.start.x + (resolved.leader.end.x - resolved.leader.start.x) * ratio
+          );
+          const y = Math.round(
+            resolved.leader.start.y + (resolved.leader.end.y - resolved.leader.start.y) * ratio
+          );
+          const offset = (y * raw.info.width + x) * raw.info.channels;
+          if (
+            raw.data[offset] === 10 &&
+            raw.data[offset + 1] === 122 &&
+            raw.data[offset + 2] === 66
+          ) {
+            visibleStrokeSamples += 1;
+          }
+        }
+        expect(visibleStrokeSamples).toBeGreaterThanOrEqual(24);
+      }
+    }
+  });
+
+  it("resolves equivalent pixel/normalized numbered geometry and repeats each hash", async () => {
+    const inputPath = path.join(temporaryDirectory, "coordinate equivalence source.png");
+    await sharp({
+      create: { ...NUMBERED_CALLOUT_CANVAS, channels: 3, background: "white" }
+    })
+      .png()
+      .toFile(inputPath);
+    const normalizedSpec = {
+      ...NUMBERED_CALLOUT_V11_SPEC,
+      coordinateSpace: "normalized",
+      annotations: [
+        {
+          ...NUMBERED_CALLOUT_V11_SPEC.annotations[0],
+          target: { x: 0.65625, y: 0.425, width: 0.125, height: 0.15 }
+        }
+      ]
+    } as const;
+    const cases: { name: string; spec: unknown }[] = [
+      { name: "pixel-first", spec: NUMBERED_CALLOUT_V11_SPEC },
+      { name: "pixel-second", spec: NUMBERED_CALLOUT_V11_SPEC },
+      { name: "normalized-first", spec: normalizedSpec },
+      { name: "normalized-second", spec: normalizedSpec }
+    ];
+    const runs = await Promise.all(
+      cases.map(async ({ name, spec }) =>
+        annotateImage({
+          inputPath,
+          outputPath: path.join(temporaryDirectory, `${name}.png`),
+          allowedRoots: [temporaryDirectory],
+          spec
+        })
+      )
+    );
+    const [pixelFirst, pixelSecond, normalizedFirst, normalizedSecond] = runs;
+    if (!pixelFirst || !pixelSecond || !normalizedFirst || !normalizedSecond) {
+      throw new Error("Missing coordinate-equivalence render result.");
+    }
+    const pixelGeometry = await resolvedNumberedCallout(pixelFirst.sidecarPath);
+    const normalizedGeometry = await resolvedNumberedCallout(normalizedFirst.sidecarPath);
+
+    expect(pixelFirst.outputSha256).toBe(pixelSecond.outputSha256);
+    expect(pixelFirst.specSha256).toBe(pixelSecond.specSha256);
+    expect(normalizedFirst.outputSha256).toBe(normalizedSecond.outputSha256);
+    expect(normalizedFirst.specSha256).toBe(normalizedSecond.specSha256);
+    expect(normalizedGeometry).toEqual(pixelGeometry);
+    expect(normalizedFirst.outputSha256).toBe(pixelFirst.outputSha256);
+    expect(pixelFirst.warnings).toEqual([]);
+    expect(normalizedFirst.warnings).toEqual([]);
+  });
+
+  it("renders constrained repeated numbered callouts and names every degraded annotation", async () => {
+    const inputPath = path.join(temporaryDirectory, "constrained numbered source.png");
+    const outputPath = path.join(temporaryDirectory, "constrained numbered output.png");
+    await sharp({ create: { width: 128, height: 96, channels: 3, background: "white" } })
+      .png()
+      .toFile(inputPath);
+    const result = await annotateImage({
+      inputPath,
+      outputPath,
+      allowedRoots: [temporaryDirectory],
+      spec: {
+        version: "1.1",
+        defaults: { fontSize: 8, maxWidth: 48, padding: 2 },
+        annotations: [
+          {
+            id: "tight-first",
+            type: "numbered-callout",
+            target: { x: 4, y: 48 },
+            text: "One",
+            number: 1,
+            placement: "left"
+          },
+          {
+            id: "tight-second",
+            type: "numbered-callout",
+            target: { x: 4, y: 48 },
+            text: "Two",
+            number: 2,
+            placement: "left"
+          }
+        ]
+      }
+    });
+    const sidecar = JSON.parse(await readFile(result.sidecarPath, "utf8")) as {
+      resolvedAnnotations: ResolvedNumberedCallout[];
+    };
+
+    expect(await sharp(result.outputPath).metadata()).toMatchObject({
+      format: "png",
+      width: 128,
+      height: 96
+    });
+    expect(result.warnings.some((warning) => warning.includes("tight-first"))).toBe(true);
+    expect(result.warnings.some((warning) => warning.includes("tight-second"))).toBe(true);
+    expect(result.warnings.some((warning) => warning.includes("visible leader"))).toBe(true);
+    const occupiedWarnings = result.warnings.filter((warning) =>
+      warning.includes("occupied annotation")
+    );
+    expect(occupiedWarnings).toHaveLength(1);
+    expect(occupiedWarnings[0]).toContain("1 occupied annotation");
+    expect(result.warnings.some((warning) => warning.includes("hides the leader"))).toBe(true);
+    for (const resolved of sidecar.resolvedAnnotations) {
+      expect(resolved.box.x).toBeGreaterThanOrEqual(0);
+      expect(resolved.box.y).toBeGreaterThanOrEqual(0);
+      expect(resolved.box.x + resolved.box.width).toBeLessThanOrEqual(128);
+      expect(resolved.box.y + resolved.box.height).toBeLessThanOrEqual(96);
+      expect(resolved.marker.bounds.x).toBeGreaterThanOrEqual(0);
+      expect(resolved.marker.bounds.y).toBeGreaterThanOrEqual(0);
+      expect(resolved.marker.bounds.x + resolved.marker.bounds.width).toBeLessThanOrEqual(128);
+      expect(resolved.marker.bounds.y + resolved.marker.bounds.height).toBeLessThanOrEqual(96);
+    }
+  });
+
+  it("warns and reports zero visible length when a valid style hides the leader", async () => {
+    const inputPath = path.join(temporaryDirectory, "invisible leader source.png");
+    await sharp({
+      create: { ...NUMBERED_CALLOUT_CANVAS, channels: 3, background: "white" }
+    })
+      .png()
+      .toFile(inputPath);
+    const cases = [
+      { name: "zero-width", style: { strokeColor: "#FF0000", strokeWidth: 0 } },
+      { name: "alpha-zero", style: { strokeColor: "#FF000000", strokeWidth: 4 } },
+      {
+        name: "rounded-opacity-zero",
+        style: { strokeColor: "#FF0000", strokeWidth: 4, opacity: 0.0004 }
+      }
+    ] as const;
+    for (const item of cases) {
+      const result = await annotateImage({
+        inputPath,
+        outputPath: path.join(temporaryDirectory, `invisible-${item.name}.png`),
+        allowedRoots: [temporaryDirectory],
+        spec: {
+          ...NUMBERED_CALLOUT_V11_SPEC,
+          annotations: [
+            {
+              ...NUMBERED_CALLOUT_V11_SPEC.annotations[0],
+              id: `hidden-${item.name}`,
+              style: {
+                ...NUMBERED_CALLOUT_V11_SPEC.annotations[0].style,
+                ...item.style,
+                markerStrokeColor: "#0000FF"
+              }
+            }
+          ]
+        }
+      });
+      const resolved = await resolvedNumberedCallout(result.sidecarPath);
+      const raw = await sharp(result.outputPath).removeAlpha().raw().toBuffer();
+      let redPixels = 0;
+      for (let index = 0; index < raw.length; index += 3) {
+        if (raw[index] === 255 && raw[index + 1] === 0 && raw[index + 2] === 0) {
+          redPixels += 1;
+        }
+      }
+
+      expect(resolved.leader).not.toHaveProperty("bounds");
+      expect(resolved.leader.start).toEqual(resolved.leader.end);
+      expect(resolved.leader.length).toBe(0);
+      expect(result.warnings.every((warning) => warning.includes(`hidden-${item.name}`))).toBe(
+        true
+      );
+      expect(result.warnings.some((warning) => warning.includes("leader is invisible"))).toBe(true);
+      expect(result.warnings.some((warning) => warning.includes("0px of visible leader"))).toBe(
+        true
+      );
+      expect(redPixels).toBe(0);
+    }
+  });
+
+  it("degrades a high-stroke numbered marker on a small canvas instead of throwing", async () => {
+    const inputPath = path.join(temporaryDirectory, "small high-stroke source.png");
+    await sharp({ create: { width: 60, height: 60, channels: 3, background: "white" } })
+      .png()
+      .toFile(inputPath);
+    const result = await annotateImage({
+      inputPath,
+      outputPath: path.join(temporaryDirectory, "small high-stroke.png"),
+      allowedRoots: [temporaryDirectory],
+      spec: {
+        version: "1.1",
+        defaults: { fontSize: 6, padding: 0, maxWidth: 48 },
+        annotations: [
+          {
+            id: "small-high-stroke",
+            type: "numbered-callout",
+            target: { x: 30, y: 30 },
+            text: "1",
+            number: 1,
+            placement: "auto",
+            style: { strokeWidth: 64 }
+          }
+        ]
+      }
+    });
+    const resolved = await resolvedNumberedCallout(result.sidecarPath);
+
+    expect(await sharp(result.outputPath).metadata()).toMatchObject({
+      format: "png",
+      width: 60,
+      height: 60
+    });
+    expect(result.warnings.every((warning) => warning.includes("small-high-stroke"))).toBe(true);
+    expect(result.warnings.some((warning) => warning.includes("marker stroke width"))).toBe(true);
+    expect(result.warnings.some((warning) => warning.includes("leader stroke width"))).toBe(true);
+    expect(resolved.marker.radius).toBeGreaterThanOrEqual(6);
+    expect(markerOverlapsTarget(resolved)).toBe(false);
+    expect(resolved.label.paintedBounds.x).toBeGreaterThanOrEqual(0);
+    expect(resolved.label.paintedBounds.y).toBeGreaterThanOrEqual(0);
+    expect(resolved.label.paintedBounds.x + resolved.label.paintedBounds.width).toBeLessThanOrEqual(
+      60
+    );
+    expect(
+      resolved.label.paintedBounds.y + resolved.label.paintedBounds.height
+    ).toBeLessThanOrEqual(60);
+    expect(resolved.marker.bounds.x).toBeGreaterThanOrEqual(0);
+    expect(resolved.marker.bounds.y).toBeGreaterThanOrEqual(0);
+    expect(resolved.marker.bounds.x + resolved.marker.bounds.width).toBeLessThanOrEqual(60);
+    expect(resolved.marker.bounds.y + resolved.marker.bounds.height).toBeLessThanOrEqual(60);
+  });
+
+  it("reduces a 24x24 marker and keeps the fitted painted geometry decodable", async () => {
+    const inputPath = path.join(temporaryDirectory, "tiny numbered source.png");
+    await sharp({ create: { width: 24, height: 24, channels: 3, background: "white" } })
+      .png()
+      .toFile(inputPath);
+    const result = await annotateImage({
+      inputPath,
+      outputPath: path.join(temporaryDirectory, "tiny numbered.png"),
+      allowedRoots: [temporaryDirectory],
+      spec: {
+        version: "1.1",
+        defaults: { fontSize: 64, padding: 0, maxWidth: 48 },
+        annotations: [
+          {
+            id: "tiny-radius",
+            type: "numbered-callout",
+            target: { x: 12, y: 12 },
+            text: "1",
+            number: 1,
+            placement: "auto",
+            style: { strokeWidth: 2 }
+          }
+        ]
+      }
+    });
+    const resolved = await resolvedNumberedCallout(result.sidecarPath);
+
+    expect(await sharp(result.outputPath).metadata()).toMatchObject({
+      format: "png",
+      width: 24,
+      height: 24
+    });
+    expect(result.warnings.every((warning) => warning.includes("tiny-radius"))).toBe(true);
+    expect(result.warnings.some((warning) => warning.includes("marker radius was reduced"))).toBe(
+      true
+    );
+    expect(resolved.marker.bounds.x).toBeGreaterThanOrEqual(0);
+    expect(resolved.marker.bounds.y).toBeGreaterThanOrEqual(0);
+    expect(resolved.marker.bounds.x + resolved.marker.bounds.width).toBeLessThanOrEqual(24);
+    expect(resolved.marker.bounds.y + resolved.marker.bounds.height).toBeLessThanOrEqual(24);
+    expect(markerOverlapsTarget(resolved)).toBe(false);
+  });
+
+  it("does not let a transparent marker stroke enlarge its painted radius or gap", async () => {
+    const inputPath = path.join(temporaryDirectory, "marker alpha source.png");
+    await sharp({
+      create: { ...NUMBERED_CALLOUT_CANVAS, channels: 3, background: "white" }
+    })
+      .png()
+      .toFile(inputPath);
+    const renders = await Promise.all(
+      [
+        { name: "visible", markerStrokeColor: "#5B21B6" },
+        { name: "transparent", markerStrokeColor: "#5B21B600" }
+      ].map(async (item) => {
+        const result = await annotateImage({
+          inputPath,
+          outputPath: path.join(temporaryDirectory, `marker-${item.name}.png`),
+          allowedRoots: [temporaryDirectory],
+          spec: {
+            ...NUMBERED_CALLOUT_V11_SPEC,
+            annotations: [
+              {
+                ...NUMBERED_CALLOUT_V11_SPEC.annotations[0],
+                style: {
+                  ...NUMBERED_CALLOUT_V11_SPEC.annotations[0].style,
+                  strokeWidth: 8,
+                  markerStrokeColor: item.markerStrokeColor
+                }
+              }
+            ]
+          }
+        });
+        return { geometry: await resolvedNumberedCallout(result.sidecarPath), result };
+      })
+    );
+    const [visible, transparent] = renders;
+    if (!visible || !transparent) throw new Error("Missing marker-alpha render.");
+
+    expect(transparent.geometry.marker.paintedRadius).toBe(transparent.geometry.marker.radius);
+    expect(visible.geometry.marker.paintedRadius).toBeGreaterThan(visible.geometry.marker.radius);
+    expect(transparent.geometry.marker.paintedRadius).toBeLessThan(
+      visible.geometry.marker.paintedRadius
+    );
+    expect(transparent.geometry.leader.length).toBeGreaterThanOrEqual(24);
+    expect(transparent.result.warnings).toEqual([]);
+  });
+
+  it("relocates the final marker face after clamping instead of overlapping its label", async () => {
+    const inputPath = path.join(temporaryDirectory, "face relocation source.png");
+    await sharp({ create: { width: 200, height: 120, channels: 3, background: "white" } })
+      .png()
+      .toFile(inputPath);
+    const result = await annotateImage({
+      inputPath,
+      outputPath: path.join(temporaryDirectory, "face relocation.png"),
+      allowedRoots: [temporaryDirectory],
+      spec: {
+        version: "1.1",
+        defaults: { fontSize: 10, padding: 2, maxWidth: 80 },
+        annotations: [
+          {
+            id: "face-relocation",
+            type: "numbered-callout",
+            target: { x: 100, y: 0 },
+            text: "Edge",
+            number: 1,
+            placement: "top"
+          }
+        ]
+      }
+    });
+    const resolved = await resolvedNumberedCallout(result.sidecarPath);
+
+    expect(
+      circleOverlapsTarget(
+        { center: resolved.marker.center, radius: resolved.marker.paintedRadius },
+        resolved.label.paintedBounds
+      )
+    ).toBe(false);
+    expect(resolved.marker.labelSide).not.toBe("bottom");
+    expect(result.warnings.some((warning) => warning.includes("face-relocation"))).toBe(true);
+    expect(result.warnings.some((warning) => warning.includes("marker moved"))).toBe(true);
+  });
+
+  it("moves an auto callout to a collision-free final candidate", async () => {
+    const inputPath = path.join(temporaryDirectory, "final candidate source.png");
+    await sharp({ create: { width: 480, height: 320, channels: 3, background: "white" } })
+      .png()
+      .toFile(inputPath);
+    const result = await annotateImage({
+      inputPath,
+      outputPath: path.join(temporaryDirectory, "final candidates.png"),
+      allowedRoots: [temporaryDirectory],
+      spec: {
+        version: "1.1",
+        defaults: { fontSize: 12, padding: 4, maxWidth: 100 },
+        annotations: [
+          {
+            id: "candidate-first",
+            type: "numbered-callout",
+            target: { x: 240, y: 160 },
+            text: "First",
+            number: 1,
+            placement: "auto"
+          },
+          {
+            id: "candidate-second",
+            type: "numbered-callout",
+            target: { x: 240, y: 160 },
+            text: "Second",
+            number: 2,
+            placement: "auto"
+          }
+        ]
+      }
+    });
+    const sidecar = JSON.parse(await readFile(result.sidecarPath, "utf8")) as {
+      resolvedAnnotations: ResolvedNumberedCallout[];
+    };
+
+    expect(sidecar.resolvedAnnotations[0]?.label.placement).toBe("top");
+    expect(sidecar.resolvedAnnotations[1]?.label.placement).not.toBe("top");
+    expect(result.warnings.some((warning) => warning.includes("occupied annotation"))).toBe(false);
+  });
+
+  it("normalizes overlapping leader geometry and does not paint a round-cap point", async () => {
+    const inputPath = path.join(temporaryDirectory, "overlap source.png");
+    await sharp({ create: { width: 200, height: 120, channels: 3, background: "white" } })
+      .png()
+      .toFile(inputPath);
+    const result = await annotateImage({
+      inputPath,
+      outputPath: path.join(temporaryDirectory, "overlap.png"),
+      allowedRoots: [temporaryDirectory],
+      spec: {
+        version: "1.1",
+        defaults: { fontSize: 10, padding: 2, maxWidth: 80 },
+        annotations: [
+          {
+            id: "contained-target",
+            type: "numbered-callout",
+            target: { x: 0, y: 0, width: 200, height: 120 },
+            text: "Contained",
+            number: 1,
+            placement: "auto",
+            style: {
+              strokeColor: "#FF0000",
+              markerStrokeColor: "#0000FF",
+              markerFillColor: "#0000FF"
+            }
+          }
+        ]
+      }
+    });
+    const resolved = await resolvedNumberedCallout(result.sidecarPath);
+    const raw = await sharp(result.outputPath)
+      .removeAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    let redOutsideOwnedGeometry = 0;
+    for (let y = 0; y < raw.info.height; y += 1) {
+      for (let x = 0; x < raw.info.width; x += 1) {
+        const inLabel =
+          x >= resolved.label.paintedBounds.x &&
+          x <= resolved.label.paintedBounds.x + resolved.label.paintedBounds.width &&
+          y >= resolved.label.paintedBounds.y &&
+          y <= resolved.label.paintedBounds.y + resolved.label.paintedBounds.height;
+        const inMarker =
+          x >= resolved.marker.bounds.x &&
+          x <= resolved.marker.bounds.x + resolved.marker.bounds.width &&
+          y >= resolved.marker.bounds.y &&
+          y <= resolved.marker.bounds.y + resolved.marker.bounds.height;
+        const offset = (y * raw.info.width + x) * raw.info.channels;
+        if (
+          !inLabel &&
+          !inMarker &&
+          raw.data[offset] === 255 &&
+          raw.data[offset + 1] === 0 &&
+          raw.data[offset + 2] === 0
+        ) {
+          redOutsideOwnedGeometry += 1;
+        }
+      }
+    }
+
+    expect(resolved.leader).not.toHaveProperty("bounds");
+    expect(resolved.leader.start).toEqual(resolved.leader.end);
+    expect(resolved.leader.length).toBe(0);
+    expect(redOutsideOwnedGeometry).toBe(0);
+  });
+
+  it("warns when an exact-edge painted leader is unavoidably clipped", async () => {
+    const inputPath = path.join(temporaryDirectory, "edge leader source.png");
+    await sharp({ create: { width: 200, height: 100, channels: 3, background: "white" } })
+      .png()
+      .toFile(inputPath);
+    const result = await annotateImage({
+      inputPath,
+      outputPath: path.join(temporaryDirectory, "edge leader.png"),
+      allowedRoots: [temporaryDirectory],
+      spec: {
+        version: "1.1",
+        defaults: { fontSize: 10, padding: 2, maxWidth: 80 },
+        annotations: [
+          {
+            id: "edge-leader",
+            type: "numbered-callout",
+            target: { x: 0, y: 50 },
+            text: "Edge",
+            number: 1,
+            placement: "right",
+            style: { strokeWidth: 3 }
+          }
+        ]
+      }
+    });
+    const resolved = await resolvedNumberedCallout(result.sidecarPath);
+
+    expect(resolved.leader.bounds?.x).toBeLessThan(0);
+    expect(result.warnings.some((warning) => warning.includes("edge-leader"))).toBe(true);
+    expect(result.warnings.some((warning) => warning.includes("painted leader was clipped"))).toBe(
+      true
+    );
+    expect(
+      result.warnings.some((warning) => warning.includes("facing decoration footprint overflowed"))
+    ).toBe(true);
   });
 
   it("renders a minimal 1.1 numbered callout with a light label and blue border/marker", async () => {

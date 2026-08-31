@@ -16,6 +16,22 @@ export interface LayoutSize {
   height: number;
 }
 
+export type LayoutTarget = LayoutPoint | LayoutRect;
+
+export interface LayoutCircle {
+  center: LayoutPoint;
+  radius: number;
+}
+
+export interface BoundaryLeader {
+  /** Point on the marker circle facing the target. */
+  start: LayoutPoint;
+  /** Point target, or the point where the leader meets a rectangular target boundary. */
+  end: LayoutPoint;
+  /** Visible distance between the two shape boundaries. Zero when the shapes overlap. */
+  length: number;
+}
+
 export interface CalloutPlacementInput {
   canvas: LayoutSize;
   target: LayoutRect;
@@ -24,6 +40,10 @@ export interface CalloutPlacementInput {
   placement?: PlacementPreference;
   margin?: number;
   gap?: number;
+  /** Extra occupied depth extending from the label edge toward its target. */
+  facingDecorationDepth?: number;
+  /** Tangential span of that decoration, such as a numbered marker diameter. */
+  facingDecorationSpan?: number;
 }
 
 export interface CalloutPlacementScore {
@@ -48,6 +68,8 @@ export interface CalloutPlacementResult {
 interface Candidate {
   placement: CardinalPlacement;
   box: LayoutRect;
+  collisionBox: LayoutRect;
+  decorationOverflow: number;
   score: CalloutPlacementScore;
   wasClamped: boolean;
   order: number;
@@ -71,11 +93,17 @@ export function placeCallout(input: CalloutPlacementInput): CalloutPlacementResu
 
   const requestedMargin = input.margin ?? 8;
   const requestedGap = input.gap ?? 12;
+  const requestedDecorationDepth = input.facingDecorationDepth ?? 0;
+  const requestedDecorationSpan = input.facingDecorationSpan ?? 0;
   validateNonNegativeFinite(requestedMargin, "margin");
   validateNonNegativeFinite(requestedGap, "gap");
+  validateNonNegativeFinite(requestedDecorationDepth, "facingDecorationDepth");
+  validateNonNegativeFinite(requestedDecorationSpan, "facingDecorationSpan");
 
   const margin = Math.ceil(requestedMargin);
   const gap = Math.ceil(requestedGap);
+  const decorationDepth = Math.ceil(requestedDecorationDepth);
+  const decorationSpan = Math.ceil(requestedDecorationSpan);
   if (margin * 2 >= input.canvas.width || margin * 2 >= input.canvas.height) {
     throw new RangeError("margin must leave at least one pixel inside the canvas");
   }
@@ -108,7 +136,9 @@ export function placeCallout(input: CalloutPlacementInput): CalloutPlacementResu
       measuredBox,
       occupied,
       margin,
-      gap
+      gap,
+      decorationDepth,
+      decorationSpan
     )
   );
   const selected = candidates.reduce((best, candidate) =>
@@ -118,12 +148,15 @@ export function placeCallout(input: CalloutPlacementInput): CalloutPlacementResu
   if (selected.wasClamped) {
     warnings.push("Callout position was clamped to the canvas margin.");
   }
+  if ((decorationDepth > 0 || decorationSpan > 0) && selected.decorationOverflow > 0) {
+    warnings.push("Facing decoration footprint overflowed the canvas margin after clamping.");
+  }
   if (selected.score.targetOverlap > 0) {
     warnings.push("Callout overlaps its target because the selected placement cannot avoid it.");
   }
 
   const occupiedOverlapCount = occupied.filter(
-    (box) => intersectionArea(selected.box, box) > 0
+    (box) => intersectionArea(selected.collisionBox, box) > 0
   ).length;
   if (occupiedOverlapCount > 0) {
     warnings.push(
@@ -145,6 +178,55 @@ export function placeCallout(input: CalloutPlacementInput): CalloutPlacementResu
 /** Alias for consumers that use layout-oriented naming. */
 export const layoutCallout = placeCallout;
 
+/**
+ * Connect a circular marker to a point or rectangular target without using either
+ * shape's center as a visible endpoint.
+ */
+export function connectCircleToTarget(circle: LayoutCircle, target: LayoutTarget): BoundaryLeader {
+  validatePoint(circle.center, "circle.center");
+  if (!Number.isFinite(circle.radius) || circle.radius <= 0) {
+    throw new RangeError("circle.radius must be a positive finite number");
+  }
+  if (isLayoutRect(target)) {
+    validateRect(target, "target");
+  } else {
+    validatePoint(target, "target");
+  }
+
+  const end = targetBoundaryPoint(circle.center, target);
+  const vectorX = end.x - circle.center.x;
+  const vectorY = end.y - circle.center.y;
+  const boundaryDistance = Math.hypot(vectorX, vectorY);
+  if (boundaryDistance <= circle.radius || circleOverlapsTarget(circle, target)) {
+    return { start: { x: end.x, y: end.y }, end, length: 0 };
+  }
+  const scale = circle.radius / boundaryDistance;
+  return {
+    start: {
+      x: circle.center.x + vectorX * scale,
+      y: circle.center.y + vectorY * scale
+    },
+    end,
+    length: boundaryDistance - circle.radius
+  };
+}
+
+/** Return true only when the marker has positive-area overlap with the target. */
+export function circleOverlapsTarget(circle: LayoutCircle, target: LayoutTarget): boolean {
+  validatePoint(circle.center, "circle.center");
+  if (!Number.isFinite(circle.radius) || circle.radius <= 0) {
+    throw new RangeError("circle.radius must be a positive finite number");
+  }
+  if (!isLayoutRect(target)) {
+    validatePoint(target, "target");
+    return Math.hypot(circle.center.x - target.x, circle.center.y - target.y) < circle.radius;
+  }
+  validateRect(target, "target");
+  const closestX = clamp(circle.center.x, target.x, target.x + target.width);
+  const closestY = clamp(circle.center.y, target.y, target.y + target.height);
+  return Math.hypot(circle.center.x - closestX, circle.center.y - closestY) < circle.radius;
+}
+
 function createCandidate(
   placement: CardinalPlacement,
   order: number,
@@ -153,7 +235,9 @@ function createCandidate(
   boxSize: LayoutSize,
   occupied: readonly LayoutRect[],
   margin: number,
-  gap: number
+  gap: number,
+  decorationDepth: number,
+  decorationSpan: number
 ): Candidate {
   const targetCenterX = target.x + target.width / 2;
   const targetCenterY = target.y + target.height / 2;
@@ -195,10 +279,14 @@ function createCandidate(
     y: clamp(rawY, margin, maxY),
     ...boxSize
   };
-  const overflow = boxSize.width * boxSize.height - intersectionArea(rawBox, allowedBounds);
-  const targetOverlap = intersectionArea(box, target);
+  const rawCollisionBox = facingDecorationBox(placement, rawBox, decorationDepth, decorationSpan);
+  const collisionBox = facingDecorationBox(placement, box, decorationDepth, decorationSpan);
+  const collisionArea = collisionBox.width * collisionBox.height;
+  const overflow = collisionArea - intersectionArea(rawCollisionBox, allowedBounds);
+  const decorationOverflow = collisionArea - intersectionArea(collisionBox, allowedBounds);
+  const targetOverlap = intersectionArea(collisionBox, target);
   const calloutOverlap = occupied.reduce(
-    (total, occupiedBox) => total + intersectionArea(box, occupiedBox),
+    (total, occupiedBox) => total + intersectionArea(collisionBox, occupiedBox),
     0
   );
   const anchors = leaderAnchors(placement, box, target);
@@ -206,7 +294,7 @@ function createCandidate(
     anchors.anchor.x - anchors.targetAnchor.x,
     anchors.anchor.y - anchors.targetAnchor.y
   );
-  const area = boxSize.width * boxSize.height;
+  const area = collisionArea;
   const canvasDiagonal = Math.hypot(canvas.width, canvas.height);
   const targetRatio = targetOverlap / area;
   const calloutRatio = calloutOverlap / area;
@@ -224,6 +312,8 @@ function createCandidate(
   return {
     placement,
     box,
+    collisionBox,
+    decorationOverflow,
     score: {
       overflow,
       targetOverlap,
@@ -234,6 +324,45 @@ function createCandidate(
     wasClamped: box.x !== rawX || box.y !== rawY,
     order
   };
+}
+
+function facingDecorationBox(
+  placement: CardinalPlacement,
+  box: LayoutRect,
+  depth: number,
+  span: number
+): LayoutRect {
+  const tangentialInset = span / 2;
+  switch (placement) {
+    case "top":
+      return {
+        x: box.x - tangentialInset,
+        y: box.y,
+        width: box.width + span,
+        height: box.height + depth
+      };
+    case "right":
+      return {
+        x: box.x - depth,
+        y: box.y - tangentialInset,
+        width: box.width + depth,
+        height: box.height + span
+      };
+    case "bottom":
+      return {
+        x: box.x - tangentialInset,
+        y: box.y - depth,
+        width: box.width + span,
+        height: box.height + depth
+      };
+    case "left":
+      return {
+        x: box.x,
+        y: box.y - tangentialInset,
+        width: box.width + depth,
+        height: box.height + span
+      };
+  }
 }
 
 function compareCandidates(left: Candidate, right: Candidate): number {
@@ -301,6 +430,33 @@ function leaderAnchors(
   }
 }
 
+function targetBoundaryPoint(origin: LayoutPoint, target: LayoutTarget): LayoutPoint {
+  if (!isLayoutRect(target)) return { x: target.x, y: target.y };
+  const centerX = target.x + target.width / 2;
+  const centerY = target.y + target.height / 2;
+  const vectorX = origin.x - centerX;
+  const vectorY = origin.y - centerY;
+  if (vectorX === 0 && vectorY === 0) {
+    return { x: centerX, y: target.y };
+  }
+  const halfWidth = target.width / 2;
+  const halfHeight = target.height / 2;
+  const scale = 1 / Math.max(Math.abs(vectorX) / halfWidth, Math.abs(vectorY) / halfHeight);
+  return {
+    x: centerX + vectorX * scale,
+    y: centerY + vectorY * scale
+  };
+}
+
+function isLayoutRect(target: LayoutTarget): target is LayoutRect {
+  const hasWidth = Object.prototype.hasOwnProperty.call(target, "width");
+  const hasHeight = Object.prototype.hasOwnProperty.call(target, "height");
+  if (hasWidth !== hasHeight) {
+    throw new RangeError("target must contain both width and height, or neither");
+  }
+  return hasWidth && hasHeight;
+}
+
 function intersectionArea(left: LayoutRect, right: LayoutRect): number {
   const width = Math.max(
     0,
@@ -336,6 +492,12 @@ function validateRect(rect: LayoutRect, name: string): void {
     throw new RangeError(`${name} coordinates must be finite numbers`);
   }
   validateSize(rect, name);
+}
+
+function validatePoint(point: LayoutPoint, name: string): void {
+  if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+    throw new RangeError(`${name} coordinates must be finite numbers`);
+  }
 }
 
 function validateNonNegativeFinite(value: number, name: string): void {

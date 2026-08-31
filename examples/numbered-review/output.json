@@ -49,7 +49,7 @@
   },
   "hashes": {
     "inputSha256": "5c4210154b98ac51af5a095fd59df369c0616e3d1a5b66af9c1878b351124493",
-    "outputSha256": "21e426c854bf47d99a593ab2cb2523d3ab63ab8afbb42188ec3ff8f11b5dc721",
+    "outputSha256": "ab32f6458acd099f454301f02fee31f7a1bea2230e5531c7249f5d681f1561bc",
     "specSha256": "80b3bc96e5ab5e4e802787191cb0d4af1c4ce2dfac2350561a4e1f2858b6a135"
   },
   "inputs": [
@@ -152,22 +152,68 @@
     {
       "anchor": {
         "x": 580,
-        "y": 261
+        "y": 273
       },
       "box": {
         "height": 46,
         "width": 222,
         "x": 469,
-        "y": 261
+        "y": 308
       },
       "fontSize": 22,
       "id": "review-1",
-      "marker": {
-        "center": {
+      "label": {
+        "box": {
+          "height": 46,
+          "width": 222,
+          "x": 469,
+          "y": 308
+        },
+        "fontSize": 22,
+        "padding": 12,
+        "paintedBounds": {
+          "height": 48,
+          "width": 224,
+          "x": 468,
+          "y": 307
+        },
+        "placement": "bottom",
+        "strokeWidth": 2,
+        "text": "一次通过率低于目标"
+      },
+      "leader": {
+        "bounds": {
+          "height": 30,
+          "width": 2,
+          "x": 579,
+          "y": 244
+        },
+        "end": {
           "x": 580,
           "y": 245
         },
-        "radius": 16
+        "length": 28,
+        "start": {
+          "x": 580,
+          "y": 273
+        },
+        "strokeWidth": 2
+      },
+      "marker": {
+        "bounds": {
+          "height": 34,
+          "width": 34,
+          "x": 563,
+          "y": 273
+        },
+        "center": {
+          "x": 580,
+          "y": 290
+        },
+        "labelSide": "top",
+        "paintedRadius": 17,
+        "radius": 16,
+        "strokeWidth": 2
       },
       "number": 1,
       "placement": "bottom",
@@ -190,14 +236,12 @@
         "textColor": "#0f172a"
       },
       "target": {
-        "height": 4,
-        "width": 4,
-        "x": 578,
-        "y": 243
+        "x": 580,
+        "y": 245
       },
       "targetAnchor": {
         "x": 580,
-        "y": 247
+        "y": 245
       },
       "text": "一次通过率低于目标",
       "type": "numbered-callout"
@@ -205,22 +249,68 @@
     {
       "anchor": {
         "x": 970,
-        "y": 286
+        "y": 298
       },
       "box": {
         "height": 46,
         "width": 177,
         "x": 882,
-        "y": 286
+        "y": 333
       },
       "fontSize": 22,
       "id": "review-2",
-      "marker": {
-        "center": {
+      "label": {
+        "box": {
+          "height": 46,
+          "width": 177,
+          "x": 882,
+          "y": 333
+        },
+        "fontSize": 22,
+        "padding": 12,
+        "paintedBounds": {
+          "height": 48,
+          "width": 179,
+          "x": 881,
+          "y": 332
+        },
+        "placement": "bottom",
+        "strokeWidth": 2,
+        "text": "告警缺少责任人"
+      },
+      "leader": {
+        "bounds": {
+          "height": 30,
+          "width": 2,
+          "x": 969,
+          "y": 269
+        },
+        "end": {
           "x": 970,
           "y": 270
         },
-        "radius": 16
+        "length": 28,
+        "start": {
+          "x": 970,
+          "y": 298
+        },
+        "strokeWidth": 2
+      },
+      "marker": {
+        "bounds": {
+          "height": 34,
+          "width": 34,
+          "x": 953,
+          "y": 298
+        },
+        "center": {
+          "x": 970,
+          "y": 315
+        },
+        "labelSide": "top",
+        "paintedRadius": 17,
+        "radius": 16,
+        "strokeWidth": 2
       },
       "number": 2,
       "placement": "bottom",
@@ -243,14 +333,12 @@
         "textColor": "#78350f"
       },
       "target": {
-        "height": 4,
-        "width": 4,
-        "x": 968,
-        "y": 268
+        "x": 970,
+        "y": 270
       },
       "targetAnchor": {
-        "x": 971,
-        "y": 272
+        "x": 970,
+        "y": 270
       },
       "text": "告警缺少责任人",
       "type": "numbered-callout"
@@ -258,22 +346,68 @@
     {
       "anchor": {
         "x": 960,
-        "y": 534
+        "y": 522
       },
       "box": {
         "height": 46,
         "width": 199,
         "x": 861,
-        "y": 488
+        "y": 441
       },
       "fontSize": 22,
       "id": "review-3",
-      "marker": {
-        "center": {
+      "label": {
+        "box": {
+          "height": 46,
+          "width": 199,
+          "x": 861,
+          "y": 441
+        },
+        "fontSize": 22,
+        "padding": 12,
+        "paintedBounds": {
+          "height": 48,
+          "width": 201,
+          "x": 860,
+          "y": 440
+        },
+        "placement": "top",
+        "strokeWidth": 2,
+        "text": "趋势峰值需要说明"
+      },
+      "leader": {
+        "bounds": {
+          "height": 30,
+          "width": 2,
+          "x": 959,
+          "y": 521
+        },
+        "end": {
           "x": 960,
           "y": 550
         },
-        "radius": 16
+        "length": 28,
+        "start": {
+          "x": 960,
+          "y": 522
+        },
+        "strokeWidth": 2
+      },
+      "marker": {
+        "bounds": {
+          "height": 34,
+          "width": 34,
+          "x": 943,
+          "y": 488
+        },
+        "center": {
+          "x": 960,
+          "y": 505
+        },
+        "labelSide": "bottom",
+        "paintedRadius": 17,
+        "radius": 16,
+        "strokeWidth": 2
       },
       "number": 3,
       "placement": "top",
@@ -296,14 +430,12 @@
         "textColor": "#0f172a"
       },
       "target": {
-        "height": 4,
-        "width": 4,
-        "x": 958,
-        "y": 548
+        "x": 960,
+        "y": 550
       },
       "targetAnchor": {
-        "x": 961,
-        "y": 548
+        "x": 960,
+        "y": 550
       },
       "text": "趋势峰值需要说明",
       "type": "numbered-callout"

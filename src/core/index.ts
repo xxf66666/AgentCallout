@@ -710,7 +710,8 @@ export async function annotateImage(
   const spec = parseAnnotationSpec(arguments_.spec);
   const resolution = resolveAnnotationSpec(spec, loaded.inspection.dimensions);
   const rendered = await renderAnnotations(loaded.bytes, resolution.spec.annotations, {
-    limitInputPixels: loaded.limits.maxPixels
+    limitInputPixels: loaded.limits.maxPixels,
+    specVersion: resolution.spec.version
   });
   const warnings = [...resolution.warnings, ...rendered.warnings];
   return finalizeGenerated({

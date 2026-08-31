@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { layoutCallout, placeCallout } from "../src/layout/index.js";
+import {
+  circleOverlapsTarget,
+  connectCircleToTarget,
+  layoutCallout,
+  placeCallout
+} from "../src/layout/index.js";
 
 const centeredInput = {
   canvas: { width: 400, height: 300 },
@@ -41,6 +46,29 @@ describe("deterministic callout placement", () => {
     expect(result.placement).toBe("right");
     expect(result.score.calloutOverlap).toBe(0);
     expect(result.warnings).toEqual([]);
+  });
+
+  it("scores a target-facing marker footprint even when the label itself is clear", () => {
+    const input = {
+      ...centeredInput,
+      gap: 60,
+      occupied: [{ x: 190, y: 90, width: 20, height: 20 }]
+    };
+
+    expect(placeCallout(input).placement).toBe("top");
+    expect(placeCallout({ ...input, facingDecorationDepth: 50 }).placement).toBe("right");
+  });
+
+  it("scores the exposed leader corridor between a marker footprint and target", () => {
+    const input = {
+      ...centeredInput,
+      gap: 60,
+      occupied: [{ x: 190, y: 110, width: 20, height: 10 }],
+      facingDecorationSpan: 30
+    };
+
+    expect(placeCallout({ ...input, facingDecorationDepth: 30 }).placement).toBe("top");
+    expect(placeCallout({ ...input, facingDecorationDepth: 60 }).placement).toBe("right");
   });
 
   it("keeps an explicitly placed box inside the canvas and warns on clamping", () => {
@@ -92,6 +120,23 @@ describe("deterministic callout placement", () => {
     expect(result.warnings[0]).toContain("was clamped from 500x300 to 90x70");
   });
 
+  it("warns when a facing decoration still overflows after label clamping", () => {
+    const result = placeCallout({
+      canvas: { width: 100, height: 80 },
+      target: { x: 45, y: 2, width: 10, height: 10 },
+      box: { width: 50, height: 20 },
+      placement: "top",
+      margin: 4,
+      gap: 60,
+      facingDecorationDepth: 60,
+      facingDecorationSpan: 40
+    });
+
+    expect(
+      result.warnings.some((warning) => warning.includes("decoration footprint overflowed"))
+    ).toBe(true);
+  });
+
   it("returns stable anchors, scores, warnings, and geometry across runs", () => {
     const input = {
       canvas: { width: 321, height: 217 },
@@ -122,5 +167,78 @@ describe("deterministic callout placement", () => {
     expect(() => placeCallout({ ...centeredInput, canvas: { width: 0, height: 300 } })).toThrow(
       /canvas.width/
     );
+  });
+});
+
+describe("numbered-callout boundary leaders", () => {
+  it.each([
+    ["left", { x: 40, y: 100 }, { x: 80, y: 100 }],
+    ["right", { x: 160, y: 100 }, { x: 120, y: 100 }],
+    ["top", { x: 100, y: 40 }, { x: 100, y: 80 }],
+    ["bottom", { x: 100, y: 160 }, { x: 100, y: 120 }]
+  ] as const)(
+    "connects a circle to a %s point from the circle boundary",
+    (_side, target, start) => {
+      expect(connectCircleToTarget({ center: { x: 100, y: 100 }, radius: 20 }, target)).toEqual({
+        start,
+        end: target,
+        length: 40
+      });
+    }
+  );
+
+  it("ends on a rectangular target boundary and reports only exposed length", () => {
+    const leader = connectCircleToTarget(
+      { center: { x: 100, y: 100 }, radius: 20 },
+      { x: 20, y: 80, width: 20, height: 40 }
+    );
+
+    expect(leader).toEqual({
+      start: { x: 80, y: 100 },
+      end: { x: 40, y: 100 },
+      length: 40
+    });
+  });
+
+  it("distinguishes tangency from marker/target overlap", () => {
+    const marker = { center: { x: 60, y: 50 }, radius: 20 };
+    expect(circleOverlapsTarget(marker, { x: 20, y: 30, width: 20, height: 40 })).toBe(false);
+    expect(circleOverlapsTarget(marker, { x: 20.1, y: 30, width: 20, height: 40 })).toBe(true);
+    expect(circleOverlapsTarget(marker, { x: 40, y: 50 })).toBe(false);
+    expect(circleOverlapsTarget(marker, { x: 40.1, y: 50 })).toBe(true);
+  });
+
+  it("reports zero exposed leader when the marker is contained by the target", () => {
+    const marker = { center: { x: 50, y: 50 }, radius: 10 };
+    const target = { x: 20, y: 20, width: 60, height: 60 };
+
+    expect(circleOverlapsTarget(marker, target)).toBe(true);
+    expect(connectCircleToTarget(marker, target)).toEqual({
+      start: { x: 50, y: 20 },
+      end: { x: 50, y: 20 },
+      length: 0
+    });
+  });
+
+  it("rejects invalid circle and target geometry", () => {
+    expect(() =>
+      connectCircleToTarget({ center: { x: 10, y: 10 }, radius: 0 }, { x: 20, y: 20 })
+    ).toThrow(/circle.radius/u);
+    expect(() =>
+      connectCircleToTarget(
+        { center: { x: 10, y: 10 }, radius: 2 },
+        { x: 20, y: 20, width: -1, height: 10 }
+      )
+    ).toThrow(/target.width/u);
+    expect(() =>
+      connectCircleToTarget(
+        { center: { x: 10, y: 10 }, radius: 2 },
+        {
+          x: 20,
+          y: 20,
+          width: 5
+        }
+      )
+    ).toThrow(/both width and height/u);
   });
 });
