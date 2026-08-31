@@ -1,13 +1,16 @@
-# Constructing AnnotationSpec v1.0
+# Constructing AnnotationSpec 1.1
 
-Use this guide while composing tool input. The normative field definitions, limits, defaults, and complete examples are in the repository's [AnnotationSpec manual](../../../../../docs/annotation-spec.md).
+Use 1.1 for new annotations. Existing 1.0 sidecars remain valid and must be replayed as 1.0 when their canonical JSON or pixels matter; 1.0 rejects every 1.1-only field. Both versions are strict at the root, annotation, geometry, and style levels.
+
+The repository's normative manual is [AnnotationSpec 1.0 and 1.1](../../../../../docs/annotation-spec.md). This installed reference contains the complete 1.1 authoring contract needed by an agent.
 
 ## Minimal skeleton
 
 ```json
 {
-  "version": "1.0",
+  "version": "1.1",
   "coordinateSpace": "normalized",
+  "preset": "docs-light",
   "annotations": [
     {
       "id": "save-button",
@@ -18,14 +21,26 @@ Use this guide while composing tool input. The normative field definitions, limi
 }
 ```
 
-- Set `version` to exactly `"1.0"`.
-- `coordinateSpace` defaults to `"pixel"`; override it on one annotation only when needed.
-- Use finite numbers. Rectangles need positive `width` and `height`.
-- Use at most 200 annotations; combined annotation text is capped at 100,000 characters.
-- In normalized space, point components and rectangle origins are in `[0, 1]`; normalized sizes are in `(0, 1]`.
-- IDs are optional. Prefer safe, meaningful IDs using letters, digits, `_`, and `-`. Missing IDs become deterministic `a1`, `a2`, and so on.
+- `version` is exactly `"1.1"` for new work or `"1.0"` for legacy replay.
+- `coordinateSpace` is `"pixel"` or `"normalized"` and defaults to `"pixel"`.
+- Each annotation may set its own `coordinateSpace` to override the root value; otherwise it inherits the root value.
+- 1.1 `preset` is `docs-light`, `docs-dark`, `high-contrast`, or `classic-red`; it defaults to `docs-light`.
+- Optional root `defaults` is a strict style patch shared by all annotations.
+- Use at most 200 annotations. Each `text` value contains 1 to 10,000 UTF-16 code units, and all `text` values together contain at most 100,000.
+- IDs are optional, at most 64 characters, and match `^[A-Za-z0-9][A-Za-z0-9_-]*$`; missing IDs become deterministic `a1`, `a2`, and so on.
+- A `numbered-callout` number is an integer from 1 through 9,999.
+- A `blur` sigma is finite, ranges from `0.3` through `1000`, and defaults to `10`.
 
-## Choose the geometry that matches the intent
+## Coordinates and bounds
+
+The origin is the top-left corner. A point is `{ "x": number, "y": number }`; a rectangle is `{ "x": number, "y": number, "width": positive-number, "height": positive-number }`; and a target may be either. Geometry objects are strict, and every number must be finite.
+
+- In `pixel` space, fractional values are allowed. A point must be inside the image before rounding: `0 <= x < imageWidth` and `0 <= y < imageHeight`. A rectangle may start outside the image, but its width and height must be positive and it must intersect the canvas.
+- In `normalized` space, point components and rectangle `x`/`y` are in `[0, 1]`; rectangle `width`/`height` are in `(0, 1]`. A valid normalized rectangle may extend past the right or bottom edge when its origin and size sum to more than `1`.
+
+Points resolve to the nearest pixel; normalized points scale against `imageWidth - 1` and `imageHeight - 1`, so `(1, 1)` selects the bottom-right pixel. Rectangle edges scale against the full canvas extent. An intersecting rectangle that crosses an edge is clamped with a warning. A wholly outside or integer-empty rectangle is an error, and an out-of-canvas point is always an error.
+
+## Choose geometry by intent
 
 | Intent                              | Type and required geometry                                     |
 | ----------------------------------- | -------------------------------------------------------------- |
@@ -39,21 +54,61 @@ Use this guide while composing tool input. The normative field definitions, limi
 | Visually weaken low-risk content    | `blur` with `rect` and optional `sigma`                        |
 | Irreversibly cover sensitive pixels | `redact` with `rect` and optional opaque `color`               |
 
-For callouts, omit `placement` or use `"auto"` first. The other values are `"top"`, `"right"`, `"bottom"`, and `"left"`. Prefer a rectangular target when its bounds are known; this gives the leader and collision logic more useful geometry.
+For callouts, omit `placement` or use `auto` first. Other values are `top`, `right`, `bottom`, and `left`. Prefer a rectangular target when its bounds are known.
 
-## Style safely
+## Style without repetition
 
-Use only `#RRGGBB` or `#RRGGBBAA` colors. Common style keys are `strokeColor`, `fillColor`, `textColor`, `backgroundColor`, `strokeWidth`, `fontSize`, `opacity`, `padding`, `cornerRadius`, `lineHeight`, and `arrowHeadSize`. Omit style fields when the defaults are adequate; do not copy a complete style block into every annotation.
+Every field resolves independently in this order:
 
-`blur` is not secure redaction. Use `redact` for credentials, tokens, personal identifiers, or anything that must not survive in output pixels. A redact color must be opaque `#RRGGBB`, and redact opacity cannot be reduced.
+```text
+annotation.style > annotation.tone > root defaults > preset/type defaults
+```
 
-## Validation loop
+Omitting `tone` means no tone patch, not `neutral`. Put repeated width, font, padding, or other shared values in root `defaults`; use annotation `style` only for a local override.
+
+Shared style keys are `strokeColor`, `fillColor`, `textColor`, `backgroundColor`, `strokeWidth` (`0..64`), `fontSize` (`6..256`), `opacity` (`0..1`), `padding` (`0..128`), `cornerRadius` (`0..256`), `lineHeight` (`1..3`), and `arrowHeadSize` (`1..128`). Version 1.1 adds:
+
+- `maxWidth` (`48..4096`) for text/callout wrapping;
+- `markerStrokeColor`, `markerFillColor`, and `markerTextColor` for a numbered marker independent of its label.
+
+Colors are only `#RRGGBB` or `#RRGGBBAA`; parsing uppercases them. Named colors, three-digit hex, functions, and unknown fields fail validation.
+
+## Presets and tones
+
+| Preset          | Label text / background | Border    | Marker fill / text    |
+| --------------- | ----------------------- | --------- | --------------------- |
+| `docs-light`    | `#0F172A` / `#EFF6FF`   | `#2563EB` | `#2563EB` / `#FFFFFF` |
+| `docs-dark`     | `#F8FAFC` / `#1E293B`   | `#60A5FA` | `#2563EB` / `#FFFFFF` |
+| `high-contrast` | `#FFFFFF` / `#000000`   | `#FACC15` | `#FACC15` / `#000000` |
+| `classic-red`   | `#FFFFFF` / `#D92D20`   | `#FF3B30` | `#D92D20` / `#FFFFFF` |
+
+| Tone      | Label text / background | Border    | Marker fill / text    |
+| --------- | ----------------------- | --------- | --------------------- |
+| `neutral` | `#0F172A` / `#F1F5F9`   | `#64748B` | `#475569` / `#FFFFFF` |
+| `info`    | `#0F172A` / `#EFF6FF`   | `#2563EB` | `#2563EB` / `#FFFFFF` |
+| `success` | `#14532D` / `#F0FDF4`   | `#15803D` | `#15803D` / `#FFFFFF` |
+| `warning` | `#78350F` / `#FFFBEB`   | `#B45309` | `#B45309` / `#FFFFFF` |
+| `danger`  | `#7F1D1D` / `#FEF2F2`   | `#DC2626` | `#DC2626` / `#FFFFFF` |
+
+The built-in palette emits red only through `danger` and `classic-red`. Keep ordinary explanatory notes on the preset default or use `neutral`/`info`. This reservation does not prohibit or rewrite an explicit valid hex color: it is authoritative whenever it wins the documented per-field priority (annotation `style` remains above `tone`, while root `defaults` remains below it). Visually check the contrast and semantic meaning of every custom color.
+
+## Migrating numbered-callout markers from 1.0
+
+Replay a stored 1.0 spec as 1.0 when its canonical JSON or pixels matter; do not add 1.1-only fields to it. Version 1.0 has no `marker*` fields: a `numbered-callout` marker takes its outline from the resolved `strokeColor`, its fill from the resolved `backgroundColor`, and its number from the resolved `textColor`.
+
+Version 1.1 resolves marker colors independently. When authoring a 1.1 revision of a custom 1.0 numbered callout and preserving its marker appearance matters, copy those former resolved values to `markerStrokeColor`, `markerFillColor`, and `markerTextColor`, respectively. Omit the three fields when intentionally adopting the selected 1.1 preset/tone marker palette.
+
+## Redact is the safety boundary
+
+`blur` is reversible visual weakening, not safe deletion. Use `redact` for credentials, tokens, identifiers, or anything that must not survive in output pixels. `redact.color` is opaque `#RRGGBB`. After all preset/default/tone/style resolution, redact still forces `fillColor` to that color and `opacity` to `1`; a local redact opacity other than `1` is rejected.
+
+## Validation and replay loop
 
 1. Inspect the image and use its orientation-corrected dimensions.
-2. Construct a strict spec; do not add comments, paths, timestamps, selector metadata, or arbitrary fields.
+2. Construct a strict spec without comments, paths, timestamps, selector metadata, or arbitrary fields.
 3. Validate and resolve it against the actual image size.
 4. Treat wholly outside or empty geometry as an error. Review every clamp or layout warning.
-5. Render, inspect the output, and revise coordinates or placement when a callout obscures its target.
-6. Preserve annotation order and IDs when revising so replay and references remain stable.
+5. Render and inspect label wrapping, marker contrast, target visibility, and callout overlap.
+6. Revise coordinates or placement as needed while preserving annotation order and IDs.
 
-Canonicalization inserts schema defaults and generated IDs, uppercases hex colors, sorts object keys, and preserves annotation array order. The same canonical spec and canvas size produce the same resolved pixel geometry; the same source image and renderer environment are also needed for pixel-identical output.
+Canonicalization inserts schema defaults and generated IDs, uppercases hex colors, sorts object keys, and preserves annotation order. Version 1.1 also inserts `preset: "docs-light"`; version 1.0 canonical output remains unchanged. Pixel-identical replay additionally requires the same source image, renderer, fonts, and platform.

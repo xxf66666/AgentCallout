@@ -2,7 +2,7 @@ interface:
   display_name: "AgentCallout"
   short_description: "Annotate screenshots for reviews and reports"
   brand_color: "#E53935"
-  default_prompt: "Use $agent-callout to inspect, annotate, review, and return a Markdown-ready screenshot."
+  default_prompt: "Use $agent-callout to inspect, annotate with AnnotationSpec 1.1 readable defaults, review, and return a Markdown-ready screenshot. Keep ordinary notes non-danger."
 
 policy:
   allow_implicit_invocation: true

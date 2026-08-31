@@ -1,6 +1,6 @@
 # Numbered review
 
-A synthetic operations dashboard with three ordered review findings and deterministic callout placement.
+A synthetic operations dashboard showing neutral, warning, and info tones without defaulting ordinary findings to red.
 
 ## Generate
 

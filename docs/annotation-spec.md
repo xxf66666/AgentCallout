@@ -1,35 +1,42 @@
-# AnnotationSpec v1.0
+# AnnotationSpec 1.0 and 1.1
 
 AnnotationSpec is AgentCallout's strict, replayable description of annotations over an existing image. It contains no input/output paths, timestamps, hashes, random values, or renderer state. The source image and concrete canvas size are supplied separately.
+
+Use version `"1.1"` for new specs. It provides readable document-oriented defaults, reusable presets, semantic tones, root style defaults, independent numbered-marker colors, and explicit text width. Version `"1.0"` remains supported exactly for replay: its parsing, canonical JSON, resolved style/geometry, and renderer defaults are unchanged.
 
 ## Root object
 
 ```json
 {
-  "version": "1.0",
+  "version": "1.1",
   "coordinateSpace": "pixel",
+  "preset": "docs-light",
+  "defaults": { "maxWidth": 360 },
   "annotations": []
 }
 ```
 
-| Field             | Required | Value                                                                |
-| ----------------- | -------- | -------------------------------------------------------------------- |
-| `version`         | yes      | Exactly `"1.0"`. Other versions are rejected.                        |
-| `coordinateSpace` | no       | `"pixel"` or `"normalized"`; defaults to `"pixel"`.                  |
-| `annotations`     | yes      | Up to 200 annotation objects in paint order. The array may be empty. |
+| Field             | Required | Value                                                                                                |
+| ----------------- | -------- | ---------------------------------------------------------------------------------------------------- |
+| `version`         | yes      | Exactly `"1.0"` or `"1.1"`. Other versions are rejected.                                             |
+| `coordinateSpace` | no       | `"pixel"` or `"normalized"`; defaults to `"pixel"`.                                                  |
+| `preset`          | 1.1 only | One of the four [1.1 presets](#11-presets); defaults to `"docs-light"`.                              |
+| `defaults`        | 1.1 only | A strict shared style patch below annotation tone/style and above the selected preset/type defaults. |
+| `annotations`     | yes      | Up to 200 annotation objects in paint order. The array may be empty.                                 |
 
-Root, annotation, geometry, and style objects are strict: unknown fields are rejected. Annotation order is significant and is retained during parsing, resolution, and canonicalization.
+Root, annotation, geometry, and style objects are strict in both versions: unknown fields are rejected. A 1.0 spec also rejects every 1.1-only field. Annotation order is significant and is retained during parsing, resolution, and canonicalization.
 
 The combined `text` length across `text`, `callout`, and `numbered-callout` annotations must not exceed 100,000 UTF-16 code units. This bounds validation and renderer work before image allocation.
 
 Every annotation accepts these common fields:
 
-| Field             | Required | Value                                                                            |
-| ----------------- | -------- | -------------------------------------------------------------------------------- |
-| `type`            | yes      | One of the ten annotation types below.                                           |
-| `id`              | no       | Stable identifier matching `^[A-Za-z0-9][A-Za-z0-9_-]*$`, at most 64 characters. |
-| `coordinateSpace` | no       | Overrides the root coordinate space for this annotation.                         |
-| `style`           | no       | Strict style object described under [Styles](#styles).                           |
+| Field             | Required | Value                                                                                |
+| ----------------- | -------- | ------------------------------------------------------------------------------------ |
+| `type`            | yes      | One of the ten annotation types below.                                               |
+| `id`              | no       | Stable identifier matching `^[A-Za-z0-9][A-Za-z0-9_-]*$`, at most 64 characters.     |
+| `coordinateSpace` | no       | Overrides the root coordinate space for this annotation.                             |
+| `style`           | no       | Strict, version-specific style object described under [Styles](#styles).             |
+| `tone`            | 1.1 only | Optional semantic color patch: `neutral`, `info`, `success`, `warning`, or `danger`. |
 
 ## Coordinates and geometry
 
@@ -178,31 +185,83 @@ Uses `rect` as the focus region while dimming the surrounding image.
 
 Colors accept only `#RRGGBB` or `#RRGGBBAA`, with alpha last. Three-digit colors, named CSS colors, functions, and other CSS strings are rejected. Parsing normalizes letters to uppercase. The `redact.color` field is stricter and accepts no alpha channel.
 
-| Field             | Range            | Resolved base default |
-| ----------------- | ---------------- | --------------------- |
-| `strokeColor`     | strict hex color | `#FF3B30`             |
-| `fillColor`       | strict hex color | `#00000000`           |
-| `textColor`       | strict hex color | `#FFFFFF`             |
-| `backgroundColor` | strict hex color | `#D92D20`             |
-| `strokeWidth`     | `0` to `64`      | `3`                   |
-| `fontSize`        | `6` to `256`     | `24`                  |
-| `opacity`         | `0` to `1`       | `1`                   |
-| `padding`         | `0` to `128`     | `10`                  |
-| `cornerRadius`    | `0` to `256`     | `6`                   |
-| `lineHeight`      | `1` to `3`       | `1.25`                |
-| `arrowHeadSize`   | `1` to `128`     | `12`                  |
+The shared fields and validation ranges are:
 
-Type-specific resolved defaults override the base before user-supplied style values are applied:
+| Field               | Versions | Range            |
+| ------------------- | -------- | ---------------- |
+| `strokeColor`       | both     | strict hex color |
+| `fillColor`         | both     | strict hex color |
+| `textColor`         | both     | strict hex color |
+| `backgroundColor`   | both     | strict hex color |
+| `strokeWidth`       | both     | `0` to `64`      |
+| `fontSize`          | both     | `6` to `256`     |
+| `opacity`           | both     | `0` to `1`       |
+| `padding`           | both     | `0` to `128`     |
+| `cornerRadius`      | both     | `0` to `256`     |
+| `lineHeight`        | both     | `1` to `3`       |
+| `arrowHeadSize`     | both     | `1` to `128`     |
+| `maxWidth`          | 1.1 only | `48` to `4096`   |
+| `markerStrokeColor` | 1.1 only | strict hex color |
+| `markerFillColor`   | 1.1 only | strict hex color |
+| `markerTextColor`   | 1.1 only | strict hex color |
 
-| Type        | Overrides                                                                          |
-| ----------- | ---------------------------------------------------------------------------------- |
-| `text`      | `strokeWidth: 0`, `textColor: #FF3B30`, transparent background                     |
-| `highlight` | `strokeColor: #FFD43B00`, `fillColor: #FFD43B80`                                   |
-| `spotlight` | `strokeColor: #FFFFFF`, `fillColor: #000000A6`                                     |
-| `blur`      | `strokeWidth: 0`                                                                   |
-| `redact`    | `strokeWidth: 0`; resolved `fillColor` is its opaque `color`, and `opacity` is `1` |
+`maxWidth` bounds text measurement for `text`, `callout`, and `numbered-callout`; the renderer wraps Chinese and English with the same width rule. Other annotation types accept the resolved field but do not use it. The three `marker*` fields affect only a `numbered-callout` marker, so its outline, fill, and number no longer need to inherit the label colors.
 
-Rectangle, ellipse, arrow, callout, and numbered-callout use the base defaults unless their `style` overrides a value.
+### 1.1 resolution priority
+
+Version 1.1 resolves every style field independently in this exact order, from highest priority to lowest:
+
+1. the annotation's `style` field;
+2. the annotation's semantic `tone` color patch;
+3. root `defaults`;
+4. the selected preset and type-specific defaults.
+
+Omitting `tone` means no tone patch; it does not silently mean `neutral`. This lets root color defaults remain effective. Tone changes colors only, so dimensions such as `fontSize`, `padding`, and `maxWidth` continue to come from `style`, root defaults, or the preset.
+
+For `redact`, the security rule runs after all style resolution: resolved `fillColor` is always the annotation's opaque `color`, and resolved `opacity` is always `1`. A local redact style with any other opacity is rejected. Root defaults and tones cannot weaken this rule.
+
+### 1.1 presets
+
+| Preset          | Label text / background | Border    | Marker fill / text    | Purpose                                   |
+| --------------- | ----------------------- | --------- | --------------------- | ----------------------------------------- |
+| `docs-light`    | `#0F172A` / `#EFF6FF`   | `#2563EB` | `#2563EB` / `#FFFFFF` | Default light documentation style         |
+| `docs-dark`     | `#F8FAFC` / `#1E293B`   | `#60A5FA` | `#2563EB` / `#FFFFFF` | Labels over dark screenshots              |
+| `high-contrast` | `#FFFFFF` / `#000000`   | `#FACC15` | `#FACC15` / `#000000` | Maximum built-in text and marker contrast |
+| `classic-red`   | `#FFFFFF` / `#D92D20`   | `#FF3B30` | `#D92D20` / `#FFFFFF` | Explicit legacy-red visual style          |
+
+The first three presets use `fontSize: 22`, `padding: 12`, `maxWidth: 360`, `cornerRadius: 8`, `lineHeight: 1.35`, and `arrowHeadSize: 12`. Their default stroke width is `2`, except `high-contrast` uses `3`. `classic-red` uses the 1.0 geometry defaults and adds resolved marker colors plus `maxWidth: 360`.
+
+### 1.1 semantic tones
+
+| Tone      | Label text / background | Border    | Marker fill / text    |
+| --------- | ----------------------- | --------- | --------------------- |
+| `neutral` | `#0F172A` / `#F1F5F9`   | `#64748B` | `#475569` / `#FFFFFF` |
+| `info`    | `#0F172A` / `#EFF6FF`   | `#2563EB` | `#2563EB` / `#FFFFFF` |
+| `success` | `#14532D` / `#F0FDF4`   | `#15803D` | `#15803D` / `#FFFFFF` |
+| `warning` | `#78350F` / `#FFFBEB`   | `#B45309` | `#B45309` / `#FFFFFF` |
+| `danger`  | `#7F1D1D` / `#FEF2F2`   | `#DC2626` | `#DC2626` / `#FFFFFF` |
+
+All built-in label and marker text pairs have a contrast ratio of at least 4.5:1. The built-in palette emits red only through `danger` and `classic-red`; ordinary explanatory notes should omit `tone` or use `neutral`/`info`. This reservation does not prohibit or rewrite an explicit valid hex color. An explicit color is authoritative whenever it wins the documented per-field priority (for example, annotation `style` remains above `tone`, while root `defaults` remains below it), and the author is responsible for its contrast and semantic meaning.
+
+### 1.0 legacy defaults
+
+Version 1.0 retains its original resolved base defaults and does not accept `preset`, `defaults`, `tone`, `maxWidth`, or marker color fields:
+
+| Field             | 1.0 resolved base default |
+| ----------------- | ------------------------- |
+| `strokeColor`     | `#FF3B30`                 |
+| `fillColor`       | `#00000000`               |
+| `textColor`       | `#FFFFFF`                 |
+| `backgroundColor` | `#D92D20`                 |
+| `strokeWidth`     | `3`                       |
+| `fontSize`        | `24`                      |
+| `opacity`         | `1`                       |
+| `padding`         | `10`                      |
+| `cornerRadius`    | `6`                       |
+| `lineHeight`      | `1.25`                    |
+| `arrowHeadSize`   | `12`                      |
+
+Type-specific 1.0 defaults remain unchanged: `text` uses no stroke, red text, and a transparent background; `highlight` uses `#FFD43B00`/`#FFD43B80`; `spotlight` uses `#FFFFFF`/`#000000A6`; `blur` has no stroke; and `redact` is forced to its opaque replacement color.
 
 ## Stable IDs
 
@@ -218,7 +277,7 @@ Use meaningful explicit IDs when another report or workflow needs to refer to an
 
 ## Canonicalization and replay
 
-`canonicalizeSpec(value)` first performs the same strict parse as `parseAnnotationSpec`. It therefore inserts the root coordinate-space default, generated IDs, default placement, default blur sigma, default redact color, and uppercase color spelling. It then recursively sorts object keys and emits compact JSON. Annotation array order is retained.
+`canonicalizeSpec(value)` first performs the same strict parse as `parseAnnotationSpec`. It therefore inserts the root coordinate-space default, generated IDs, default placement, default blur sigma, default redact color, and uppercase color spelling. Version 1.1 additionally inserts `preset: "docs-light"` when it was omitted. Version 1.0 does not gain that field or any other 1.1 default. Canonicalization then recursively sorts object keys and emits compact JSON. Annotation array order is retained.
 
 The canonical string is stable for semantically identical valid input regardless of object key order. Canonicalization never invents timestamps or random IDs: explicit IDs are preserved and missing IDs use the deterministic sequence described above. Runtime timestamp fields, random-seed fields, source paths, hashes, and warnings are not accepted AnnotationSpec fields. Replaying the same canonical spec against the same canvas dimensions produces the same resolved pixel spec. Pixel-identical rendered output additionally requires the same source image, renderer version, fonts, and rendering environment.
 
@@ -228,28 +287,31 @@ The canonical string is stable for semantically identical valid input regardless
 
 ```json
 {
-  "version": "1.0",
+  "version": "1.1",
   "coordinateSpace": "normalized",
+  "preset": "docs-light",
   "annotations": [
     {
       "id": "invalid-field",
       "type": "rectangle",
       "rect": { "x": 0.61, "y": 0.28, "width": 0.3, "height": 0.13 },
-      "style": { "strokeColor": "#FF3B30", "strokeWidth": 4 }
+      "tone": "danger",
+      "style": { "strokeWidth": 4 }
     },
     {
       "id": "save-arrow",
       "type": "arrow",
       "start": { "x": 0.48, "y": 0.83 },
       "target": { "x": 0.82, "y": 0.78 },
-      "style": { "strokeColor": "#FF3B30" }
+      "tone": "danger"
     },
     {
       "id": "save-note",
       "type": "callout",
       "target": { "x": 0.72, "y": 0.72, "width": 0.2, "height": 0.12 },
       "text": "点击保存后没有响应",
-      "placement": "top"
+      "placement": "top",
+      "tone": "danger"
     }
   ]
 }
@@ -259,8 +321,9 @@ The canonical string is stable for semantically identical valid input regardless
 
 ```json
 {
-  "version": "1.0",
+  "version": "1.1",
   "coordinateSpace": "normalized",
+  "defaults": { "fontSize": 22, "maxWidth": 280 },
   "annotations": [
     {
       "id": "review-1",
@@ -268,7 +331,8 @@ The canonical string is stable for semantically identical valid input regardless
       "target": { "x": 0.08, "y": 0.14, "width": 0.22, "height": 0.12 },
       "text": "标题层级不清晰",
       "number": 1,
-      "placement": "right"
+      "placement": "right",
+      "tone": "neutral"
     },
     {
       "id": "review-2",
@@ -276,7 +340,8 @@ The canonical string is stable for semantically identical valid input regardless
       "target": { "x": 0.43, "y": 0.38, "width": 0.28, "height": 0.16 },
       "text": "状态信息缺少上下文",
       "number": 2,
-      "placement": "left"
+      "placement": "left",
+      "tone": "warning"
     },
     {
       "id": "review-3",
@@ -284,7 +349,8 @@ The canonical string is stable for semantically identical valid input regardless
       "target": { "x": 0.68, "y": 0.76, "width": 0.2, "height": 0.1 },
       "text": "主要操作不够醒目",
       "number": 3,
-      "placement": "top"
+      "placement": "top",
+      "tone": "info"
     }
   ]
 }
@@ -294,7 +360,7 @@ The canonical string is stable for semantically identical valid input regardless
 
 ```json
 {
-  "version": "1.0",
+  "version": "1.1",
   "coordinateSpace": "pixel",
   "annotations": [
     {
@@ -314,10 +380,19 @@ The canonical string is stable for semantically identical valid input regardless
       "type": "text",
       "position": { "x": 168, "y": 206 },
       "text": "Token 已永久遮挡",
-      "style": { "textColor": "#DC2626", "fontSize": 22 }
+      "tone": "danger",
+      "style": { "fontSize": 22 }
     }
   ]
 }
 ```
+
+## Migrating from 1.0
+
+Do not rewrite a stored 1.0 sidecar merely to adopt new colors; replay it as 1.0 when the old canonical and pixels matter. For a newly authored revision, change `version` to `"1.1"`, choose a preset only when the `docs-light` default is unsuitable, move shared dimensions into root `defaults`, and use `tone` for semantic color. Keep ordinary explanations non-red; use `danger` only for an actual error or risk. Use `classic-red` only when the legacy red visual is explicitly desired.
+
+Version 1.0 has no `marker*` fields: a `numbered-callout` marker takes its outline from the resolved `strokeColor`, its fill from the resolved `backgroundColor`, and its number from the resolved `textColor`. Version 1.1 resolves those marker colors independently. When converting a custom 1.0 numbered callout and preserving its marker appearance matters, copy those former resolved values explicitly to `markerStrokeColor`, `markerFillColor`, and `markerTextColor`, respectively, in the 1.1 revision. Omit them when intentionally adopting the selected 1.1 preset/tone marker palette, and never add them to a 1.0 spec because 1.0 rejects those fields.
+
+The callout layout algorithm, candidate order, and fixed leader gap are the same in both versions. `maxWidth` can change wrapping and therefore the size and selected position of a 1.1 label, but it does not introduce a different layout algorithm.
 
 Validate a spec before rendering, resolve it against the inspected image dimensions, retain its warnings, and save the canonical or sidecar representation needed for replay.

@@ -97,7 +97,7 @@ const definitions: ExampleDefinition[] = [
     slug: "ui-bug",
     title: "UI bug annotation",
     description:
-      "A synthetic release-settings screen with a boxed validation error, an arrow to Save, and a Chinese callout.",
+      "A synthetic release-settings screen using AnnotationSpec 1.1 danger tone only for a real validation failure.",
     width: 1000,
     height: 640,
     svgBody: `
@@ -138,28 +138,32 @@ const definitions: ExampleDefinition[] = [
       { text: "保存", left: 815, top: 514, width: 80, fontSize: 23, color: "#FFFFFF" }
     ],
     spec: {
-      version: "1.0",
+      version: "1.1",
+      preset: "docs-light",
+      defaults: { fontSize: 25, padding: 14, maxWidth: 280 },
       annotations: [
         {
           id: "invalid-field",
           type: "rectangle",
           rect: { x: 110, y: 258, width: 650, height: 84 },
-          style: { strokeColor: "#E53935", strokeWidth: 6, cornerRadius: 12 }
+          tone: "danger",
+          style: { strokeWidth: 6, cornerRadius: 12 }
         },
         {
           id: "save-arrow",
           type: "arrow",
           start: { x: 605, y: 472 },
-          target: { x: 842, y: 527 },
-          style: { strokeColor: "#E53935", strokeWidth: 7, arrowHeadSize: 22 }
+          target: { x: 790, y: 506 },
+          tone: "danger",
+          style: { strokeWidth: 7, arrowHeadSize: 22 }
         },
         {
           id: "save-note",
           type: "callout",
-          target: { x: 775, y: 498, width: 135, height: 58 },
+          target: { x: 790, y: 548 },
           text: "点击后没有响应",
           placement: "left",
-          style: { backgroundColor: "#B91C1C", fontSize: 25, padding: 14 }
+          tone: "danger"
         }
       ]
     }
@@ -168,7 +172,7 @@ const definitions: ExampleDefinition[] = [
     slug: "numbered-review",
     title: "Numbered review",
     description:
-      "A synthetic operations dashboard with three ordered review findings and deterministic callout placement.",
+      "A synthetic operations dashboard showing neutral, warning, and info tones without defaulting ordinary findings to red.",
     width: 1100,
     height: 700,
     svgBody: `
@@ -204,34 +208,36 @@ const definitions: ExampleDefinition[] = [
       { text: "趋势 / Trend", left: 330, top: 374, width: 220, fontSize: 20, color: "#334155" }
     ],
     spec: {
-      version: "1.0",
+      version: "1.1",
+      preset: "docs-light",
+      defaults: { fontSize: 22, maxWidth: 290 },
       annotations: [
         {
           id: "review-1",
           type: "numbered-callout",
-          target: { x: 455, y: 246 },
+          target: { x: 580, y: 245 },
           number: 1,
           text: "一次通过率低于目标",
           placement: "bottom",
-          style: { backgroundColor: "#B91C1C", fontSize: 22 }
+          tone: "neutral"
         },
         {
           id: "review-2",
           type: "numbered-callout",
-          target: { x: 825, y: 190 },
+          target: { x: 970, y: 270 },
           number: 2,
           text: "告警缺少责任人",
-          placement: "left",
-          style: { backgroundColor: "#C2410C", fontSize: 22 }
+          placement: "bottom",
+          tone: "warning"
         },
         {
           id: "review-3",
           type: "numbered-callout",
-          target: { x: 915, y: 445 },
+          target: { x: 960, y: 550 },
           number: 3,
           text: "趋势峰值需要说明",
           placement: "top",
-          style: { backgroundColor: "#1D4ED8", fontSize: 22 }
+          tone: "info"
         }
       ]
     }
@@ -240,7 +246,7 @@ const definitions: ExampleDefinition[] = [
     slug: "privacy",
     title: "Privacy-safe output",
     description:
-      "A synthetic account screen: ordinary email is blurred, while the fictional token is destroyed with opaque redact pixels.",
+      "A synthetic account screen using an ordinary info note for blur and danger only for irreversible token redaction.",
     width: 1000,
     height: 600,
     svgBody: `
@@ -292,7 +298,9 @@ const definitions: ExampleDefinition[] = [
       { text: "保存更改", left: 270, top: 480, width: 120, fontSize: 20, color: "#FFFFFF" }
     ],
     spec: {
-      version: "1.0",
+      version: "1.1",
+      preset: "docs-light",
+      defaults: { fontSize: 20, maxWidth: 260 },
       annotations: [
         {
           id: "email-note",
@@ -300,7 +308,7 @@ const definitions: ExampleDefinition[] = [
           target: { x: 255, y: 250, width: 500, height: 44 },
           text: "普通隐私：视觉弱化",
           placement: "right",
-          style: { backgroundColor: "#0F766E", fontSize: 20 }
+          tone: "info"
         },
         {
           id: "token-note",
@@ -308,7 +316,7 @@ const definitions: ExampleDefinition[] = [
           target: { x: 255, y: 372, width: 515, height: 46 },
           text: "Token：不可恢复遮挡",
           placement: "top",
-          style: { backgroundColor: "#B91C1C", fontSize: 20 }
+          tone: "danger"
         },
         {
           id: "email-blur",
@@ -359,6 +367,9 @@ for (const definition of definitions) {
   if (first.outputSha256 !== second.outputSha256 || !firstSidecar.equals(secondSidecar)) {
     throw new Error(`${definition.slug} is not deterministic on this platform.`);
   }
+  if (second.warnings.length > 0) {
+    throw new Error(`${definition.slug} emitted warnings: ${second.warnings.join(" | ")}`);
+  }
 
   if (definition.slug === "privacy") {
     const redact = { x: 255, y: 372, width: 515, height: 46 };
@@ -407,7 +418,7 @@ await writeFile(
   path.join(examplesRoot, "README.md"),
   `# AgentCallout examples
 
-All screenshots are synthetic and generated locally by \`npm run examples\`. Each example includes its original PNG, validated AnnotationSpec, generated PNG, replay sidecar, Markdown preview, and exact CLI command.
+All screenshots are synthetic and generated locally by \`npm run examples\`. The public examples use AnnotationSpec 1.1 readable defaults; the automated test suite retains a fixed 1.0 replay golden. Each example includes its original PNG, validated AnnotationSpec, generated PNG, replay sidecar, Markdown preview, and exact CLI command.
 
 - [UI bug](ui-bug/README.md)
 - [Numbered review](numbered-review/README.md)

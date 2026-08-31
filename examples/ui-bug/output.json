@@ -12,9 +12,9 @@
         },
         "style": {
           "cornerRadius": 12,
-          "strokeColor": "#E53935",
           "strokeWidth": 6
         },
+        "tone": "danger",
         "type": "rectangle"
       },
       {
@@ -25,40 +25,40 @@
         },
         "style": {
           "arrowHeadSize": 22,
-          "strokeColor": "#E53935",
           "strokeWidth": 7
         },
         "target": {
-          "x": 842,
-          "y": 527
+          "x": 790,
+          "y": 506
         },
+        "tone": "danger",
         "type": "arrow"
       },
       {
         "id": "save-note",
         "placement": "left",
-        "style": {
-          "backgroundColor": "#B91C1C",
-          "fontSize": 25,
-          "padding": 14
-        },
         "target": {
-          "height": 58,
-          "width": 135,
-          "x": 775,
-          "y": 498
+          "x": 790,
+          "y": 548
         },
         "text": "点击后没有响应",
+        "tone": "danger",
         "type": "callout"
       }
     ],
     "coordinateSpace": "pixel",
-    "version": "1.0"
+    "defaults": {
+      "fontSize": 25,
+      "maxWidth": 280,
+      "padding": 14
+    },
+    "preset": "docs-light",
+    "version": "1.1"
   },
   "hashes": {
     "inputSha256": "e90be19c00948046cc113562214832d6cfc4243b9bb2c4cf7c17b67dca7b544d",
-    "outputSha256": "5f303dc0ea825e65104564727d3dd838494d34d26990af809d1e121ca8250da4",
-    "specSha256": "5fd7a4c2c97457ff907d49d645bfd08426027e06ec756daf8e1be634549ba533"
+    "outputSha256": "bb3d3b9faf8c249b3fefafb44b74c8a579c13868a2a191d544cf0511c5a46bf6",
+    "specSha256": "0fc7a8d67731a7211ec3ad17b89353a3ff796bfee50452cfd586d2ace1a2149b"
   },
   "inputs": [
     {
@@ -93,9 +93,9 @@
         },
         "style": {
           "cornerRadius": 12,
-          "strokeColor": "#E53935",
           "strokeWidth": 6
         },
+        "tone": "danger",
         "type": "rectangle"
       },
       {
@@ -106,35 +106,35 @@
         },
         "style": {
           "arrowHeadSize": 22,
-          "strokeColor": "#E53935",
           "strokeWidth": 7
         },
         "target": {
-          "x": 842,
-          "y": 527
+          "x": 790,
+          "y": 506
         },
+        "tone": "danger",
         "type": "arrow"
       },
       {
         "id": "save-note",
         "placement": "left",
-        "style": {
-          "backgroundColor": "#B91C1C",
-          "fontSize": 25,
-          "padding": 14
-        },
         "target": {
-          "height": 58,
-          "width": 135,
-          "x": 775,
-          "y": 498
+          "x": 790,
+          "y": 548
         },
         "text": "点击后没有响应",
+        "tone": "danger",
         "type": "callout"
       }
     ],
     "coordinateSpace": "pixel",
-    "version": "1.0"
+    "defaults": {
+      "fontSize": 25,
+      "maxWidth": 280,
+      "padding": 14
+    },
+    "preset": "docs-light",
+    "version": "1.1"
   },
   "originalDimensions": {
     "height": 640,
@@ -175,25 +175,28 @@
       },
       "style": {
         "arrowHeadSize": 12,
-        "backgroundColor": "#d92d20",
+        "backgroundColor": "#fef2f2",
         "blurSigma": 10,
         "cornerRadius": 12,
         "fillColor": "#00000000",
-        "fontSize": 24,
-        "lineHeight": 1.25,
-        "maxWidth": 360,
+        "fontSize": 25,
+        "lineHeight": 1.35,
+        "markerFillColor": "#dc2626",
+        "markerStrokeColor": "#dc2626",
+        "markerTextColor": "#ffffff",
+        "maxWidth": 280,
         "opacity": 1,
-        "padding": 10,
-        "strokeColor": "#e53935",
+        "padding": 14,
+        "strokeColor": "#dc2626",
         "strokeWidth": 6,
-        "textColor": "#ffffff"
+        "textColor": "#7f1d1d"
       },
       "type": "rectangle"
     },
     {
       "end": {
-        "x": 842,
-        "y": 527
+        "x": 790,
+        "y": 506
       },
       "id": "save-arrow",
       "start": {
@@ -202,48 +205,69 @@
       },
       "style": {
         "arrowHeadSize": 22,
-        "backgroundColor": "#d92d20",
+        "backgroundColor": "#fef2f2",
         "blurSigma": 10,
-        "cornerRadius": 6,
+        "cornerRadius": 8,
         "fillColor": "#00000000",
-        "fontSize": 24,
-        "lineHeight": 1.25,
-        "maxWidth": 360,
+        "fontSize": 25,
+        "lineHeight": 1.35,
+        "markerFillColor": "#dc2626",
+        "markerStrokeColor": "#dc2626",
+        "markerTextColor": "#ffffff",
+        "maxWidth": 280,
         "opacity": 1,
-        "padding": 10,
-        "strokeColor": "#e53935",
+        "padding": 14,
+        "strokeColor": "#dc2626",
         "strokeWidth": 7,
-        "textColor": "#ffffff"
+        "textColor": "#7f1d1d"
       },
       "target": {
-        "x": 842,
-        "y": 527
+        "x": 790,
+        "y": 506
       },
       "type": "arrow"
     },
     {
       "anchor": {
-        "x": 761,
-        "y": 527
+        "x": 774,
+        "y": 548
       },
       "box": {
         "height": 53,
         "width": 201,
-        "x": 560,
-        "y": 501
+        "x": 573,
+        "y": 522
       },
       "fontSize": 25,
       "id": "save-note",
       "placement": "left",
+      "style": {
+        "arrowHeadSize": 12,
+        "backgroundColor": "#fef2f2",
+        "blurSigma": 10,
+        "cornerRadius": 8,
+        "fillColor": "#00000000",
+        "fontSize": 25,
+        "lineHeight": 1.35,
+        "markerFillColor": "#dc2626",
+        "markerStrokeColor": "#dc2626",
+        "markerTextColor": "#ffffff",
+        "maxWidth": 280,
+        "opacity": 1,
+        "padding": 14,
+        "strokeColor": "#dc2626",
+        "strokeWidth": 2,
+        "textColor": "#7f1d1d"
+      },
       "target": {
-        "height": 58,
-        "width": 135,
-        "x": 775,
-        "y": 498
+        "height": 4,
+        "width": 4,
+        "x": 788,
+        "y": 546
       },
       "targetAnchor": {
-        "x": 775,
-        "y": 528
+        "x": 788,
+        "y": 549
       },
       "text": "点击后没有响应",
       "type": "callout"

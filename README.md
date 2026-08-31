@@ -155,7 +155,7 @@ MCP 提供 6 个工具：
 - `crop_image`：裁剪局部，便于 Agent 放大检查。
 - `create_contact_sheet`：把多张图片合成联系表。
 
-AnnotationSpec v1.0 是可重放的 JSON 批注记录，以左上角为原点，支持像素坐标和 `0..1` 标准化坐标。完整字段见 [AnnotationSpec v1.0](docs/annotation-spec.md)。
+新建批注请使用 AnnotationSpec 1.1，它提供可读的默认样式、preset 和语义 tone；已有的 AnnotationSpec 1.0 sidecar 仍受支持。需要保持 canonical JSON 或像素兼容时，请保持其 1.0 版本原样重放。两个版本都以左上角为原点，支持像素坐标和 `0..1` 标准化坐标。完整字段见 [AnnotationSpec 1.0 和 1.1](docs/annotation-spec.md)。
 
 可选的 Codex Skill 会教 Agent 按“检查 → 批注 → 查看 → 修正”的流程工作；它不替代 MCP 安装：
 

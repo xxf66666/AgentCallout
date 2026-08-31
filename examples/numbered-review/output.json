@@ -6,55 +6,51 @@
         "id": "review-1",
         "number": 1,
         "placement": "bottom",
-        "style": {
-          "backgroundColor": "#B91C1C",
-          "fontSize": 22
-        },
         "target": {
-          "x": 455,
-          "y": 246
+          "x": 580,
+          "y": 245
         },
         "text": "一次通过率低于目标",
+        "tone": "neutral",
         "type": "numbered-callout"
       },
       {
         "id": "review-2",
         "number": 2,
-        "placement": "left",
-        "style": {
-          "backgroundColor": "#C2410C",
-          "fontSize": 22
-        },
+        "placement": "bottom",
         "target": {
-          "x": 825,
-          "y": 190
+          "x": 970,
+          "y": 270
         },
         "text": "告警缺少责任人",
+        "tone": "warning",
         "type": "numbered-callout"
       },
       {
         "id": "review-3",
         "number": 3,
         "placement": "top",
-        "style": {
-          "backgroundColor": "#1D4ED8",
-          "fontSize": 22
-        },
         "target": {
-          "x": 915,
-          "y": 445
+          "x": 960,
+          "y": 550
         },
         "text": "趋势峰值需要说明",
+        "tone": "info",
         "type": "numbered-callout"
       }
     ],
     "coordinateSpace": "pixel",
-    "version": "1.0"
+    "defaults": {
+      "fontSize": 22,
+      "maxWidth": 290
+    },
+    "preset": "docs-light",
+    "version": "1.1"
   },
   "hashes": {
     "inputSha256": "5c4210154b98ac51af5a095fd59df369c0616e3d1a5b66af9c1878b351124493",
-    "outputSha256": "f0a9c150b8cf950a0ed43d752e567cf394533f45060b93028fc4507bfec4aad5",
-    "specSha256": "dc9ea33b968cc8198bd9e603ce74e1d933639f0808a44743a6e857ae65b64fb0"
+    "outputSha256": "21e426c854bf47d99a593ab2cb2523d3ab63ab8afbb42188ec3ff8f11b5dc721",
+    "specSha256": "80b3bc96e5ab5e4e802787191cb0d4af1c4ce2dfac2350561a4e1f2858b6a135"
   },
   "inputs": [
     {
@@ -83,50 +79,46 @@
         "id": "review-1",
         "number": 1,
         "placement": "bottom",
-        "style": {
-          "backgroundColor": "#B91C1C",
-          "fontSize": 22
-        },
         "target": {
-          "x": 455,
-          "y": 246
+          "x": 580,
+          "y": 245
         },
         "text": "一次通过率低于目标",
+        "tone": "neutral",
         "type": "numbered-callout"
       },
       {
         "id": "review-2",
         "number": 2,
-        "placement": "left",
-        "style": {
-          "backgroundColor": "#C2410C",
-          "fontSize": 22
-        },
+        "placement": "bottom",
         "target": {
-          "x": 825,
-          "y": 190
+          "x": 970,
+          "y": 270
         },
         "text": "告警缺少责任人",
+        "tone": "warning",
         "type": "numbered-callout"
       },
       {
         "id": "review-3",
         "number": 3,
         "placement": "top",
-        "style": {
-          "backgroundColor": "#1D4ED8",
-          "fontSize": 22
-        },
         "target": {
-          "x": 915,
-          "y": 445
+          "x": 960,
+          "y": 550
         },
         "text": "趋势峰值需要说明",
+        "tone": "info",
         "type": "numbered-callout"
       }
     ],
     "coordinateSpace": "pixel",
-    "version": "1.0"
+    "defaults": {
+      "fontSize": 22,
+      "maxWidth": 290
+    },
+    "preset": "docs-light",
+    "version": "1.1"
   },
   "originalDimensions": {
     "height": 700,
@@ -159,105 +151,159 @@
   "resolvedAnnotations": [
     {
       "anchor": {
-        "x": 455,
-        "y": 262
+        "x": 580,
+        "y": 261
       },
       "box": {
-        "height": 42,
-        "width": 218,
-        "x": 346,
-        "y": 262
+        "height": 46,
+        "width": 222,
+        "x": 469,
+        "y": 261
       },
       "fontSize": 22,
       "id": "review-1",
       "marker": {
         "center": {
-          "x": 455,
-          "y": 246
+          "x": 580,
+          "y": 245
         },
         "radius": 16
       },
       "number": 1,
       "placement": "bottom",
+      "style": {
+        "arrowHeadSize": 12,
+        "backgroundColor": "#f1f5f9",
+        "blurSigma": 10,
+        "cornerRadius": 8,
+        "fillColor": "#00000000",
+        "fontSize": 22,
+        "lineHeight": 1.35,
+        "markerFillColor": "#475569",
+        "markerStrokeColor": "#475569",
+        "markerTextColor": "#ffffff",
+        "maxWidth": 290,
+        "opacity": 1,
+        "padding": 12,
+        "strokeColor": "#64748b",
+        "strokeWidth": 2,
+        "textColor": "#0f172a"
+      },
       "target": {
         "height": 4,
         "width": 4,
-        "x": 453,
-        "y": 244
+        "x": 578,
+        "y": 243
       },
       "targetAnchor": {
-        "x": 455,
-        "y": 248
+        "x": 580,
+        "y": 247
       },
       "text": "一次通过率低于目标",
       "type": "numbered-callout"
     },
     {
       "anchor": {
-        "x": 809,
-        "y": 190
+        "x": 970,
+        "y": 286
       },
       "box": {
-        "height": 42,
-        "width": 173,
-        "x": 636,
-        "y": 169
+        "height": 46,
+        "width": 177,
+        "x": 882,
+        "y": 286
       },
       "fontSize": 22,
       "id": "review-2",
       "marker": {
         "center": {
-          "x": 825,
-          "y": 190
+          "x": 970,
+          "y": 270
         },
         "radius": 16
       },
       "number": 2,
-      "placement": "left",
+      "placement": "bottom",
+      "style": {
+        "arrowHeadSize": 12,
+        "backgroundColor": "#fffbeb",
+        "blurSigma": 10,
+        "cornerRadius": 8,
+        "fillColor": "#00000000",
+        "fontSize": 22,
+        "lineHeight": 1.35,
+        "markerFillColor": "#b45309",
+        "markerStrokeColor": "#b45309",
+        "markerTextColor": "#ffffff",
+        "maxWidth": 290,
+        "opacity": 1,
+        "padding": 12,
+        "strokeColor": "#b45309",
+        "strokeWidth": 2,
+        "textColor": "#78350f"
+      },
       "target": {
         "height": 4,
         "width": 4,
-        "x": 823,
-        "y": 188
+        "x": 968,
+        "y": 268
       },
       "targetAnchor": {
-        "x": 823,
-        "y": 190
+        "x": 971,
+        "y": 272
       },
       "text": "告警缺少责任人",
       "type": "numbered-callout"
     },
     {
       "anchor": {
-        "x": 915,
-        "y": 429
+        "x": 960,
+        "y": 534
       },
       "box": {
-        "height": 42,
-        "width": 195,
-        "x": 818,
-        "y": 387
+        "height": 46,
+        "width": 199,
+        "x": 861,
+        "y": 488
       },
       "fontSize": 22,
       "id": "review-3",
       "marker": {
         "center": {
-          "x": 915,
-          "y": 445
+          "x": 960,
+          "y": 550
         },
         "radius": 16
       },
       "number": 3,
       "placement": "top",
+      "style": {
+        "arrowHeadSize": 12,
+        "backgroundColor": "#eff6ff",
+        "blurSigma": 10,
+        "cornerRadius": 8,
+        "fillColor": "#00000000",
+        "fontSize": 22,
+        "lineHeight": 1.35,
+        "markerFillColor": "#2563eb",
+        "markerStrokeColor": "#2563eb",
+        "markerTextColor": "#ffffff",
+        "maxWidth": 290,
+        "opacity": 1,
+        "padding": 12,
+        "strokeColor": "#2563eb",
+        "strokeWidth": 2,
+        "textColor": "#0f172a"
+      },
       "target": {
         "height": 4,
         "width": 4,
-        "x": 913,
-        "y": 443
+        "x": 958,
+        "y": 548
       },
       "targetAnchor": {
-        "x": 916,
-        "y": 443
+        "x": 961,
+        "y": 548
       },
       "text": "趋势峰值需要说明",
       "type": "numbered-callout"

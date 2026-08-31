@@ -9,6 +9,10 @@ const repositoryRoot = path.dirname(fileURLToPath(import.meta.url));
 export default tseslint.config(
   {
     ignores: [
+      ".agents/**",
+      ".claude/**",
+      "_bmad/**",
+      "_bmad-output/**",
       "coverage/**",
       "dist/**",
       "examples/**/output/**",

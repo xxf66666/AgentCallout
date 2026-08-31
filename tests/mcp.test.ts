@@ -1,4 +1,4 @@
-import { access, mkdtemp, rm } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -79,6 +79,13 @@ describe("AgentCallout MCP server", () => {
     const annotate = listed.tools.find((tool) => tool.name === "annotate_image");
     const advertisedSpec = JSON.stringify(annotate?.inputSchema.properties?.spec);
     expect(advertisedSpec).toContain('"const":"1.0"');
+    expect(advertisedSpec).toContain('"const":"1.1"');
+    expect(advertisedSpec).toContain('"docs-light"');
+    expect(advertisedSpec).toContain('"classic-red"');
+    expect(advertisedSpec).toContain('"neutral"');
+    expect(advertisedSpec).toContain('"danger"');
+    expect(advertisedSpec).toContain('"markerFillColor"');
+    expect(advertisedSpec).toContain('"maxWidth"');
     for (const type of [
       "rectangle",
       "ellipse",
@@ -126,6 +133,78 @@ describe("AgentCallout MCP server", () => {
       ok: true,
       limits: { maxPixels: 40_000_000, maxAnnotations: 200 },
       mcp: { maxPreviewBytes: 128 * 1024 }
+    });
+  });
+
+  test("validates and annotates a real 1.1 tone/maxWidth spec through MCP", async () => {
+    const spec = {
+      version: "1.1",
+      annotations: [
+        {
+          id: "mcp-v11",
+          type: "numbered-callout",
+          target: { x: 72, y: 28, width: 28, height: 24 },
+          text: "v1.1",
+          number: 1,
+          placement: "left",
+          tone: "info",
+          style: { maxWidth: 48, fontSize: 8, padding: 2 }
+        }
+      ]
+    };
+    const validated = (await client.callTool({
+      name: "validate_annotation_spec",
+      arguments: { inputPath, spec }
+    })) as CallToolResult;
+    expect(validated.isError).not.toBe(true);
+    expect(validated.structuredContent).toMatchObject({
+      valid: true,
+      spec: {
+        version: "1.1",
+        preset: "docs-light",
+        annotations: [{ id: "mcp-v11", tone: "info", style: { maxWidth: 48 } }]
+      },
+      resolvedSpec: {
+        version: "1.1",
+        annotations: [
+          {
+            id: "mcp-v11",
+            style: { maxWidth: 48, markerFillColor: "#2563EB" }
+          }
+        ]
+      }
+    });
+
+    const outputPath = join(directory, "mcp-v11.png");
+    const annotated = (await client.callTool({
+      name: "annotate_image",
+      arguments: { inputPath, outputPath, spec }
+    })) as CallToolResult;
+    expect(annotated.isError).not.toBe(true);
+    expect(annotated.structuredContent).toBeUndefined();
+    expect(annotated.content.some((item) => item.type === "image")).toBe(true);
+    const text = annotated.content.find((item) => item.type === "text");
+    const result = (text?.type === "text" ? JSON.parse(text.text) : undefined) as
+      { outputPath?: string; sidecarPath?: string } | undefined;
+    expect(result?.outputPath).toBe(outputPath);
+    expect(typeof result?.sidecarPath).toBe("string");
+    if (result?.sidecarPath === undefined) throw new Error("Missing MCP 1.1 sidecar path.");
+    const sidecar = JSON.parse(await readFile(result.sidecarPath, "utf8")) as {
+      annotationSpec: {
+        version: string;
+        preset: string;
+        annotations: { tone?: string; style?: { maxWidth?: number } }[];
+      };
+      resolvedAnnotations: { style?: Record<string, unknown> }[];
+    };
+    expect(sidecar.annotationSpec).toMatchObject({
+      version: "1.1",
+      preset: "docs-light",
+      annotations: [{ tone: "info", style: { maxWidth: 48 } }]
+    });
+    expect(sidecar.resolvedAnnotations[0]?.style).toMatchObject({
+      maxWidth: 48,
+      markerFillColor: "#2563eb"
     });
   });
 

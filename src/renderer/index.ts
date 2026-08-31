@@ -65,6 +65,9 @@ interface RenderStyle {
   fillColor: string;
   textColor: string;
   backgroundColor: string;
+  markerStrokeColor?: string;
+  markerFillColor?: string;
+  markerTextColor?: string;
   strokeWidth: number;
   fontSize: number;
   opacity: number;
@@ -173,11 +176,14 @@ function normalizeStyle(
   const defaultFill =
     type === "highlight" ? "#ffeb3b" : type === "redact" ? "#000000" : TRANSPARENT;
   const defaultOpacity = type === "highlight" ? 0.36 : type === "spotlight" ? 0.62 : 1;
-  return {
-    strokeColor: safeColor(style.strokeColor ?? style.color, DEFAULT_STROKE),
+  const strokeColor = safeColor(style.strokeColor ?? style.color, DEFAULT_STROKE);
+  const textColor = safeColor(style.textColor, DEFAULT_TEXT);
+  const backgroundColor = safeColor(style.backgroundColor, DEFAULT_BACKGROUND);
+  const normalized: RenderStyle = {
+    strokeColor,
     fillColor: safeColor(annotation.color ?? style.fillColor ?? style.fill, defaultFill),
-    textColor: safeColor(style.textColor, DEFAULT_TEXT),
-    backgroundColor: safeColor(style.backgroundColor, DEFAULT_BACKGROUND),
+    textColor,
+    backgroundColor,
     strokeWidth: boundedNumber(style.strokeWidth, 4, 0, 64),
     fontSize: boundedNumber(style.fontSize, 22, 6, 256),
     opacity: boundedNumber(style.opacity, defaultOpacity, 0, 1),
@@ -188,6 +194,16 @@ function normalizeStyle(
     lineHeight: boundedNumber(style.lineHeight, 1.25, 1, 3),
     arrowHeadSize: boundedNumber(style.arrowHeadSize, 12, 1, 128)
   };
+  if (style.markerStrokeColor !== undefined) {
+    normalized.markerStrokeColor = safeColor(style.markerStrokeColor, strokeColor);
+  }
+  if (style.markerFillColor !== undefined) {
+    normalized.markerFillColor = safeColor(style.markerFillColor, backgroundColor);
+  }
+  if (style.markerTextColor !== undefined) {
+    normalized.markerTextColor = safeColor(style.markerTextColor, textColor);
+  }
+  return normalized;
 }
 
 function pointFrom(value: unknown): PixelPoint | undefined {
@@ -421,7 +437,7 @@ async function renderTextSprite(
     })
       .png(STABLE_PNG_OPTIONS)
       .toBuffer({ resolveWithObject: true });
-    if (rendered.info.height <= safeMaximumHeight) {
+    if (rendered.info.width <= safeMaximumWidth && rendered.info.height <= safeMaximumHeight) {
       const buffer =
         style.opacity < 1
           ? await sharp(rendered.data)
@@ -519,6 +535,12 @@ async function renderCallout(
     { input: geometry, left: 0, top: 0 },
     { input: sprite.buffer, left: textLeft, top: textTop }
   ]);
+  const resolvedStyle =
+    annotation.style.markerStrokeColor === undefined ||
+    annotation.style.markerFillColor === undefined ||
+    annotation.style.markerTextColor === undefined
+      ? {}
+      : { style: annotation.style };
   return {
     buffer: rendered,
     box: chosen.box,
@@ -531,7 +553,8 @@ async function renderCallout(
       targetAnchor: chosen.targetAnchor,
       placement: chosen.placement,
       text,
-      fontSize: sprite.fontSize
+      fontSize: sprite.fontSize,
+      ...resolvedStyle
     }
   };
 }
@@ -557,7 +580,8 @@ async function renderNumberMarker(
   };
   const markerStyle: RenderStyle = {
     ...annotation.style,
-    fillColor: annotation.style.backgroundColor,
+    strokeColor: annotation.style.markerStrokeColor ?? annotation.style.strokeColor,
+    fillColor: annotation.style.markerFillColor ?? annotation.style.backgroundColor,
     opacity: annotation.style.opacity
   };
   const markerRect = {
@@ -566,7 +590,12 @@ async function renderNumberMarker(
     width: radius * 2,
     height: radius * 2
   };
-  const textStyle = { ...annotation.style, fontSize: Math.max(10, radius), maxWidth: radius * 2 };
+  const textStyle = {
+    ...annotation.style,
+    textColor: annotation.style.markerTextColor ?? annotation.style.textColor,
+    fontSize: Math.max(10, radius),
+    maxWidth: radius * 2
+  };
   const sprite = await renderTextSprite(
     String(number),
     textStyle,

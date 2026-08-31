@@ -1,51 +1,47 @@
 {
-  "version": "1.0",
+  "version": "1.1",
   "coordinateSpace": "pixel",
+  "preset": "docs-light",
+  "defaults": {
+    "fontSize": 22,
+    "maxWidth": 290
+  },
   "annotations": [
     {
       "id": "review-1",
-      "style": {
-        "backgroundColor": "#B91C1C",
-        "fontSize": 22
-      },
       "type": "numbered-callout",
       "target": {
-        "x": 455,
-        "y": 246
+        "x": 580,
+        "y": 245
       },
       "text": "一次通过率低于目标",
       "number": 1,
-      "placement": "bottom"
+      "placement": "bottom",
+      "tone": "neutral"
     },
     {
       "id": "review-2",
-      "style": {
-        "backgroundColor": "#C2410C",
-        "fontSize": 22
-      },
       "type": "numbered-callout",
       "target": {
-        "x": 825,
-        "y": 190
+        "x": 970,
+        "y": 270
       },
       "text": "告警缺少责任人",
       "number": 2,
-      "placement": "left"
+      "placement": "bottom",
+      "tone": "warning"
     },
     {
       "id": "review-3",
-      "style": {
-        "backgroundColor": "#1D4ED8",
-        "fontSize": 22
-      },
       "type": "numbered-callout",
       "target": {
-        "x": 915,
-        "y": 445
+        "x": 960,
+        "y": 550
       },
       "text": "趋势峰值需要说明",
       "number": 3,
-      "placement": "top"
+      "placement": "top",
+      "tone": "info"
     }
   ]
 }

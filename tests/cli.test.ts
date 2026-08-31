@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -110,6 +110,101 @@ describe("AgentCallout CLI", () => {
     const generated = JSON.parse(annotation.stdout.value) as Record<string, unknown>;
     expect(generated.outputPath).toBe(outputPath);
     expect((await sharp(outputPath).metadata()).format).toBe("png");
+  });
+
+  test("help recommends 1.1 for new specs while retaining 1.0 replay guidance", async () => {
+    const capture = captureIo();
+    expect(await runCli(["node", "agent-callout", "--help"], capture.io)).toBe(0);
+
+    expect(capture.stderr.value).toBe("");
+    expect(capture.stdout.value).toContain("Use AnnotationSpec 1.1 for new specs.");
+    expect(capture.stdout.value).toContain("Replay existing 1.0 sidecars unchanged");
+    expect(capture.stdout.value).toContain(
+      `agent-callout annotate screenshot.png --spec-json '{"version":"1.1","annotations":[]}'`
+    );
+  });
+
+  test("validate and annotate exercise AnnotationSpec 1.1 through the real CLI", async () => {
+    const spec = {
+      version: "1.1",
+      preset: "docs-light",
+      defaults: { strokeWidth: 2 },
+      annotations: [
+        {
+          id: "cli-info",
+          type: "rectangle",
+          rect: { x: 8, y: 9, width: 32, height: 20 },
+          tone: "info"
+        }
+      ]
+    };
+    const specPath = join(directory, "1.1-批注.json");
+    await writeFile(specPath, JSON.stringify(spec), "utf8");
+
+    const validation = captureIo();
+    expect(
+      await runCli(
+        [
+          "node",
+          "agent-callout",
+          "validate",
+          inputPath,
+          "--spec",
+          specPath,
+          "--allow-root",
+          directory,
+          "--json"
+        ],
+        validation.io
+      )
+    ).toBe(0);
+    expect(JSON.parse(validation.stdout.value)).toMatchObject({
+      valid: true,
+      spec: { version: "1.1", preset: "docs-light" },
+      annotationCount: 1
+    });
+
+    const outputPath = join(directory, "1.1-已批注.png");
+    const annotation = captureIo();
+    expect(
+      await runCli(
+        [
+          "node",
+          "agent-callout",
+          "annotate",
+          inputPath,
+          "--spec-json",
+          JSON.stringify(spec),
+          "--output",
+          outputPath,
+          "--allow-root",
+          directory,
+          "--json"
+        ],
+        annotation.io
+      )
+    ).toBe(0);
+    const generated = JSON.parse(annotation.stdout.value) as {
+      outputPath: string;
+      sidecarPath: string;
+    };
+    expect(generated.outputPath).toBe(outputPath);
+    expect((await sharp(outputPath).metadata()).format).toBe("png");
+
+    const sidecar = JSON.parse(await readFile(generated.sidecarPath, "utf8")) as {
+      annotationSpec: {
+        version: string;
+        preset?: string;
+        annotations: { id: string; tone?: string }[];
+      };
+      resolvedAnnotations: { style?: { strokeColor?: string } }[];
+    };
+    expect(sidecar.annotationSpec).toMatchObject({
+      version: "1.1",
+      preset: "docs-light",
+      annotations: [{ id: "cli-info", tone: "info" }]
+    });
+    expect(sidecar.resolvedAnnotations[0]?.style).toMatchObject({ strokeColor: "#2563eb" });
   });
 
   test("crop and contact-sheet create decodable outputs", async () => {

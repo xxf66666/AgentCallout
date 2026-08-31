@@ -504,7 +504,7 @@ export function createCliProgram(io: CliIo = defaultIo): Command {
 
   program.addHelpText(
     "after",
-    `\nExamples:\n  agent-callout inspect screenshot.png --json\n  agent-callout validate screenshot.png --spec annotations.json --json\n  agent-callout annotate screenshot.png --spec-json '{"version":"1.0","annotations":[]}'\n  agent-callout crop screenshot.png --rect 20,30,400,240 -o crop.png\n`
+    `\nAnnotationSpec:\n  Use AnnotationSpec 1.1 for new specs. Replay existing 1.0 sidecars unchanged when compatibility matters.\n\nExamples:\n  agent-callout inspect screenshot.png --json\n  agent-callout validate screenshot.png --spec annotations.json --json\n  agent-callout annotate screenshot.png --spec-json '{"version":"1.1","annotations":[]}'\n  agent-callout crop screenshot.png --rect 20,30,400,240 -o crop.png\n`
   );
   return program;
 }

@@ -1,6 +1,6 @@
 # UI bug annotation
 
-A synthetic release-settings screen with a boxed validation error, an arrow to Save, and a Chinese callout.
+A synthetic release-settings screen using AnnotationSpec 1.1 danger tone only for a real validation failure.
 
 ## Generate
 

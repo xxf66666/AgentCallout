@@ -5,10 +5,6 @@
       {
         "id": "email-note",
         "placement": "right",
-        "style": {
-          "backgroundColor": "#0F766E",
-          "fontSize": 20
-        },
         "target": {
           "height": 44,
           "width": 500,
@@ -16,15 +12,12 @@
           "y": 250
         },
         "text": "普通隐私：视觉弱化",
+        "tone": "info",
         "type": "callout"
       },
       {
         "id": "token-note",
         "placement": "top",
-        "style": {
-          "backgroundColor": "#B91C1C",
-          "fontSize": 20
-        },
         "target": {
           "height": 46,
           "width": 515,
@@ -32,6 +25,7 @@
           "y": 372
         },
         "text": "Token：不可恢复遮挡",
+        "tone": "danger",
         "type": "callout"
       },
       {
@@ -58,12 +52,17 @@
       }
     ],
     "coordinateSpace": "pixel",
-    "version": "1.0"
+    "defaults": {
+      "fontSize": 20,
+      "maxWidth": 260
+    },
+    "preset": "docs-light",
+    "version": "1.1"
   },
   "hashes": {
     "inputSha256": "5e8f4d735df796430072b297600cff9fdf5608c2c136808ed8dcc5bbb5c0ed1e",
-    "outputSha256": "10010378ad6c845017e3bac8d701f5c4cfb1973f0369fee42769f5ada1e76733",
-    "specSha256": "b7690c8033e8fa946f3a139f37c7a227754e80e6e1851fe2439613c1e813b7ab"
+    "outputSha256": "c3e52a99d622a3c5cad5eda7c7a0e86bcca0d5e5a543e29f3961476032c727b6",
+    "specSha256": "1b5f1ce28ea85c06965f571b7377b2b1077c0ebebe8131bdcc0f23af28fa2a62"
   },
   "inputs": [
     {
@@ -91,10 +90,6 @@
       {
         "id": "email-note",
         "placement": "right",
-        "style": {
-          "backgroundColor": "#0F766E",
-          "fontSize": 20
-        },
         "target": {
           "height": 44,
           "width": 500,
@@ -102,15 +97,12 @@
           "y": 250
         },
         "text": "普通隐私：视觉弱化",
+        "tone": "info",
         "type": "callout"
       },
       {
         "id": "token-note",
         "placement": "top",
-        "style": {
-          "backgroundColor": "#B91C1C",
-          "fontSize": 20
-        },
         "target": {
           "height": 46,
           "width": 515,
@@ -118,6 +110,7 @@
           "y": 372
         },
         "text": "Token：不可恢复遮挡",
+        "tone": "danger",
         "type": "callout"
       },
       {
@@ -144,7 +137,12 @@
       }
     ],
     "coordinateSpace": "pixel",
-    "version": "1.0"
+    "defaults": {
+      "fontSize": 20,
+      "maxWidth": 260
+    },
+    "preset": "docs-light",
+    "version": "1.1"
   },
   "originalDimensions": {
     "height": 600,
@@ -181,14 +179,32 @@
         "y": 272
       },
       "box": {
-        "height": 40,
-        "width": 199,
+        "height": 44,
+        "width": 203,
         "x": 769,
-        "y": 252
+        "y": 250
       },
       "fontSize": 20,
       "id": "email-note",
       "placement": "right",
+      "style": {
+        "arrowHeadSize": 12,
+        "backgroundColor": "#eff6ff",
+        "blurSigma": 10,
+        "cornerRadius": 8,
+        "fillColor": "#00000000",
+        "fontSize": 20,
+        "lineHeight": 1.35,
+        "markerFillColor": "#2563eb",
+        "markerStrokeColor": "#2563eb",
+        "markerTextColor": "#ffffff",
+        "maxWidth": 260,
+        "opacity": 1,
+        "padding": 12,
+        "strokeColor": "#2563eb",
+        "strokeWidth": 2,
+        "textColor": "#0f172a"
+      },
       "target": {
         "height": 44,
         "width": 500,
@@ -208,14 +224,32 @@
         "y": 358
       },
       "box": {
-        "height": 40,
-        "width": 216,
-        "x": 405,
-        "y": 318
+        "height": 44,
+        "width": 220,
+        "x": 403,
+        "y": 314
       },
       "fontSize": 20,
       "id": "token-note",
       "placement": "top",
+      "style": {
+        "arrowHeadSize": 12,
+        "backgroundColor": "#fef2f2",
+        "blurSigma": 10,
+        "cornerRadius": 8,
+        "fillColor": "#00000000",
+        "fontSize": 20,
+        "lineHeight": 1.35,
+        "markerFillColor": "#dc2626",
+        "markerStrokeColor": "#dc2626",
+        "markerTextColor": "#ffffff",
+        "maxWidth": 260,
+        "opacity": 1,
+        "padding": 12,
+        "strokeColor": "#dc2626",
+        "strokeWidth": 2,
+        "textColor": "#7f1d1d"
+      },
       "target": {
         "height": 46,
         "width": 515,
@@ -239,18 +273,21 @@
       },
       "style": {
         "arrowHeadSize": 12,
-        "backgroundColor": "#d92d20",
+        "backgroundColor": "#eff6ff",
         "blurSigma": 12,
-        "cornerRadius": 6,
+        "cornerRadius": 8,
         "fillColor": "#00000000",
-        "fontSize": 24,
-        "lineHeight": 1.25,
-        "maxWidth": 360,
+        "fontSize": 20,
+        "lineHeight": 1.35,
+        "markerFillColor": "#2563eb",
+        "markerStrokeColor": "#2563eb",
+        "markerTextColor": "#ffffff",
+        "maxWidth": 260,
         "opacity": 1,
-        "padding": 10,
-        "strokeColor": "#ff3b30",
+        "padding": 12,
+        "strokeColor": "#2563eb",
         "strokeWidth": 0,
-        "textColor": "#ffffff"
+        "textColor": "#0f172a"
       },
       "type": "blur"
     },
@@ -264,18 +301,21 @@
       },
       "style": {
         "arrowHeadSize": 12,
-        "backgroundColor": "#d92d20",
+        "backgroundColor": "#eff6ff",
         "blurSigma": 10,
-        "cornerRadius": 6,
+        "cornerRadius": 8,
         "fillColor": "#111827",
-        "fontSize": 24,
-        "lineHeight": 1.25,
-        "maxWidth": 360,
+        "fontSize": 20,
+        "lineHeight": 1.35,
+        "markerFillColor": "#2563eb",
+        "markerStrokeColor": "#2563eb",
+        "markerTextColor": "#ffffff",
+        "maxWidth": 260,
         "opacity": 1,
-        "padding": 10,
-        "strokeColor": "#ff3b30",
+        "padding": 12,
+        "strokeColor": "#2563eb",
         "strokeWidth": 0,
-        "textColor": "#ffffff"
+        "textColor": "#0f172a"
       },
       "type": "redact"
     }

@@ -1,8 +1,26 @@
 import { z } from "zod";
 
+/**
+ * @deprecated Legacy AnnotationSpec 1.0 replay constant. Existing consumers may
+ * keep using it for byte-compatible replay; new authoring should use
+ * LATEST_ANNOTATION_SPEC_VERSION.
+ */
 export const ANNOTATION_SPEC_VERSION = "1.0" as const;
+export const LATEST_ANNOTATION_SPEC_VERSION = "1.1" as const;
+export const ANNOTATION_SPEC_VERSIONS = [
+  ANNOTATION_SPEC_VERSION,
+  LATEST_ANNOTATION_SPEC_VERSION
+] as const;
 export const MAX_ANNOTATIONS = 200;
 export const MAX_TOTAL_TEXT_LENGTH = 100_000;
+
+export const ANNOTATION_PRESETS = [
+  "docs-light",
+  "docs-dark",
+  "high-contrast",
+  "classic-red"
+] as const;
+export const ANNOTATION_TONES = ["neutral", "info", "success", "warning", "danger"] as const;
 
 export const ANNOTATION_TYPES = [
   "rectangle",
@@ -18,6 +36,9 @@ export const ANNOTATION_TYPES = [
 ] as const;
 
 export type AnnotationType = (typeof ANNOTATION_TYPES)[number];
+export type AnnotationSpecVersion = (typeof ANNOTATION_SPEC_VERSIONS)[number];
+export type AnnotationPreset = (typeof ANNOTATION_PRESETS)[number];
+export type AnnotationTone = (typeof ANNOTATION_TONES)[number];
 export type CoordinateSpace = "pixel" | "normalized";
 export type CalloutPlacementPreference = "auto" | "top" | "right" | "bottom" | "left";
 
@@ -66,7 +87,7 @@ const annotationIdSchema = z
     message: "Annotation ID must use only ASCII letters, digits, _ or -"
   });
 
-const styleSchema = z
+const legacyStyleSchema = z
   .object({
     strokeColor: hexColorSchema.optional(),
     fillColor: hexColorSchema.optional(),
@@ -82,10 +103,17 @@ const styleSchema = z
   })
   .strict();
 
+const styleSchema = legacyStyleSchema.extend({
+  markerStrokeColor: hexColorSchema.optional(),
+  markerFillColor: hexColorSchema.optional(),
+  markerTextColor: hexColorSchema.optional(),
+  maxWidth: finiteNumberSchema.min(48).max(4_096).optional()
+});
+
 const commonAnnotationShape = {
   id: annotationIdSchema.optional(),
   coordinateSpace: z.enum(["pixel", "normalized"]).optional(),
-  style: styleSchema.optional()
+  style: legacyStyleSchema.optional()
 };
 
 const rectangleAnnotationSchema = z
@@ -190,15 +218,77 @@ const annotationUnionSchema = z.discriminatedUnion("type", [
   redactAnnotationSchema
 ]);
 
-type ParsedAnnotationWithOptionalId = z.output<typeof annotationUnionSchema>;
+const toneSchema = z.enum(ANNOTATION_TONES);
+
+const v11RectangleAnnotationSchema = rectangleAnnotationSchema.extend({
+  tone: toneSchema.optional(),
+  style: styleSchema.optional()
+});
+const v11EllipseAnnotationSchema = ellipseAnnotationSchema.extend({
+  tone: toneSchema.optional(),
+  style: styleSchema.optional()
+});
+const v11ArrowAnnotationSchema = arrowAnnotationSchema.extend({
+  tone: toneSchema.optional(),
+  style: styleSchema.optional()
+});
+const v11TextAnnotationSchema = textAnnotationSchema.extend({
+  tone: toneSchema.optional(),
+  style: styleSchema.optional()
+});
+const v11CalloutAnnotationSchema = calloutAnnotationSchema.extend({
+  tone: toneSchema.optional(),
+  style: styleSchema.optional()
+});
+const v11NumberedCalloutAnnotationSchema = numberedCalloutAnnotationSchema.extend({
+  tone: toneSchema.optional(),
+  style: styleSchema.optional()
+});
+const v11HighlightAnnotationSchema = highlightAnnotationSchema.extend({
+  tone: toneSchema.optional(),
+  style: styleSchema.optional()
+});
+const v11SpotlightAnnotationSchema = spotlightAnnotationSchema.extend({
+  tone: toneSchema.optional(),
+  style: styleSchema.optional()
+});
+const v11BlurAnnotationSchema = blurAnnotationSchema.extend({
+  tone: toneSchema.optional(),
+  style: styleSchema.optional()
+});
+const v11RedactAnnotationSchema = redactAnnotationSchema.extend({
+  tone: toneSchema.optional(),
+  style: styleSchema.optional()
+});
+
+const v11AnnotationUnionSchema = z.discriminatedUnion("type", [
+  v11RectangleAnnotationSchema,
+  v11EllipseAnnotationSchema,
+  v11ArrowAnnotationSchema,
+  v11TextAnnotationSchema,
+  v11CalloutAnnotationSchema,
+  v11NumberedCalloutAnnotationSchema,
+  v11HighlightAnnotationSchema,
+  v11SpotlightAnnotationSchema,
+  v11BlurAnnotationSchema,
+  v11RedactAnnotationSchema
+]);
+
+type ParsedLegacyAnnotationWithOptionalId = z.output<typeof annotationUnionSchema>;
+type ParsedV11AnnotationWithOptionalId = z.output<typeof v11AnnotationUnionSchema>;
+type ParsedAnnotationWithOptionalId =
+  ParsedLegacyAnnotationWithOptionalId | ParsedV11AnnotationWithOptionalId;
 type WithRequiredId<T> = T extends unknown ? Omit<T, "id"> & { id: string } : never;
 
 export type Point = z.output<typeof pointSchema>;
 export type Rect = z.output<typeof rectSchema>;
 export type AnnotationTarget = z.output<typeof targetSchema>;
 export type AnnotationStyle = z.output<typeof styleSchema>;
-export type AnnotationInput = z.input<typeof annotationUnionSchema>;
-export type Annotation = WithRequiredId<ParsedAnnotationWithOptionalId>;
+export type AnnotationInput =
+  z.input<typeof annotationUnionSchema> | z.input<typeof v11AnnotationUnionSchema>;
+export type LegacyAnnotation = WithRequiredId<ParsedLegacyAnnotationWithOptionalId>;
+export type AnnotationV11 = WithRequiredId<ParsedV11AnnotationWithOptionalId>;
+export type Annotation = LegacyAnnotation | AnnotationV11;
 export type RectangleAnnotation = Extract<Annotation, { type: "rectangle" }>;
 export type EllipseAnnotation = Extract<Annotation, { type: "ellipse" }>;
 export type ArrowAnnotation = Extract<Annotation, { type: "arrow" }>;
@@ -210,19 +300,42 @@ export type SpotlightAnnotation = Extract<Annotation, { type: "spotlight" }>;
 export type BlurAnnotation = Extract<Annotation, { type: "blur" }>;
 export type RedactAnnotation = Extract<Annotation, { type: "redact" }>;
 
-export interface AnnotationSpec {
+export interface AnnotationSpecV1 {
   version: typeof ANNOTATION_SPEC_VERSION;
   coordinateSpace: CoordinateSpace;
-  annotations: Annotation[];
+  annotations: LegacyAnnotation[];
 }
 
-const rawAnnotationSpecSchema = z
+export interface AnnotationSpecV11 {
+  version: typeof LATEST_ANNOTATION_SPEC_VERSION;
+  coordinateSpace: CoordinateSpace;
+  preset: AnnotationPreset;
+  defaults?: AnnotationStyle;
+  annotations: AnnotationV11[];
+}
+
+export type AnnotationSpec = AnnotationSpecV1 | AnnotationSpecV11;
+
+const rawV1AnnotationSpecSchema = z
   .object({
     version: z.literal(ANNOTATION_SPEC_VERSION),
     coordinateSpace: z.enum(["pixel", "normalized"]).default("pixel"),
     annotations: z.array(annotationUnionSchema).max(MAX_ANNOTATIONS)
   })
-  .strict()
+  .strict();
+
+const rawV11AnnotationSpecSchema = z
+  .object({
+    version: z.literal(LATEST_ANNOTATION_SPEC_VERSION),
+    coordinateSpace: z.enum(["pixel", "normalized"]).default("pixel"),
+    preset: z.enum(ANNOTATION_PRESETS).default("docs-light"),
+    defaults: styleSchema.optional(),
+    annotations: z.array(v11AnnotationUnionSchema).max(MAX_ANNOTATIONS)
+  })
+  .strict();
+
+const rawAnnotationSpecSchema = z
+  .discriminatedUnion("version", [rawV1AnnotationSpecSchema, rawV11AnnotationSpecSchema])
   .superRefine((spec, context) => {
     const seenIds = new Map<string, number>();
     let totalTextLength = 0;
@@ -276,8 +389,8 @@ const rawAnnotationSpecSchema = z
   });
 
 /**
- * Strict AnnotationSpec v1 schema. Parsing also supplies the root coordinate-space
- * default and deterministic IDs for annotations that omitted one.
+ * Strict AnnotationSpec 1.0/1.1 schema. Parsing also supplies root defaults and
+ * deterministic IDs for annotations that omitted one.
  */
 export const annotationSpecSchema = rawAnnotationSpecSchema.transform((spec): AnnotationSpec => {
   const reservedIds = new Set(
@@ -302,6 +415,16 @@ export const annotationSpecSchema = rawAnnotationSpecSchema.transform((spec): An
     return { ...annotation, id };
   });
 
+  if (spec.version === LATEST_ANNOTATION_SPEC_VERSION) {
+    return {
+      version: spec.version,
+      coordinateSpace: spec.coordinateSpace,
+      preset: spec.preset,
+      ...(spec.defaults === undefined ? {} : { defaults: spec.defaults }),
+      annotations
+    };
+  }
+
   return {
     version: spec.version,
     coordinateSpace: spec.coordinateSpace,
@@ -316,10 +439,14 @@ export interface ResolvedAnnotationStyle {
   fillColor: string;
   textColor: string;
   backgroundColor: string;
+  markerStrokeColor?: string;
+  markerFillColor?: string;
+  markerTextColor?: string;
   strokeWidth: number;
   fontSize: number;
   opacity: number;
   padding: number;
+  maxWidth?: number;
   cornerRadius: number;
   lineHeight: number;
   arrowHeadSize: number;
@@ -403,7 +530,7 @@ export type ResolvedAnnotation =
   | ResolvedRedactAnnotation;
 
 export interface ResolvedAnnotationSpec {
-  version: typeof ANNOTATION_SPEC_VERSION;
+  version: AnnotationSpecVersion;
   coordinateSpace: "pixel";
   annotations: ResolvedAnnotation[];
 }
@@ -430,6 +557,17 @@ const BASE_STYLE: ResolvedAnnotationStyle = {
   cornerRadius: 6,
   lineHeight: 1.25,
   arrowHeadSize: 12
+};
+
+type ResolvedAnnotationStyleV11 = ResolvedAnnotationStyle & {
+  markerStrokeColor: string;
+  markerFillColor: string;
+  markerTextColor: string;
+  maxWidth: number;
+};
+
+type ResolvedAnnotationStyleLayer = {
+  [Field in keyof ResolvedAnnotationStyleV11]?: ResolvedAnnotationStyleV11[Field] | undefined;
 };
 
 const STYLE_DEFAULTS: Record<AnnotationType, Partial<ResolvedAnnotationStyle>> = {
@@ -460,6 +598,137 @@ const STYLE_DEFAULTS: Record<AnnotationType, Partial<ResolvedAnnotationStyle>> =
   }
 };
 
+const V11_PRESET_STYLES: Record<AnnotationPreset, ResolvedAnnotationStyleV11> = {
+  "docs-light": {
+    strokeColor: "#2563EB",
+    fillColor: "#00000000",
+    textColor: "#0F172A",
+    backgroundColor: "#EFF6FF",
+    markerStrokeColor: "#2563EB",
+    markerFillColor: "#2563EB",
+    markerTextColor: "#FFFFFF",
+    strokeWidth: 2,
+    fontSize: 22,
+    opacity: 1,
+    padding: 12,
+    maxWidth: 360,
+    cornerRadius: 8,
+    lineHeight: 1.35,
+    arrowHeadSize: 12
+  },
+  "docs-dark": {
+    strokeColor: "#60A5FA",
+    fillColor: "#00000000",
+    textColor: "#F8FAFC",
+    backgroundColor: "#1E293B",
+    markerStrokeColor: "#60A5FA",
+    markerFillColor: "#2563EB",
+    markerTextColor: "#FFFFFF",
+    strokeWidth: 2,
+    fontSize: 22,
+    opacity: 1,
+    padding: 12,
+    maxWidth: 360,
+    cornerRadius: 8,
+    lineHeight: 1.35,
+    arrowHeadSize: 12
+  },
+  "high-contrast": {
+    strokeColor: "#FACC15",
+    fillColor: "#00000000",
+    textColor: "#FFFFFF",
+    backgroundColor: "#000000",
+    markerStrokeColor: "#FACC15",
+    markerFillColor: "#FACC15",
+    markerTextColor: "#000000",
+    strokeWidth: 3,
+    fontSize: 22,
+    opacity: 1,
+    padding: 12,
+    maxWidth: 360,
+    cornerRadius: 8,
+    lineHeight: 1.35,
+    arrowHeadSize: 12
+  },
+  "classic-red": {
+    ...BASE_STYLE,
+    markerStrokeColor: "#FF3B30",
+    markerFillColor: "#D92D20",
+    markerTextColor: "#FFFFFF",
+    maxWidth: 360
+  }
+};
+
+const V11_TYPE_DEFAULTS: Record<AnnotationType, ResolvedAnnotationStyleLayer> = {
+  rectangle: {},
+  ellipse: {},
+  arrow: {},
+  text: {
+    strokeWidth: 0,
+    backgroundColor: "#00000000"
+  },
+  callout: {},
+  "numbered-callout": {},
+  highlight: {
+    strokeColor: "#FFD43B00",
+    fillColor: "#FFD43B80"
+  },
+  spotlight: {
+    strokeColor: "#FFFFFF",
+    fillColor: "#000000A6"
+  },
+  blur: {
+    strokeWidth: 0
+  },
+  redact: {
+    strokeWidth: 0,
+    fillColor: "#000000"
+  }
+};
+
+const V11_TONE_STYLES: Record<AnnotationTone, ResolvedAnnotationStyleLayer> = {
+  neutral: {
+    strokeColor: "#64748B",
+    textColor: "#0F172A",
+    backgroundColor: "#F1F5F9",
+    markerStrokeColor: "#475569",
+    markerFillColor: "#475569",
+    markerTextColor: "#FFFFFF"
+  },
+  info: {
+    strokeColor: "#2563EB",
+    textColor: "#0F172A",
+    backgroundColor: "#EFF6FF",
+    markerStrokeColor: "#2563EB",
+    markerFillColor: "#2563EB",
+    markerTextColor: "#FFFFFF"
+  },
+  success: {
+    strokeColor: "#15803D",
+    textColor: "#14532D",
+    backgroundColor: "#F0FDF4",
+    markerStrokeColor: "#15803D",
+    markerFillColor: "#15803D",
+    markerTextColor: "#FFFFFF"
+  },
+  warning: {
+    strokeColor: "#B45309",
+    textColor: "#78350F",
+    backgroundColor: "#FFFBEB",
+    markerStrokeColor: "#B45309",
+    markerFillColor: "#B45309",
+    markerTextColor: "#FFFFFF"
+  },
+  danger: {
+    strokeColor: "#DC2626",
+    textColor: "#7F1D1D",
+    backgroundColor: "#FEF2F2",
+    markerStrokeColor: "#DC2626",
+    markerFillColor: "#DC2626",
+    markerTextColor: "#FFFFFF"
+  }
+};
+
 export function parseAnnotationSpec(value: unknown): AnnotationSpec {
   return annotationSpecSchema.parse(value);
 }
@@ -475,7 +744,11 @@ export function resolveAnnotationSpec(
 
   const annotations = spec.annotations.map((annotation): ResolvedAnnotation => {
     const coordinateSpace = annotation.coordinateSpace ?? spec.coordinateSpace;
-    const style = resolveStyle(annotation.type, annotation.style);
+    const tone = "tone" in annotation ? annotation.tone : undefined;
+    const style =
+      spec.version === ANNOTATION_SPEC_VERSION
+        ? resolveLegacyStyle(annotation.type, annotation.style)
+        : resolveV11Style(annotation.type, spec.preset, spec.defaults, tone, annotation.style);
     const common = {
       id: annotation.id,
       coordinateSpace: "pixel" as const,
@@ -595,7 +868,7 @@ export function resolveAnnotationSpec(
 
   return {
     spec: {
-      version: ANNOTATION_SPEC_VERSION,
+      version: spec.version,
       coordinateSpace: "pixel",
       annotations
     },
@@ -679,7 +952,10 @@ function validateCanvas(canvas: CanvasSize): void {
   }
 }
 
-function resolveStyle(type: AnnotationType, style?: AnnotationStyle): ResolvedAnnotationStyle {
+function resolveLegacyStyle(
+  type: AnnotationType,
+  style?: AnnotationStyle
+): ResolvedAnnotationStyle {
   const defaults: ResolvedAnnotationStyle = {
     ...BASE_STYLE,
     ...STYLE_DEFAULTS[type]
@@ -697,6 +973,52 @@ function resolveStyle(type: AnnotationType, style?: AnnotationStyle): ResolvedAn
     lineHeight: style?.lineHeight ?? defaults.lineHeight,
     arrowHeadSize: style?.arrowHeadSize ?? defaults.arrowHeadSize
   };
+}
+
+function resolveV11Style(
+  type: AnnotationType,
+  preset: AnnotationPreset,
+  rootDefaults?: AnnotationStyle,
+  tone?: AnnotationTone,
+  annotationStyle?: AnnotationStyle
+): ResolvedAnnotationStyleV11 {
+  const presetStyle = V11_PRESET_STYLES[preset];
+  const typeStyle: ResolvedAnnotationStyleLayer = {
+    ...V11_TYPE_DEFAULTS[type],
+    ...(type === "text" && preset === "classic-red" ? { textColor: "#FF3B30" } : {})
+  };
+  const toneStyle = tone === undefined ? undefined : V11_TONE_STYLES[tone];
+  const layers = [typeStyle, rootDefaults, toneStyle, annotationStyle];
+  const resolved: ResolvedAnnotationStyleV11 = { ...presetStyle };
+
+  for (const layer of layers) {
+    applyDefinedStyle(resolved, layer);
+  }
+  return resolved;
+}
+
+function applyDefinedStyle(
+  target: ResolvedAnnotationStyleV11,
+  layer: ResolvedAnnotationStyleLayer | undefined
+): void {
+  if (layer === undefined) return;
+  if (layer.strokeColor !== undefined) target.strokeColor = layer.strokeColor;
+  if (layer.fillColor !== undefined) target.fillColor = layer.fillColor;
+  if (layer.textColor !== undefined) target.textColor = layer.textColor;
+  if (layer.backgroundColor !== undefined) target.backgroundColor = layer.backgroundColor;
+  if (layer.markerStrokeColor !== undefined) {
+    target.markerStrokeColor = layer.markerStrokeColor;
+  }
+  if (layer.markerFillColor !== undefined) target.markerFillColor = layer.markerFillColor;
+  if (layer.markerTextColor !== undefined) target.markerTextColor = layer.markerTextColor;
+  if (layer.strokeWidth !== undefined) target.strokeWidth = layer.strokeWidth;
+  if (layer.fontSize !== undefined) target.fontSize = layer.fontSize;
+  if (layer.opacity !== undefined) target.opacity = layer.opacity;
+  if (layer.padding !== undefined) target.padding = layer.padding;
+  if (layer.maxWidth !== undefined) target.maxWidth = layer.maxWidth;
+  if (layer.cornerRadius !== undefined) target.cornerRadius = layer.cornerRadius;
+  if (layer.lineHeight !== undefined) target.lineHeight = layer.lineHeight;
+  if (layer.arrowHeadSize !== undefined) target.arrowHeadSize = layer.arrowHeadSize;
 }
 
 function resolvePoint(

@@ -1,13 +1,14 @@
 {
-  "version": "1.0",
+  "version": "1.1",
   "coordinateSpace": "pixel",
+  "preset": "docs-light",
+  "defaults": {
+    "fontSize": 20,
+    "maxWidth": 260
+  },
   "annotations": [
     {
       "id": "email-note",
-      "style": {
-        "backgroundColor": "#0F766E",
-        "fontSize": 20
-      },
       "type": "callout",
       "target": {
         "x": 255,
@@ -16,14 +17,11 @@
         "height": 44
       },
       "text": "普通隐私：视觉弱化",
-      "placement": "right"
+      "placement": "right",
+      "tone": "info"
     },
     {
       "id": "token-note",
-      "style": {
-        "backgroundColor": "#B91C1C",
-        "fontSize": 20
-      },
       "type": "callout",
       "target": {
         "x": 255,
@@ -32,7 +30,8 @@
         "height": 46
       },
       "text": "Token：不可恢复遮挡",
-      "placement": "top"
+      "placement": "top",
+      "tone": "danger"
     },
     {
       "id": "email-blur",

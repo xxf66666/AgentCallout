@@ -1,11 +1,16 @@
 {
-  "version": "1.0",
+  "version": "1.1",
   "coordinateSpace": "pixel",
+  "preset": "docs-light",
+  "defaults": {
+    "fontSize": 25,
+    "padding": 14,
+    "maxWidth": 280
+  },
   "annotations": [
     {
       "id": "invalid-field",
       "style": {
-        "strokeColor": "#E53935",
         "strokeWidth": 6,
         "cornerRadius": 12
       },
@@ -15,12 +20,12 @@
         "y": 258,
         "width": 650,
         "height": 84
-      }
+      },
+      "tone": "danger"
     },
     {
       "id": "save-arrow",
       "style": {
-        "strokeColor": "#E53935",
         "strokeWidth": 7,
         "arrowHeadSize": 22
       },
@@ -30,26 +35,21 @@
         "y": 472
       },
       "target": {
-        "x": 842,
-        "y": 527
-      }
+        "x": 790,
+        "y": 506
+      },
+      "tone": "danger"
     },
     {
       "id": "save-note",
-      "style": {
-        "backgroundColor": "#B91C1C",
-        "fontSize": 25,
-        "padding": 14
-      },
       "type": "callout",
       "target": {
-        "x": 775,
-        "y": 498,
-        "width": 135,
-        "height": 58
+        "x": 790,
+        "y": 548
       },
       "text": "点击后没有响应",
-      "placement": "left"
+      "placement": "left",
+      "tone": "danger"
     }
   ]
 }

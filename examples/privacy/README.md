@@ -1,6 +1,6 @@
 # Privacy-safe output
 
-A synthetic account screen: ordinary email is blurred, while the fictional token is destroyed with opaque redact pixels.
+A synthetic account screen using an ordinary info note for blur and danger only for irreversible token redaction.
 
 ## Generate
 
