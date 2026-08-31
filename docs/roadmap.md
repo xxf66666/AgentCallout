@@ -4,20 +4,20 @@
 
 ## 范围总览
 
-| 能力                                                      | MVP 0.1：已有截图批注 | 0.2：复核/AI 交付（发布候选） | Later 0.3+    |
-| --------------------------------------------------------- | --------------------- | ----------------------------- | ------------- |
-| PNG/JPEG/WebP 已有截图输入                                | **是**                | 维护                          | 维护          |
-| rectangle、ellipse、arrow、text/callout、numbered callout | **是**                | 改进布局                      | 编辑器交互    |
-| highlight、spotlight、blur、安全 redact                   | **是**                | 改进检测与验证                | 更多视觉效果  |
-| append-only revision、父链与恢复                          | **是**                | 摘要/分支语义                 | 显式合并      |
-| PNG + 可读 JSON sidecar 跨 AI 交付                        | **是**                | 校验/摘要工具                 | 标准化互操作  |
-| 512 px 紧凑总览                                           | **是**                | **变更区域聚焦预览**          | 自适应预算    |
-| CLI + 本地 stdio MCP                                      | **是**                | 维护兼容                      | 更多宿主集成  |
-| Claude Code/Codex GitHub 直接安装                         | **是**                | 持续回归                      | 更多 Agent    |
-| OCR 文字定位                                              | **否**                | 否                            | 可选本地适配  |
-| Playwright/DOM selector 定位                              | **否**                | 否                            | 可选 DOM 适配 |
-| 完整桌面 GUI/截图快捷键/GIF/视频                          | **否**                | 否                            | **以后**      |
-| 云同步、账号、计费                                        | **否**                | 否                            | 未承诺        |
+| 能力                                                      | MVP 0.1：已有截图批注 | 0.2：复核/AI 交付（已发布） | Later 0.3+    |
+| --------------------------------------------------------- | --------------------- | --------------------------- | ------------- |
+| PNG/JPEG/WebP 已有截图输入                                | **是**                | 维护                        | 维护          |
+| rectangle、ellipse、arrow、text/callout、numbered callout | **是**                | 改进布局                    | 编辑器交互    |
+| highlight、spotlight、blur、安全 redact                   | **是**                | 改进检测与验证              | 更多视觉效果  |
+| append-only revision、父链与恢复                          | **是**                | 摘要/分支语义               | 显式合并      |
+| PNG + 可读 JSON sidecar 跨 AI 交付                        | **是**                | 校验/摘要工具               | 标准化互操作  |
+| 512 px 紧凑总览                                           | **是**                | **变更区域聚焦预览**        | 自适应预算    |
+| CLI + 本地 stdio MCP                                      | **是**                | 维护兼容                    | 更多宿主集成  |
+| Claude Code/Codex GitHub 直接安装                         | **是**                | 持续回归                    | 更多 Agent    |
+| OCR 文字定位                                              | **否**                | 否                          | 可选本地适配  |
+| Playwright/DOM selector 定位                              | **否**                | 否                          | 可选 DOM 适配 |
+| 完整桌面 GUI/截图快捷键/GIF/视频                          | **否**                | 否                          | **以后**      |
+| 云同步、账号、计费                                        | **否**                | 否                          | 未承诺        |
 
 ## MVP 0.1：给 Agent 一支“截图批注笔”
 
@@ -50,7 +50,7 @@ MVP 只解决一个闭环：Agent 对用户已有的截图执行 `inspect → �
 
 只有以下证据齐备才发布 0.1：干净 clone 安装成功；lint/typecheck/test/build 通过；CLI 真实生成并重新解码图片；MCP Server 启动及 tool 调用成功；三组示例可重放；中英文和自动布局通过视觉检查；redact 通过像素验证；Claude Code/Codex 安装、发现、调用、二次渲染和卸载按兼容矩阵完成。未验证项必须保留为 NOT VERIFIED，不能用文档或 mock 替代。
 
-## 0.2：低 token 复核与跨 AI 语义交付（发布候选）
+## 0.2：低 token 复核与跨 AI 语义交付（已发布）
 
 0.1.3 的真实 Claude/Codex 验收证明 512 px 总览足以发现遮挡，但 Claude 为确认小区域又调用了一次 crop。0.2 已实现单张变更区域预览和安全 sidecar 摘要，目标是减少重复图片轮次，并让普通 JSON sidecar 更容易校验和交接；仍不把私有 payload 或可逆编辑层塞进 PNG metadata。
 

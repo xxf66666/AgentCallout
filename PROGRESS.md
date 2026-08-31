@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-- 阶段：MVP 与 0.1.3 已发布；0.2 聚焦预览/sidecar 摘要完成发布验收，待标签
+- 阶段：MVP、0.1.3 与 0.2.0 已发布
 - GitHub：`https://github.com/xxf66666/AgentCallout`（公开仓库，`main` 已推送）
 - 本地分支：`main`
 - 阻塞：主路径无；Codex 可选 Skills-only Marketplace 0.1.3 更新受客户端固定 30 秒 clone 超时影响
@@ -64,10 +64,11 @@
 - [x] 从精确 commit 全局安装 0.2.0；Codex 桌面自动重启 MCP 导致的 EBUSY 已用官方 remove→install→add 流程闭环
 - [x] 真实 Codex 首轮发现 `op:"replace"` 歧义；工具契约改为自描述 `op:"set"` 并由 doctor 直接报告 product 0.2.0（`12edc01`）
 - [x] Claude/Codex 0.2.0 均以两张 384×162 changed-region 完成“发现遮挡→left 修正”，预览 5,512/6,600 B，crop 均为 0；最终 sidecar 安全摘要通过
+- [x] 最终证据 commit `c28974f` 再经 GitHub clean clone、135 tests/全 gate、examples clean、doctor/self-test 与八工具 smoke；发布 `v0.2.0` 和 `agent-callout--v0.2.0` annotated tags
 
 ## 进行中
 
-- [ ] 提交/推送功能与验收证据，发布 `v0.2.0`
+- 无；0.2.0 发布门禁已关闭，下一轮从“待完成”中重新排序。
 
 ## 待完成
 
@@ -110,3 +111,5 @@
 | 2026-08-31 | revise 契约真实修正                  | 首次 Codex 无 Skill 测试误用 `replace`；`12edc01` 明示 `set` JSON/禁用 `replace`，下一次真实调用首轮即正确         |
 | 2026-08-31 | Codex 0.151.0 真实 0.2 A/B           | doctor 0.2.0；rev1/2 changed-region 384×162、5,512/6,600 B；遮挡→left 无遮挡；inspect summary 通过；crop 0         |
 | 2026-08-31 | Claude Code 2.1.251 真实 0.2 A/B     | Plugin 0.2.0 缓存 hash 与 main 一致；同上两轮视觉结论与字节数；inspect summary 通过；crop 0                        |
+| 2026-08-31 | 最终 GitHub clean clone 0.2          | `c28974f`：npm ci、135 tests/全 gate、dist 复现、examples clean、doctor/self-test、八工具 smoke 与 clean diff 通过 |
+| 2026-08-31 | v0.2.0 发布                          | main 已推送；`v0.2.0` 与 Claude Plugin `agent-callout--v0.2.0` annotated tags 指向本次最终发布提交并推送           |
