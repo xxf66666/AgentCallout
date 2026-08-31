@@ -71,6 +71,19 @@ Lock 是目录内协调，不是跨机器或跨目录的全局共识。把完整
 
 MCP 不暴露 overwrite；已有普通图片输出冲突时应要求新 `outputPath`，不得建议 MCP 调用方传入不存在的 `overwrite` 参数。修订失败使用稳定错误码（例如 `REVISION_CONFLICT`、`INPUT_INVALID`、`INPUT_HASH_MISMATCH`、`REVISION_LIMIT_REACHED`、`REVISION_RECOVERY_REQUIRED`），错误结果仍不得记录 sidecar 全文、批注文字或绝对路径到 stderr 持久日志。
 
+### 2.5 聚焦预览与 sidecar 摘要
+
+聚焦预览是新的高细节出口，必须晚于 parent/spec/output/父链验证：
+
+- 父 spec 与新 spec 都以同一原图和当前 renderer 在本地解析几何；父 spec 重渲染 hash 必须与已验证父输出一致，否则不能生成局部聚焦图。
+- 只裁剪本次已提交、SHA-256/尺寸重新验证的当前输出 PNG；不裁剪原图、父 revision 输出，不扫描目录猜测文件。
+- touched 与连带自动排版迁移共同决定候选；父/子实际 RGBA 像素差异再与几何范围合并，以覆盖宽描边、箭头头部和 alpha-only 变化。外扩/clamp 后只有一个连通簇且最终面积不超过画布 50%才聚焦。其他情况返回 low-detail compact-overview。
+- 每次最多一张 ImageContent、最长边 512 px、PNG 最多 64 KiB；focus 编码失败返回 text-only 成功结果，不回滚 revision，也不偷偷发送整图。
+- 只要直接父版本或修订后 spec 含 blur/redact，默认不自动放大局部。父版本敏感覆盖被删除或任一字段变化时返回 `review.mode=none`，不发送任何图片。`none` 是隐私抑制，不是渲染失败。
+- changed-region 必须返回原画布 `sourceRect`，Agent 不得把局部判断表述为完整画布已复核。
+
+`inspect-sidecar` / `inspect_annotation_sidecar` 是只读过滤器。它复用完整 sidecar/output/父链门禁，不打开原图、不修复/重写文件、不返回 ImageContent，且结果序列化不超过 4 KiB。默认公开字段只含 manifest/spec 版本、输出尺寸、批注 type 计数与 resolved inventory 身份对齐状态、revision 深度与目录协调边界、warning 数量、验证状态、blur/redact 布尔值和压平 PNG 的可移植性事实；明确排除所有路径/文件名/Markdown、hash/lineage/parent/edits、annotation ID/文字/style/raw warning/resolved geometry、renderer/font 指纹。任何验证失败只返回错误，不得返回部分成功摘要。
+
 ## 3. 资源限制
 
 图片压缩体积很小并不代表解码成本很小。实现必须在进入 Sharp/libvips 的昂贵路径前后分别设限，并且不能允许单个 AnnotationSpec 关闭硬上限。
@@ -84,6 +97,7 @@ MCP 不暴露 overwrite；已有普通图片输出冲突时应要求新 `outputP
 | annotation 数量与单条/总文字长度 | Schema 验证阶段                                  | **200 条；单条 10,000、合计 100,000 字符** |
 | contact sheet 输入               | Schema/核心双重校验                              | **64 张；16 列**                           |
 | MCP ImageContent/预览            | base64 前逐级缩小；完整 PNG 仍保留在本地路径     | **64 KiB；最长边 512 px；默认 low detail** |
+| sidecar 公共摘要                 | 完整校验后构造独立过滤 DTO                       | **4 KiB；零 ImageContent**                 |
 
 数值必须集中定义、由 doctor 输出，并在 README 与错误信息中保持一致。发布门槛是：每一种限制都有恰好位于边界、超过边界、畸形 metadata 和资源释放测试；在这些数值确定以前，不得把大图防护标记为 VERIFIED。
 

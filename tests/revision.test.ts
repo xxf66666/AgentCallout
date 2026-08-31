@@ -28,6 +28,7 @@ import {
   REVISION_FAULT_POINTS,
   annotateImage,
   createImagePreview,
+  inspectAnnotationSidecar,
   reviseAnnotation,
   type RevisionErrorCode,
   type RevisionFaultPoint
@@ -114,9 +115,7 @@ function canonicalJson(value: unknown): string {
   return JSON.stringify(sortJson(value), null, 2);
 }
 
-async function makeInput(filePath: string): Promise<void> {
-  const width = 128;
-  const height = 96;
+async function makeInput(filePath: string, width = 128, height = 96): Promise<void> {
   const pixels = Buffer.alloc(width * height * 3);
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
@@ -193,6 +192,54 @@ async function expectFileState(filePath: string, expected: FileState): Promise<v
   const actual = await fileState(filePath);
   expect(actual.bytes).toEqual(expected.bytes);
   expect(actual.mtimeNs).toBe(expected.mtimeNs);
+}
+
+async function pixelDifferenceBounds(
+  leftPath: string,
+  rightPath: string
+): Promise<{
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+} | null> {
+  const [left, right] = await Promise.all([
+    sharp(leftPath).ensureAlpha().raw().toBuffer({ resolveWithObject: true }),
+    sharp(rightPath).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
+  ]);
+  expect(right.info.width).toBe(left.info.width);
+  expect(right.info.height).toBe(left.info.height);
+  let minimumX = left.info.width;
+  let minimumY = left.info.height;
+  let maximumX = -1;
+  let maximumY = -1;
+  const channels = left.info.channels;
+  for (let y = 0; y < left.info.height; y += 1) {
+    for (let x = 0; x < left.info.width; x += 1) {
+      const offset = (y * left.info.width + x) * channels;
+      let different = false;
+      for (let channel = 0; channel < channels; channel += 1) {
+        if (left.data[offset + channel] !== right.data[offset + channel]) {
+          different = true;
+          break;
+        }
+      }
+      if (different) {
+        minimumX = Math.min(minimumX, x);
+        minimumY = Math.min(minimumY, y);
+        maximumX = Math.max(maximumX, x);
+        maximumY = Math.max(maximumY, y);
+      }
+    }
+  }
+  return maximumX < 0
+    ? null
+    : {
+        x: minimumX,
+        y: minimumY,
+        width: maximumX - minimumX + 1,
+        height: maximumY - minimumY + 1
+      };
 }
 
 async function expectRevisionError(
@@ -310,6 +357,25 @@ describe("safe versioned annotation revisions", () => {
       allowedRoots: [directory]
     });
 
+    expect(rev1.review).toEqual({
+      mode: "changed-region",
+      touchedCount: 1,
+      affectedCount: 1,
+      sourceRect: { x: 20, y: 3, width: 74, height: 68 }
+    });
+    expect(rev2.review).toEqual({
+      mode: "changed-region",
+      touchedCount: 1,
+      affectedCount: 1,
+      sourceRect: { x: 18, y: 1, width: 80, height: 74 }
+    });
+    expect(rev3.review).toEqual({
+      mode: "changed-region",
+      touchedCount: 1,
+      affectedCount: 1,
+      sourceRect: { x: 0, y: 0, width: 61, height: 53 }
+    });
+
     expect(path.basename(rev1.outputPath)).toBe("chain.annotated.rev1.png");
     expect(path.basename(rev2.outputPath)).toBe("chain.annotated.rev2.png");
     expect(path.basename(rev3.outputPath)).toBe("chain.annotated.rev3.png");
@@ -352,8 +418,707 @@ describe("safe versioned annotation revisions", () => {
     }
   });
 
+  test("focuses nearby edits, falls back for dispersed edits, and suppresses reduced redaction", async () => {
+    const dispersedInput = path.join(directory, "dispersed.png");
+    await makeInput(dispersedInput, 800, 600);
+    const dispersedBase = await annotateImage({
+      inputPath: dispersedInput,
+      outputPath: path.join(directory, "dispersed.annotated.png"),
+      spec: { version: "1.1", annotations: [] },
+      allowedRoots: [directory]
+    });
+    const dispersed = await reviseAnnotation({
+      parentSidecarPath: dispersedBase.sidecarPath,
+      edits: [
+        {
+          op: "add",
+          annotation: {
+            id: "north-west",
+            type: "rectangle",
+            rect: { x: 20, y: 20, width: 30, height: 24 }
+          }
+        },
+        {
+          op: "add",
+          annotation: {
+            id: "south-east",
+            type: "rectangle",
+            rect: { x: 740, y: 540, width: 30, height: 24 }
+          }
+        }
+      ],
+      allowedRoots: [directory]
+    });
+    expect(dispersed.review).toEqual({
+      mode: "compact-overview",
+      touchedCount: 2,
+      affectedCount: 2,
+      fallbackReason: "dispersed"
+    });
+
+    const connectedBase = await annotateImage({
+      inputPath: dispersedInput,
+      outputPath: path.join(directory, "connected.annotated.png"),
+      spec: { version: "1.1", annotations: [] },
+      allowedRoots: [directory]
+    });
+    const connected = await reviseAnnotation({
+      parentSidecarPath: connectedBase.sidecarPath,
+      edits: [100, 160, 220].map((x, index) => ({
+        op: "add" as const,
+        annotation: {
+          id: `connected-${index + 1}`,
+          type: "rectangle" as const,
+          rect: { x, y: 100, width: 20, height: 20 }
+        }
+      })),
+      allowedRoots: [directory]
+    });
+    expect(connected.review).toMatchObject({
+      mode: "changed-region",
+      touchedCount: 3,
+      affectedCount: 3
+    });
+
+    const sensitiveInput = path.join(directory, "sensitive.png");
+    await makeInput(sensitiveInput, 400, 300);
+    const sensitiveBase = await annotateImage({
+      inputPath: sensitiveInput,
+      outputPath: path.join(directory, "sensitive.annotated.png"),
+      spec: {
+        version: "1.1",
+        annotations: [
+          {
+            id: "public-box",
+            type: "rectangle",
+            rect: { x: 20, y: 20, width: 60, height: 40 }
+          },
+          {
+            id: "secret-redact",
+            type: "redact",
+            rect: { x: 150, y: 120, width: 120, height: 40 },
+            color: "#111827"
+          }
+        ]
+      },
+      allowedRoots: [directory]
+    });
+    const unchangedCoverage = await reviseAnnotation({
+      parentSidecarPath: sensitiveBase.sidecarPath,
+      edits: [
+        {
+          op: "set",
+          id: "public-box",
+          annotation: {
+            id: "public-box",
+            type: "rectangle",
+            rect: { x: 24, y: 22, width: 64, height: 44 }
+          }
+        }
+      ],
+      allowedRoots: [directory]
+    });
+    expect(unchangedCoverage.review).toEqual({
+      mode: "compact-overview",
+      touchedCount: 1,
+      affectedCount: 1,
+      fallbackReason: "sensitive-effect"
+    });
+    const revealed = await reviseAnnotation({
+      parentSidecarPath: unchangedCoverage.sidecarPath,
+      edits: [{ op: "remove", id: "secret-redact" }],
+      allowedRoots: [directory]
+    });
+    expect(revealed.review).toEqual({
+      mode: "none",
+      touchedCount: 1,
+      affectedCount: 1,
+      fallbackReason: "sensitive-coverage-changed"
+    });
+
+    const summaryProtectedPaths = [
+      sensitiveInput,
+      sensitiveBase.outputPath,
+      sensitiveBase.sidecarPath,
+      unchangedCoverage.outputPath,
+      unchangedCoverage.sidecarPath,
+      revealed.outputPath,
+      revealed.sidecarPath
+    ];
+    const protectedBefore = await Promise.all(
+      summaryProtectedPaths.map((filePath) => fileState(filePath))
+    );
+    const directoryEntriesBefore = (await readdir(directory)).sort();
+    const residuesBefore = await revisionResidues(directory, "sensitive.annotated");
+    const summary = await inspectAnnotationSidecar({
+      sidecarPath: revealed.sidecarPath,
+      allowedRoots: [directory]
+    });
+    expect(summary).toMatchObject({
+      summaryVersion: "1.0",
+      valid: true,
+      artifact: "agent-callout-annotation",
+      annotationSpecVersion: "1.1",
+      annotations: { total: 1, byType: { rectangle: 1 }, resolvedInventory: "identity-aligned" },
+      revision: {
+        number: 2,
+        chainEntries: 3,
+        coordinationScope: "sidecar-directory",
+        copiedLineageMayFork: true
+      },
+      integrity: { originalInput: "record-only" },
+      safety: { usesBlur: false, usesRedact: false }
+    });
+    const summaryText = JSON.stringify(summary);
+    expect(Buffer.byteLength(summaryText, "utf8")).toBeLessThanOrEqual(4096);
+    expect(summaryText).not.toContain(directory);
+    expect(summaryText).not.toContain("public-box");
+    expect(summaryText).not.toContain("secret-redact");
+    expect(summaryText).not.toMatch(/[0-9a-f]{64}/u);
+    for (const [index, filePath] of summaryProtectedPaths.entries()) {
+      const state = protectedBefore[index];
+      if (state === undefined) throw new Error("Missing protected summary fixture state");
+      await expectFileState(filePath, state);
+    }
+    expect((await readdir(directory)).sort()).toEqual(directoryEntriesBefore);
+    expect(await revisionResidues(directory, "sensitive.annotated")).toEqual(residuesBefore);
+  });
+
+  test("rejects sidecar summaries whose resolved inventory contradicts the spec", async () => {
+    const base = await createBase(directory, "summary-tamper");
+    const manifest = JSON.parse(await readFile(base.sidecarPath, "utf8")) as {
+      resolvedAnnotations: Array<Record<string, unknown>>;
+    };
+    const first = manifest.resolvedAnnotations[0];
+    if (first === undefined) throw new Error("Missing resolved annotation fixture");
+    first.id = "different-id";
+    await writeFile(base.sidecarPath, `${JSON.stringify(manifest)}\n`);
+    await expectRevisionError(
+      inspectAnnotationSidecar({ sidecarPath: base.sidecarPath, allowedRoots: [directory] }),
+      "ANNOTATION_SIDECAR_INVALID"
+    );
+
+    const secret = await createBase(directory, "summary-secret");
+    const secretManifest = JSON.parse(await readFile(secret.sidecarPath, "utf8")) as Record<
+      string,
+      unknown
+    >;
+    secretManifest.manifestVersion = "CUSTOMER_SECRET";
+    await writeFile(secret.sidecarPath, `${JSON.stringify(secretManifest)}\n`);
+    try {
+      await inspectAnnotationSidecar({
+        sidecarPath: secret.sidecarPath,
+        allowedRoots: [directory]
+      });
+      throw new Error("Expected filtered sidecar inspection error");
+    } catch (error) {
+      expect(error).toBeInstanceOf(AgentCalloutRevisionError);
+      expect((error as AgentCalloutRevisionError).code).toBe("ANNOTATION_SIDECAR_INVALID");
+      expect((error as Error).message).toBe("Annotation sidecar validation failed.");
+      expect((error as Error & { cause?: unknown }).cause).toBeUndefined();
+      expect(String(error)).not.toContain("CUSTOMER_SECRET");
+      expect(String(error)).not.toContain(directory);
+    }
+  });
+
+  test("keeps maximum annotation and warning inventory inside the filtered summary allowlist", async () => {
+    const base = await createBase(directory, "summary-maximum");
+    const manifest = JSON.parse(await readFile(base.sidecarPath, "utf8")) as Record<
+      string,
+      unknown
+    >;
+    const annotations = Array.from({ length: 200 }, (_value, index) => ({
+      id: `private-ticket-${index + 1}`,
+      type: "rectangle",
+      rect: { x: index % 100, y: Math.floor(index / 100), width: 1, height: 1 }
+    }));
+    const spec = { version: "1.1", annotations };
+    manifest.operationSpec = spec;
+    manifest.annotationSpec = spec;
+    manifest.annotationCount = annotations.length;
+    manifest.resolvedAnnotations = annotations;
+    manifest.warnings = Array.from({ length: 200 }, (_value, index) => `SECRET-${index + 1}`);
+    const hashes = manifest.hashes as Record<string, unknown>;
+    hashes.specSha256 = sha256(Buffer.from(canonicalizeSpec(spec), "utf8"));
+    await writeFile(base.sidecarPath, `${JSON.stringify(manifest)}\n`);
+    const summary = await inspectAnnotationSidecar({
+      sidecarPath: base.sidecarPath,
+      allowedRoots: [directory]
+    });
+    expect(summary.annotations).toEqual({
+      total: 200,
+      byType: { rectangle: 200 },
+      resolvedInventory: "identity-aligned"
+    });
+    expect(summary.warnings).toEqual({ count: 200 });
+    expect(Object.keys(summary).sort()).toEqual([
+      "annotationSpecVersion",
+      "annotations",
+      "artifact",
+      "integrity",
+      "manifestVersion",
+      "outputDimensions",
+      "portability",
+      "revision",
+      "safety",
+      "summaryVersion",
+      "valid",
+      "warnings"
+    ]);
+    expect(Object.keys(summary.annotations).sort()).toEqual([
+      "byType",
+      "resolvedInventory",
+      "total"
+    ]);
+    const serialized = JSON.stringify(summary);
+    expect(Buffer.byteLength(serialized, "utf8")).toBeLessThanOrEqual(4096);
+    expect(serialized).not.toContain("private-ticket");
+    expect(serialized).not.toContain("SECRET-");
+  });
+
+  test("suppresses previews for every existing blur or redact coverage change", async () => {
+    const cases: Array<{
+      name: string;
+      annotation: Record<string, unknown>;
+      edit: Record<string, unknown>;
+    }> = [
+      {
+        name: "remove-redact",
+        annotation: {
+          id: "sensitive",
+          type: "redact",
+          rect: { x: 60, y: 50, width: 100, height: 36 },
+          color: "#111827"
+        },
+        edit: { op: "remove", id: "sensitive" }
+      },
+      {
+        name: "move-redact",
+        annotation: {
+          id: "sensitive",
+          type: "redact",
+          rect: { x: 60, y: 50, width: 100, height: 36 },
+          color: "#111827"
+        },
+        edit: {
+          op: "set",
+          id: "sensitive",
+          annotation: {
+            id: "sensitive",
+            type: "redact",
+            rect: { x: 70, y: 50, width: 100, height: 36 },
+            color: "#111827"
+          }
+        }
+      },
+      {
+        name: "shrink-redact",
+        annotation: {
+          id: "sensitive",
+          type: "redact",
+          rect: { x: 60, y: 50, width: 100, height: 36 },
+          color: "#111827"
+        },
+        edit: {
+          op: "set",
+          id: "sensitive",
+          annotation: {
+            id: "sensitive",
+            type: "redact",
+            rect: { x: 60, y: 50, width: 80, height: 36 },
+            color: "#111827"
+          }
+        }
+      },
+      {
+        name: "change-redact-field",
+        annotation: {
+          id: "sensitive",
+          type: "redact",
+          rect: { x: 60, y: 50, width: 100, height: 36 },
+          color: "#111827"
+        },
+        edit: {
+          op: "set",
+          id: "sensitive",
+          annotation: {
+            id: "sensitive",
+            type: "redact",
+            rect: { x: 60, y: 50, width: 100, height: 36 },
+            color: "#000000"
+          }
+        }
+      },
+      {
+        name: "remove-blur",
+        annotation: {
+          id: "sensitive",
+          type: "blur",
+          rect: { x: 60, y: 50, width: 100, height: 36 },
+          sigma: 12
+        },
+        edit: { op: "remove", id: "sensitive" }
+      },
+      {
+        name: "weaken-blur",
+        annotation: {
+          id: "sensitive",
+          type: "blur",
+          rect: { x: 60, y: 50, width: 100, height: 36 },
+          sigma: 12
+        },
+        edit: {
+          op: "set",
+          id: "sensitive",
+          annotation: {
+            id: "sensitive",
+            type: "blur",
+            rect: { x: 60, y: 50, width: 100, height: 36 },
+            sigma: 4
+          }
+        }
+      }
+    ];
+    for (const entry of cases) {
+      const inputPath = path.join(directory, `${entry.name}.png`);
+      await makeInput(inputPath, 240, 160);
+      const base = await annotateImage({
+        inputPath,
+        outputPath: path.join(directory, `${entry.name}.annotated.png`),
+        spec: { version: "1.1", annotations: [entry.annotation] },
+        allowedRoots: [directory]
+      });
+      const revision = await reviseAnnotation({
+        parentSidecarPath: base.sidecarPath,
+        edits: [entry.edit],
+        allowedRoots: [directory]
+      });
+      expect(revision.review).toMatchObject({
+        mode: "none",
+        fallbackReason: "sensitive-coverage-changed"
+      });
+    }
+
+    const combinedInput = path.join(directory, "combined-sensitive.png");
+    await makeInput(combinedInput, 240, 160);
+    const combinedBase = await annotateImage({
+      inputPath: combinedInput,
+      outputPath: path.join(directory, "combined-sensitive.annotated.png"),
+      spec: {
+        version: "1.1",
+        annotations: [
+          { id: "blur", type: "blur", rect: { x: 20, y: 20, width: 80, height: 30 } },
+          {
+            id: "redact",
+            type: "redact",
+            rect: { x: 120, y: 80, width: 80, height: 30 },
+            color: "#111827"
+          },
+          { id: "box", type: "rectangle", rect: { x: 10, y: 100, width: 40, height: 30 } }
+        ]
+      },
+      allowedRoots: [directory]
+    });
+    const combined = await reviseAnnotation({
+      parentSidecarPath: combinedBase.sidecarPath,
+      edits: [
+        { op: "remove", id: "blur" },
+        {
+          op: "set",
+          id: "box",
+          annotation: {
+            id: "box",
+            type: "rectangle",
+            rect: { x: 12, y: 102, width: 42, height: 32 }
+          }
+        }
+      ],
+      allowedRoots: [directory]
+    });
+    expect(combined.review).toMatchObject({
+      mode: "none",
+      touchedCount: 2,
+      fallbackReason: "sensitive-coverage-changed"
+    });
+  });
+
+  test("falls back to overview when the parent pixels cannot be reproduced", async () => {
+    const base = await createBase(directory, "renderer-drift");
+    await sharp({
+      create: { width: 128, height: 96, channels: 3, background: "#334155" }
+    })
+      .png()
+      .toFile(base.outputPath);
+    const manifest = JSON.parse(await readFile(base.sidecarPath, "utf8")) as {
+      hashes: { outputSha256: string };
+    };
+    manifest.hashes.outputSha256 = sha256(await readFile(base.outputPath));
+    await writeFile(base.sidecarPath, `${JSON.stringify(manifest)}\n`);
+    const revision = await reviseAnnotation({
+      parentSidecarPath: base.sidecarPath,
+      edits: [{ op: "remove", id: "box-a" }],
+      allowedRoots: [directory]
+    });
+    expect(revision.review).toEqual({
+      mode: "compact-overview",
+      touchedCount: 1,
+      affectedCount: 1,
+      fallbackReason: "renderer-mismatch"
+    });
+  });
+
+  test("keeps every changed pixel inside focus for local annotation types", async () => {
+    const cases: Array<{
+      name: string;
+      annotation: Record<string, unknown>;
+      expectedMode: "changed-region" | "compact-overview";
+    }> = [
+      {
+        name: "rectangle",
+        annotation: {
+          type: "rectangle",
+          rect: { x: 100, y: 100, width: 80, height: 40 },
+          style: { strokeWidth: 64 }
+        },
+        expectedMode: "changed-region"
+      },
+      {
+        name: "ellipse",
+        annotation: { type: "ellipse", rect: { x: 100, y: 100, width: 80, height: 40 } },
+        expectedMode: "changed-region"
+      },
+      {
+        name: "arrow",
+        annotation: { type: "arrow", start: { x: 80, y: 80 }, target: { x: 210, y: 150 } },
+        expectedMode: "changed-region"
+      },
+      {
+        name: "text",
+        annotation: { type: "text", position: { x: 100, y: 100 }, text: "Focus test" },
+        expectedMode: "changed-region"
+      },
+      {
+        name: "callout",
+        annotation: { type: "callout", target: { x: 210, y: 150 }, text: "Focus test" },
+        expectedMode: "changed-region"
+      },
+      {
+        name: "numbered-callout",
+        annotation: {
+          type: "numbered-callout",
+          target: { x: 210, y: 150 },
+          text: "Focus test",
+          number: 1
+        },
+        expectedMode: "changed-region"
+      },
+      {
+        name: "highlight",
+        annotation: {
+          type: "highlight",
+          rect: { x: 100, y: 100, width: 80, height: 40 },
+          style: { fillColor: "#FACC15", opacity: 0.3 }
+        },
+        expectedMode: "changed-region"
+      },
+      {
+        name: "spotlight",
+        annotation: { type: "spotlight", rect: { x: 100, y: 100, width: 80, height: 40 } },
+        expectedMode: "compact-overview"
+      },
+      {
+        name: "blur",
+        annotation: { type: "blur", rect: { x: 100, y: 100, width: 80, height: 40 } },
+        expectedMode: "compact-overview"
+      },
+      {
+        name: "redact",
+        annotation: {
+          type: "redact",
+          rect: { x: 100, y: 100, width: 80, height: 40 },
+          color: "#111827"
+        },
+        expectedMode: "compact-overview"
+      }
+    ];
+
+    for (const entry of cases) {
+      const inputPath = path.join(directory, `${entry.name}-focus-input.png`);
+      await makeInput(inputPath, 400, 300);
+      const base = await annotateImage({
+        inputPath,
+        outputPath: path.join(directory, `${entry.name}-focus.png`),
+        spec: { version: "1.1", annotations: [] },
+        allowedRoots: [directory]
+      });
+      const revision = await reviseAnnotation({
+        parentSidecarPath: base.sidecarPath,
+        edits: [
+          {
+            op: "add",
+            annotation: { id: `${entry.name}-annotation`, ...entry.annotation }
+          }
+        ],
+        allowedRoots: [directory]
+      });
+      expect(revision.review.mode).toBe(entry.expectedMode);
+      const changed = await pixelDifferenceBounds(base.outputPath, revision.outputPath);
+      expect(changed).not.toBeNull();
+      if (revision.review.mode === "changed-region" && changed !== null) {
+        const focus = revision.review.sourceRect;
+        if (focus === undefined) throw new Error("Focused revision omitted sourceRect");
+        expect(focus.x).toBeLessThanOrEqual(changed.x);
+        expect(focus.y).toBeLessThanOrEqual(changed.y);
+        expect(focus.x + focus.width).toBeGreaterThanOrEqual(changed.x + changed.width);
+        expect(focus.y + focus.height).toBeGreaterThanOrEqual(changed.y + changed.height);
+      }
+    }
+  }, 60_000);
+
+  test("includes collateral auto-layout movement in the focused revision region", async () => {
+    const inputPath = path.join(directory, "collateral-layout.png");
+    await makeInput(inputPath, 600, 400);
+    const base = await annotateImage({
+      inputPath,
+      outputPath: path.join(directory, "collateral-layout.annotated.png"),
+      spec: {
+        version: "1.1",
+        annotations: [
+          { id: "a", type: "callout", target: { x: 300, y: 200 }, text: "A" },
+          { id: "b", type: "callout", target: { x: 260, y: 200 }, text: "B" },
+          { id: "c", type: "callout", target: { x: 305, y: 205 }, text: "C" }
+        ]
+      },
+      allowedRoots: [directory]
+    });
+    const revision = await reviseAnnotation({
+      parentSidecarPath: base.sidecarPath,
+      edits: [
+        {
+          op: "set",
+          id: "a",
+          annotation: {
+            id: "a",
+            type: "callout",
+            target: { x: 300, y: 200 },
+            text: "A much longer explanation that changes occupied layout width and wrapping"
+          }
+        }
+      ],
+      allowedRoots: [directory]
+    });
+    expect(revision.review.mode).toBe("changed-region");
+    expect(revision.review.touchedCount).toBe(1);
+    expect(revision.review.affectedCount).toBeGreaterThan(1);
+    const changed = await pixelDifferenceBounds(base.outputPath, revision.outputPath);
+    const focus = revision.review.sourceRect;
+    if (changed === null || focus === undefined) throw new Error("Missing collateral focus bounds");
+    expect(focus.x).toBeLessThanOrEqual(changed.x);
+    expect(focus.y).toBeLessThanOrEqual(changed.y);
+    expect(focus.x + focus.width).toBeGreaterThanOrEqual(changed.x + changed.width);
+    expect(focus.y + focus.height).toBeGreaterThanOrEqual(changed.y + changed.height);
+  });
+
+  test("focus includes alpha-only changes and legacy extreme callout paint", async () => {
+    const transparentInput = path.join(directory, "transparent-focus.png");
+    await sharp({
+      create: { width: 500, height: 300, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } }
+    })
+      .png()
+      .toFile(transparentInput);
+    const transparentBase = await annotateImage({
+      inputPath: transparentInput,
+      outputPath: path.join(directory, "transparent-focus.annotated.png"),
+      spec: { version: "1.1", annotations: [] },
+      allowedRoots: [directory]
+    });
+    const transparentRevision = await reviseAnnotation({
+      parentSidecarPath: transparentBase.sidecarPath,
+      edits: [
+        {
+          op: "add",
+          annotation: {
+            id: "alpha-text",
+            type: "text",
+            position: { x: 50, y: 50 },
+            text: "Alpha",
+            style: { backgroundColor: "#000000", textColor: "#FFFFFF", padding: 50 }
+          }
+        }
+      ],
+      allowedRoots: [directory]
+    });
+    expect(transparentRevision.review.mode).toBe("changed-region");
+    const transparentChanged = await pixelDifferenceBounds(
+      transparentBase.outputPath,
+      transparentRevision.outputPath
+    );
+    const transparentFocus = transparentRevision.review.sourceRect;
+    if (transparentChanged === null || transparentFocus === undefined) {
+      throw new Error("Missing transparent focus bounds");
+    }
+    expect(transparentFocus.x).toBeLessThanOrEqual(transparentChanged.x);
+    expect(transparentFocus.y).toBeLessThanOrEqual(transparentChanged.y);
+    expect(transparentFocus.x + transparentFocus.width).toBeGreaterThanOrEqual(
+      transparentChanged.x + transparentChanged.width
+    );
+    expect(transparentFocus.y + transparentFocus.height).toBeGreaterThanOrEqual(
+      transparentChanged.y + transparentChanged.height
+    );
+
+    const legacyInput = path.join(directory, "legacy-extreme-focus.png");
+    await makeInput(legacyInput, 800, 600);
+    const legacyBase = await annotateImage({
+      inputPath: legacyInput,
+      outputPath: path.join(directory, "legacy-extreme-focus.annotated.png"),
+      spec: { version: "1.0", annotations: [] },
+      allowedRoots: [directory]
+    });
+    const legacyRevision = await reviseAnnotation({
+      parentSidecarPath: legacyBase.sidecarPath,
+      edits: [
+        {
+          op: "add",
+          annotation: {
+            id: "legacy-callout",
+            type: "callout",
+            target: { x: 400, y: 300 },
+            text: "Legacy",
+            placement: "top",
+            style: { strokeWidth: 64, arrowHeadSize: 128 }
+          }
+        }
+      ],
+      allowedRoots: [directory]
+    });
+    expect(legacyRevision.review.mode).toBe("changed-region");
+    const legacyChanged = await pixelDifferenceBounds(
+      legacyBase.outputPath,
+      legacyRevision.outputPath
+    );
+    const legacyFocus = legacyRevision.review.sourceRect;
+    if (legacyChanged === null || legacyFocus === undefined) {
+      throw new Error("Missing legacy focus bounds");
+    }
+    expect(legacyFocus.x).toBeLessThanOrEqual(legacyChanged.x);
+    expect(legacyFocus.y).toBeLessThanOrEqual(legacyChanged.y);
+    expect(legacyFocus.x + legacyFocus.width).toBeGreaterThanOrEqual(
+      legacyChanged.x + legacyChanged.width
+    );
+    expect(legacyFocus.y + legacyFocus.height).toBeGreaterThanOrEqual(
+      legacyChanged.y + legacyChanged.height
+    );
+  });
+
   test("revises a trusted AnnotationSpec 1.0 sidecar without admitting 1.1-only fields", async () => {
     const base = await createBase(directory, "legacy-v1", "1.0");
+    await expect(
+      inspectAnnotationSidecar({ sidecarPath: base.sidecarPath, allowedRoots: [directory] })
+    ).resolves.toMatchObject({
+      manifestVersion: "1.0",
+      annotationSpecVersion: "1.0",
+      revision: { number: 0, chainEntries: 1 }
+    });
     const revision = await reviseAnnotation({
       parentSidecarPath: base.sidecarPath,
       edits: [{ op: "remove", id: "box-a" }],
@@ -397,6 +1162,9 @@ describe("safe versioned annotation revisions", () => {
       }),
       "INPUT_REQUIRED"
     );
+    await expect(
+      inspectAnnotationSidecar({ sidecarPath: moved.sidecarPath, allowedRoots: [directory] })
+    ).resolves.toMatchObject({ integrity: { originalInput: "record-only" } });
     const movedRevision = await reviseAnnotation({
       parentSidecarPath: moved.sidecarPath,
       edits: [{ op: "remove", id: "box-a" }],
@@ -435,6 +1203,9 @@ describe("safe versioned annotation revisions", () => {
     inputRecord.path = path.basename(basenameOnly.inputPath);
     inputRecord.pathSemantics = "basename-only-resolve-by-sha256";
     await writeFile(basenameOnly.sidecarPath, `${JSON.stringify(basenameManifest, null, 2)}\n`);
+    await expect(
+      inspectAnnotationSidecar({ sidecarPath: basenameOnly.sidecarPath, allowedRoots: [directory] })
+    ).resolves.toMatchObject({ integrity: { originalInput: "record-only" } });
     await expectRevisionError(
       reviseAnnotation({
         parentSidecarPath: basenameOnly.sidecarPath,
@@ -753,6 +1524,24 @@ describe("safe versioned annotation revisions", () => {
         maxRevisionChainBytes: existingBytes + 1
       }),
       "REVISION_LIMIT_REACHED"
+    );
+    const aboveHardLimit = 512 * 1024 * 1024 + 1;
+    await expectRevisionError(
+      reviseAnnotation({
+        parentSidecarPath: base.sidecarPath,
+        edits: [{ op: "remove", id: "box-a" }],
+        allowedRoots: [directory],
+        maxRevisionChainBytes: aboveHardLimit
+      }),
+      "REVISION_LIMIT_REACHED"
+    );
+    await expectRevisionError(
+      inspectAnnotationSidecar({
+        sidecarPath: base.sidecarPath,
+        allowedRoots: [directory],
+        maxRevisionChainBytes: aboveHardLimit
+      }),
+      "ANNOTATION_SIDECAR_INVALID"
     );
     expect(await revisionResidues(directory, "projected-budget.annotated")).toEqual([]);
   });
@@ -1131,7 +1920,7 @@ describe("safe versioned annotation revisions", () => {
       })) as CallToolResult;
       expect(call.isError).not.toBe(true);
       expect(call.structuredContent).toBeUndefined();
-      expect(call.content.some((item) => item.type === "image")).toBe(true);
+      expect(call.content.filter((item) => item.type === "image")).toHaveLength(1);
       const text = call.content.find((item) => item.type === "text");
       if (text?.type !== "text") throw new Error("Missing MCP revision text result");
       mcp = JSON.parse(text.text) as typeof core;
@@ -1145,6 +1934,7 @@ describe("safe versioned annotation revisions", () => {
       expect(result.outputSha256).toBe(core.outputSha256);
       expect(result.revision.lineageId).toBe(core.revision.lineageId);
       expect(result.revision.editsSha256).toBe(core.revision.editsSha256);
+      expect(result.review).toEqual(core.review);
     }
     const sidecars = await Promise.all(
       [core.sidecarPath, cli.sidecarPath, mcp.sidecarPath].map(

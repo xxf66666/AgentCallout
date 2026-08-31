@@ -90,6 +90,30 @@ describe("core image I/O and security", () => {
     expect(metadata.exif).toBeUndefined();
   });
 
+  it("creates a preview from only the declared source rectangle", async () => {
+    const inputPath = path.join(temporaryDirectory, "focus-source.png");
+    const outputPath = path.join(temporaryDirectory, "focus-preview.png");
+    const sourceRect = { x: 50, y: 20, width: 80, height: 40 };
+    await writeGradient(inputPath, 200, 100);
+    const preview = await createImagePreview({
+      inputPath,
+      outputPath,
+      sourceRect,
+      maxWidth: 512,
+      maxHeight: 512,
+      allowedRoots: [temporaryDirectory]
+    });
+    expect(preview.outputDimensions).toEqual({ width: 80, height: 40 });
+    const [actual, expected] = await Promise.all([
+      sharp(preview.outputPath).removeAlpha().raw().toBuffer(),
+      sharp(inputPath).extract({ left: 50, top: 20, width: 80, height: 40 }).raw().toBuffer()
+    ]);
+    expect(actual).toEqual(expected);
+    expect(JSON.parse(await readFile(preview.sidecarPath, "utf8"))).toMatchObject({
+      operationSpec: { maxWidth: 512, maxHeight: 512, sourceRect }
+    });
+  });
+
   it("enforces byte and pixel limits before processing", async () => {
     const inputPath = path.join(temporaryDirectory, "bounded.png");
     await writeGradient(inputPath, 32, 32);

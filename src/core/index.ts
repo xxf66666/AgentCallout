@@ -103,6 +103,7 @@ export interface GeneratedImageResult {
 }
 
 export const REVISION_ERROR_CODES = [
+  "ANNOTATION_SIDECAR_INVALID",
   "PARENT_SIDECAR_INVALID",
   "PARENT_OUTPUT_MISMATCH",
   "PARENT_SPEC_MISMATCH",
@@ -159,6 +160,20 @@ export interface RevisionResult extends GeneratedImageResult {
   };
   /** Post-commit transaction cleanup issues; render warnings remain sidecar-authoritative. */
   recoveryWarnings?: string[];
+  review: {
+    mode: "changed-region" | "compact-overview" | "none";
+    touchedCount: number;
+    affectedCount: number;
+    sourceRect?: Rect | undefined;
+    fallbackReason?:
+      | "global-effect"
+      | "dispersed"
+      | "no-resolved-geometry"
+      | "renderer-mismatch"
+      | "sensitive-coverage-changed"
+      | "sensitive-effect"
+      | "spans-most-of-canvas";
+  };
 }
 
 export interface CoreDoctorCheck {
@@ -206,6 +221,49 @@ export interface ReviseAnnotationArguments extends ImageSafetyOptions {
   faultInjector?: ((point: RevisionFaultPoint) => void | Promise<void>) | undefined;
 }
 
+export interface InspectAnnotationSidecarArguments extends ImageSafetyOptions {
+  sidecarPath: string;
+  /** Optional lower cumulative lineage byte budget for embedded/core callers. */
+  maxRevisionChainBytes?: number | undefined;
+}
+
+export interface AnnotationSidecarSummary {
+  summaryVersion: "1.0";
+  valid: true;
+  artifact: "agent-callout-annotation";
+  manifestVersion: "1.0" | "1.1";
+  annotationSpecVersion: "1.0" | "1.1";
+  outputDimensions: Dimensions;
+  annotations: {
+    total: number;
+    byType: Record<string, number>;
+    resolvedInventory: "identity-aligned";
+  };
+  revision: {
+    number: number;
+    chainEntries: number;
+    coordinationScope: "sidecar-directory";
+    copiedLineageMayFork: true;
+  };
+  warnings: { count: number };
+  integrity: {
+    sidecar: "validated";
+    output: "hash-verified";
+    parentChain: "hash-verified";
+    originalInput: "record-only";
+  };
+  safety: {
+    usesBlur: boolean;
+    usesRedact: boolean;
+    blurIsSecureRedaction: false;
+    redactUsesOpaqueOverwrite: boolean;
+  };
+  portability: {
+    flattenedPngSeparatesLayers: false;
+    sidecarRequiredForAnnotationSemantics: true;
+  };
+}
+
 export interface CropImageArguments extends ImageSafetyOptions {
   inputPath: string;
   rect: Rect;
@@ -231,6 +289,7 @@ export interface CreateImagePreviewArguments extends ImageSafetyOptions {
   outputPath?: string | undefined;
   maxWidth?: number | undefined;
   maxHeight?: number | undefined;
+  sourceRect?: Rect | undefined;
   overwrite?: boolean | undefined;
 }
 
@@ -1551,6 +1610,383 @@ function applyAnnotationRevisionEdits(
   };
 }
 
+function reviewPoint(value: unknown): { x: number; y: number } | undefined {
+  if (!isRecord(value) || !Number.isFinite(value.x) || !Number.isFinite(value.y)) {
+    return undefined;
+  }
+  return { x: value.x as number, y: value.y as number };
+}
+
+function reviewRect(value: unknown): Rect | undefined {
+  const point = reviewPoint(value);
+  if (
+    point === undefined ||
+    !isRecord(value) ||
+    !Number.isFinite(value.width) ||
+    !Number.isFinite(value.height) ||
+    (value.width as number) <= 0 ||
+    (value.height as number) <= 0
+  ) {
+    return undefined;
+  }
+  return {
+    ...point,
+    width: value.width as number,
+    height: value.height as number
+  };
+}
+
+function pointReviewRect(value: unknown, radius = 3): Rect | undefined {
+  const point = reviewPoint(value);
+  if (point === undefined) return undefined;
+  return {
+    x: point.x - radius,
+    y: point.y - radius,
+    width: radius * 2,
+    height: radius * 2
+  };
+}
+
+function segmentReviewRect(startValue: unknown, endValue: unknown, width = 2): Rect | undefined {
+  const start = reviewPoint(startValue);
+  const end = reviewPoint(endValue);
+  if (start === undefined || end === undefined) return undefined;
+  const padding = Math.max(1, width / 2);
+  const left = Math.min(start.x, end.x) - padding;
+  const top = Math.min(start.y, end.y) - padding;
+  return {
+    x: left,
+    y: top,
+    width: Math.max(1, Math.abs(start.x - end.x) + padding * 2),
+    height: Math.max(1, Math.abs(start.y - end.y) + padding * 2)
+  };
+}
+
+function resolvedReviewRects(value: unknown): Rect[] {
+  if (!isRecord(value)) return [];
+  const rects: Rect[] = [];
+  const style = isRecord(value.style) ? value.style : undefined;
+  const strokeWidth =
+    typeof style?.strokeWidth === "number" && Number.isFinite(style.strokeWidth)
+      ? Math.max(0, style.strokeWidth)
+      : 2;
+  const arrowHeadSize =
+    typeof style?.arrowHeadSize === "number" && Number.isFinite(style.arrowHeadSize)
+      ? Math.max(0, style.arrowHeadSize)
+      : 12;
+  const addRect = (candidate: unknown, inflation = 0): void => {
+    const rect = reviewRect(candidate);
+    if (rect !== undefined) {
+      rects.push({
+        x: rect.x - inflation,
+        y: rect.y - inflation,
+        width: rect.width + inflation * 2,
+        height: rect.height + inflation * 2
+      });
+    }
+  };
+  const addPoint = (candidate: unknown, radius?: number): void => {
+    const rect = pointReviewRect(candidate, radius);
+    if (rect !== undefined) rects.push(rect);
+  };
+
+  addRect(value.rect, strokeWidth / 2);
+  addRect(value.box, value.type === "text" ? 32 : strokeWidth / 2);
+  addRect(value.target);
+  addPoint(value.target);
+  addPoint(value.position);
+  addPoint(value.anchor);
+  addPoint(value.targetAnchor);
+  addPoint(value.start, Math.max(3, strokeWidth / 2));
+  addPoint(
+    value.end,
+    value.type === "arrow"
+      ? Math.max(3, arrowHeadSize + strokeWidth / 2)
+      : Math.max(3, strokeWidth / 2)
+  );
+  const directSegment = segmentReviewRect(value.start, value.end, strokeWidth);
+  if (directSegment !== undefined) rects.push(directSegment);
+  const calloutSegment = segmentReviewRect(value.anchor, value.targetAnchor, strokeWidth);
+  if (calloutSegment !== undefined) rects.push(calloutSegment);
+
+  const label = isRecord(value.label) ? value.label : undefined;
+  addRect(label?.paintedBounds);
+  addRect(label?.box);
+
+  const marker = isRecord(value.marker) ? value.marker : undefined;
+  addRect(marker?.bounds);
+  const markerCenter = reviewPoint(marker?.center);
+  const markerRadius =
+    typeof marker?.paintedRadius === "number"
+      ? marker.paintedRadius
+      : typeof marker?.radius === "number"
+        ? marker.radius
+        : undefined;
+  if (markerCenter !== undefined && markerRadius !== undefined && markerRadius > 0) {
+    rects.push({
+      x: markerCenter.x - markerRadius,
+      y: markerCenter.y - markerRadius,
+      width: markerRadius * 2,
+      height: markerRadius * 2
+    });
+  }
+
+  const leader = isRecord(value.leader) ? value.leader : undefined;
+  addRect(leader?.bounds);
+  const leaderSegment = segmentReviewRect(
+    leader?.start,
+    leader?.end,
+    typeof leader?.strokeWidth === "number" ? leader.strokeWidth : 2
+  );
+  if (leaderSegment !== undefined) rects.push(leaderSegment);
+  return rects;
+}
+
+function unionReviewRects(rects: readonly Rect[]): Rect | undefined {
+  const first = rects[0];
+  if (first === undefined) return undefined;
+  const left = Math.min(...rects.map((rect) => rect.x));
+  const top = Math.min(...rects.map((rect) => rect.y));
+  const right = Math.max(...rects.map((rect) => rect.x + rect.width));
+  const bottom = Math.max(...rects.map((rect) => rect.y + rect.height));
+  return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
+async function renderedPixelDifferenceBounds(
+  parent: Buffer,
+  revised: Buffer,
+  dimensions: Dimensions,
+  limits: ImageLimits
+): Promise<Rect | undefined> {
+  const imageOptions = { failOn: "error" as const, limitInputPixels: limits.maxPixels };
+  const [parentRgb, revisedRgb, parentAlpha, revisedAlpha] = await Promise.all([
+    sharp(parent, imageOptions).removeAlpha().png(STABLE_PNG_OPTIONS).toBuffer(),
+    sharp(revised, imageOptions).removeAlpha().png(STABLE_PNG_OPTIONS).toBuffer(),
+    sharp(parent, imageOptions).ensureAlpha().extractChannel(3).png(STABLE_PNG_OPTIONS).toBuffer(),
+    sharp(revised, imageOptions).ensureAlpha().extractChannel(3).png(STABLE_PNG_OPTIONS).toBuffer()
+  ]);
+  const [rgbDifference, alphaDifference] = await Promise.all([
+    sharp(parentRgb, imageOptions).boolean(revisedRgb, "eor").png(STABLE_PNG_OPTIONS).toBuffer(),
+    sharp(parentAlpha, imageOptions)
+      .boolean(revisedAlpha, "eor")
+      .toColourspace("srgb")
+      .png(STABLE_PNG_OPTIONS)
+      .toBuffer()
+  ]);
+  const differenceMask = await sharp(rgbDifference, {
+    failOn: "error",
+    limitInputPixels: limits.maxPixels
+  })
+    .composite([{ input: alphaDifference, blend: "add" }])
+    .removeAlpha()
+    .png(STABLE_PNG_OPTIONS)
+    .toBuffer();
+  const statistics = await sharp(differenceMask, {
+    failOn: "error",
+    limitInputPixels: limits.maxPixels
+  }).stats();
+  if (statistics.channels.every((channel) => channel.max === 0)) return undefined;
+  const trimmed = await sharp(differenceMask, {
+    failOn: "error",
+    limitInputPixels: limits.maxPixels
+  })
+    .trim({ background: "#000000" })
+    .png(STABLE_PNG_OPTIONS)
+    .toBuffer({ resolveWithObject: true });
+  const left = Math.max(0, -(trimmed.info.trimOffsetLeft ?? 0));
+  const top = Math.max(0, -(trimmed.info.trimOffsetTop ?? 0));
+  if (
+    left + trimmed.info.width > dimensions.width ||
+    top + trimmed.info.height > dimensions.height
+  ) {
+    return undefined;
+  }
+  return { x: left, y: top, width: trimmed.info.width, height: trimmed.info.height };
+}
+
+function revisionReview(
+  parent: TrustedAnnotationSidecar,
+  parentResolved: readonly Record<string, unknown>[],
+  parentPixelsMatch: boolean,
+  pixelDifference: Rect | undefined,
+  revisedSpec: AnnotationSpec,
+  revisedResolved: readonly Record<string, unknown>[],
+  edits: readonly AnnotationRevisionEdit[],
+  dimensions: Dimensions
+): RevisionResult["review"] {
+  const touchedAnnotationIds = edits.map((edit) =>
+    edit.op === "add" ? edit.annotation.id : edit.id
+  );
+  const touched = new Set(touchedAnnotationIds);
+  const parentTypes = new Map(
+    parent.spec.annotations.map((annotation) => [annotation.id, annotation.type] as const)
+  );
+  const revisedTypes = new Map(
+    revisedSpec.annotations.map((annotation) => [annotation.id, annotation.type] as const)
+  );
+  const parentResolvedById = new Map(
+    parentResolved
+      .filter((annotation) => typeof annotation.id === "string")
+      .map((annotation) => [annotation.id as string, annotation] as const)
+  );
+  const revisedResolvedById = new Map(
+    revisedResolved
+      .filter((annotation) => typeof annotation.id === "string")
+      .map((annotation) => [annotation.id as string, annotation] as const)
+  );
+  const geometrySignature = (resolved: Record<string, unknown> | undefined): string | undefined =>
+    resolved === undefined ? undefined : stableJson(resolvedReviewRects(resolved)).trimEnd();
+  const collateralAnnotationIds = [
+    ...new Set([...parentResolvedById.keys(), ...revisedResolvedById.keys()])
+  ]
+    .filter(
+      (id) =>
+        !touched.has(id) &&
+        geometrySignature(parentResolvedById.get(id)) !==
+          geometrySignature(revisedResolvedById.get(id))
+    )
+    .sort();
+  const affectedAnnotationIds = [...touchedAnnotationIds, ...collateralAnnotationIds];
+  const reviewCounts = {
+    touchedCount: touchedAnnotationIds.length,
+    affectedCount: affectedAnnotationIds.length
+  };
+  const sensitiveSignature = (spec: AnnotationSpec): Map<string, string> =>
+    new Map(
+      spec.annotations
+        .filter((annotation) => annotation.type === "blur" || annotation.type === "redact")
+        .map((annotation) => [annotation.id, stableJson(annotation).trimEnd()])
+    );
+  const parentSensitive = sensitiveSignature(parent.spec);
+  const revisedSensitive = sensitiveSignature(revisedSpec);
+  if ([...parentSensitive].some(([id, signature]) => revisedSensitive.get(id) !== signature)) {
+    return {
+      mode: "none",
+      ...reviewCounts,
+      fallbackReason: "sensitive-coverage-changed"
+    };
+  }
+  if (
+    parent.manifest.usesBlur ||
+    parent.manifest.usesRedact ||
+    revisedSpec.annotations.some(
+      (annotation) => annotation.type === "blur" || annotation.type === "redact"
+    )
+  ) {
+    return {
+      mode: "compact-overview",
+      ...reviewCounts,
+      fallbackReason: "sensitive-effect"
+    };
+  }
+  if (!parentPixelsMatch) {
+    return {
+      mode: "compact-overview",
+      ...reviewCounts,
+      fallbackReason: "renderer-mismatch"
+    };
+  }
+  if (
+    affectedAnnotationIds.some(
+      (id) => parentTypes.get(id) === "spotlight" || revisedTypes.get(id) === "spotlight"
+    )
+  ) {
+    return {
+      mode: "compact-overview",
+      ...reviewCounts,
+      fallbackReason: "global-effect"
+    };
+  }
+
+  const margin = Math.max(
+    24,
+    Math.min(64, Math.round(Math.min(dimensions.width, dimensions.height) * 0.05))
+  );
+  const focusRects = affectedAnnotationIds.map((id): Rect | undefined => {
+    const geometry = unionReviewRects([
+      ...resolvedReviewRects(parentResolvedById.get(id)),
+      ...resolvedReviewRects(revisedResolvedById.get(id))
+    ]);
+    if (geometry === undefined) return undefined;
+    const left = Math.max(0, Math.floor(geometry.x - margin));
+    const top = Math.max(0, Math.floor(geometry.y - margin));
+    const right = Math.min(dimensions.width, Math.ceil(geometry.x + geometry.width + margin));
+    const bottom = Math.min(dimensions.height, Math.ceil(geometry.y + geometry.height + margin));
+    return {
+      x: left,
+      y: top,
+      width: Math.max(1, right - left),
+      height: Math.max(1, bottom - top)
+    };
+  });
+  if (focusRects.some((rect) => rect === undefined)) {
+    return {
+      mode: "compact-overview",
+      ...reviewCounts,
+      fallbackReason: "no-resolved-geometry"
+    };
+  }
+  const concreteFocusRects = focusRects as Rect[];
+  const overlaps = (left: Rect, right: Rect): boolean =>
+    left.x <= right.x + right.width &&
+    right.x <= left.x + left.width &&
+    left.y <= right.y + right.height &&
+    right.y <= left.y + left.height;
+  const connected = new Set<number>([0]);
+  for (;;) {
+    const before = connected.size;
+    for (const [index, candidate] of concreteFocusRects.entries()) {
+      if (
+        !connected.has(index) &&
+        [...connected].some((current) => overlaps(concreteFocusRects[current] as Rect, candidate))
+      ) {
+        connected.add(index);
+      }
+    }
+    if (connected.size === before) break;
+  }
+  if (connected.size !== concreteFocusRects.length) {
+    return {
+      mode: "compact-overview",
+      ...reviewCounts,
+      fallbackReason: "dispersed"
+    };
+  }
+  if (pixelDifference === undefined) {
+    return {
+      mode: "compact-overview",
+      ...reviewCounts,
+      fallbackReason: "no-resolved-geometry"
+    };
+  }
+  const pixelSourceRect = {
+    x: Math.max(0, Math.floor(pixelDifference.x - margin)),
+    y: Math.max(0, Math.floor(pixelDifference.y - margin)),
+    width: 0,
+    height: 0
+  };
+  const differenceRight = Math.min(
+    dimensions.width,
+    Math.ceil(pixelDifference.x + pixelDifference.width + margin)
+  );
+  const differenceBottom = Math.min(
+    dimensions.height,
+    Math.ceil(pixelDifference.y + pixelDifference.height + margin)
+  );
+  pixelSourceRect.width = Math.max(1, differenceRight - pixelSourceRect.x);
+  pixelSourceRect.height = Math.max(1, differenceBottom - pixelSourceRect.y);
+  const sourceRect = unionReviewRects([...concreteFocusRects, pixelSourceRect]) as Rect;
+  const canvasArea = dimensions.width * dimensions.height;
+  if (sourceRect.width * sourceRect.height > canvasArea * 0.5) {
+    return {
+      mode: "compact-overview",
+      ...reviewCounts,
+      fallbackReason: "spans-most-of-canvas"
+    };
+  }
+  return { mode: "changed-region", ...reviewCounts, sourceRect };
+}
+
 async function loadTrustedAnnotationChain(
   parentSidecarPath: string,
   options: ImageSafetyOptions,
@@ -2327,10 +2763,14 @@ export async function reviseAnnotation(
     throw revisionFailure("PARENT_SIDECAR_INVALID", "parentSidecarPath must be a non-empty path.");
   }
   const maximumChainBytes = arguments_.maxRevisionChainBytes ?? MAX_REVISION_CHAIN_BYTES;
-  if (!Number.isSafeInteger(maximumChainBytes) || maximumChainBytes <= 0) {
+  if (
+    !Number.isSafeInteger(maximumChainBytes) ||
+    maximumChainBytes <= 0 ||
+    maximumChainBytes > MAX_REVISION_CHAIN_BYTES
+  ) {
     throw revisionFailure(
       "REVISION_LIMIT_REACHED",
-      "maxRevisionChainBytes must be a positive safe integer."
+      `maxRevisionChainBytes must be a positive safe integer no greater than ${MAX_REVISION_CHAIN_BYTES}.`
     );
   }
   const chain = await loadTrustedAnnotationChain(
@@ -2521,6 +2961,45 @@ export async function reviseAnnotation(
     });
     const warnings = [...resolution.warnings, ...rendered.warnings];
     const outputDimensions = { width: rendered.width, height: rendered.height };
+    let parentResolvedForReview: Record<string, unknown>[] = [];
+    let parentPixelsMatch = false;
+    let pixelDifference: Rect | undefined;
+    try {
+      const parentResolution = resolveAnnotationSpec(
+        chain.head.spec,
+        input.loaded.inspection.dimensions
+      );
+      const parentRendered = await renderAnnotations(
+        input.loaded.bytes,
+        parentResolution.spec.annotations,
+        {
+          limitInputPixels: input.loaded.limits.maxPixels,
+          specVersion: parentResolution.spec.version
+        }
+      );
+      parentResolvedForReview = parentRendered.resolvedAnnotations;
+      parentPixelsMatch = sha256(parentRendered.buffer) === chain.head.output.sha256;
+      if (parentPixelsMatch) {
+        pixelDifference = await renderedPixelDifferenceBounds(
+          parentRendered.buffer,
+          rendered.buffer,
+          outputDimensions,
+          input.loaded.limits
+        );
+      }
+    } catch {
+      // Review focus is an optimization. A verified full-output overview remains the fallback.
+    }
+    const review = revisionReview(
+      chain.head,
+      parentResolvedForReview,
+      parentPixelsMatch,
+      pixelDifference,
+      applied.spec,
+      rendered.resolvedAnnotations,
+      applied.edits,
+      outputDimensions
+    );
     await verifyPng(rendered.buffer, outputDimensions, input.loaded.limits);
     const canonicalSpec = canonicalizeSpec(applied.spec);
     const specSha256 = sha256(canonicalSpec);
@@ -2755,7 +3234,8 @@ export async function reviseAnnotation(
         lineageId,
         parentSidecarPath: chain.head.path,
         editsSha256: applied.editsSha256
-      }
+      },
+      review
     };
     await runRevisionFault(arguments_, "temp-sidecar-remove");
     if (temporarySidecarIdentity === undefined) {
@@ -2944,6 +3424,109 @@ export async function reviseAnnotation(
     `Revision could not be published: ${errorMessage(pendingError)}`,
     pendingError
   );
+}
+
+/**
+ * Validate an annotate sidecar and its complete parent/output chain, then return a small,
+ * path-free inventory suitable for AI handoff. The original input is intentionally not opened.
+ */
+async function inspectAnnotationSidecarInternal(
+  arguments_: InspectAnnotationSidecarArguments
+): Promise<AnnotationSidecarSummary> {
+  if (typeof arguments_.sidecarPath !== "string" || arguments_.sidecarPath.trim() === "") {
+    throw revisionFailure("PARENT_SIDECAR_INVALID", "sidecarPath must be a non-empty path.");
+  }
+  const maximumChainBytes = arguments_.maxRevisionChainBytes ?? MAX_REVISION_CHAIN_BYTES;
+  if (
+    !Number.isSafeInteger(maximumChainBytes) ||
+    maximumChainBytes <= 0 ||
+    maximumChainBytes > MAX_REVISION_CHAIN_BYTES
+  ) {
+    throw revisionFailure(
+      "REVISION_LIMIT_REACHED",
+      `maxRevisionChainBytes must be a positive safe integer no greater than ${MAX_REVISION_CHAIN_BYTES}.`
+    );
+  }
+  const chain = await loadTrustedAnnotationChain(
+    arguments_.sidecarPath,
+    arguments_,
+    maximumChainBytes
+  );
+  const { head } = chain;
+  const resolved = head.manifest.resolvedAnnotations;
+  if (resolved === undefined || resolved.length !== head.spec.annotations.length) {
+    throw revisionFailure(
+      "PARENT_SIDECAR_INVALID",
+      "resolvedAnnotations does not contain one entry per annotation."
+    );
+  }
+  for (const [index, annotation] of head.spec.annotations.entries()) {
+    const resolvedAnnotation = resolved[index];
+    if (resolvedAnnotation?.id !== annotation.id || resolvedAnnotation.type !== annotation.type) {
+      throw revisionFailure(
+        "PARENT_SIDECAR_INVALID",
+        "resolvedAnnotations order, IDs, or types do not match annotationSpec."
+      );
+    }
+  }
+
+  const counts = new Map<string, number>();
+  for (const annotation of head.spec.annotations) {
+    counts.set(annotation.type, (counts.get(annotation.type) ?? 0) + 1);
+  }
+  const summary: AnnotationSidecarSummary = {
+    summaryVersion: "1.0",
+    valid: true,
+    artifact: "agent-callout-annotation",
+    manifestVersion: head.manifest.manifestVersion,
+    annotationSpecVersion: head.spec.version,
+    outputDimensions: head.manifest.outputDimensions,
+    annotations: {
+      total: head.spec.annotations.length,
+      byType: Object.fromEntries([...counts].sort(([left], [right]) => left.localeCompare(right))),
+      resolvedInventory: "identity-aligned"
+    },
+    revision: {
+      number: head.manifest.revision?.number ?? 0,
+      chainEntries: chain.entryCount,
+      coordinationScope: "sidecar-directory",
+      copiedLineageMayFork: true
+    },
+    warnings: { count: head.manifest.warnings.length },
+    integrity: {
+      sidecar: "validated",
+      output: "hash-verified",
+      parentChain: "hash-verified",
+      originalInput: "record-only"
+    },
+    safety: {
+      usesBlur: head.manifest.usesBlur,
+      usesRedact: head.manifest.usesRedact,
+      blurIsSecureRedaction: false,
+      redactUsesOpaqueOverwrite: head.manifest.security.redactUsesOpaqueOverwrite
+    },
+    portability: {
+      flattenedPngSeparatesLayers: false,
+      sidecarRequiredForAnnotationSemantics: true
+    }
+  };
+  if (Buffer.byteLength(JSON.stringify(summary), "utf8") > 4 * 1024) {
+    throw revisionFailure(
+      "REVISION_LIMIT_REACHED",
+      "Annotation sidecar summary exceeds the 4096-byte public result limit."
+    );
+  }
+  return summary;
+}
+
+export async function inspectAnnotationSidecar(
+  arguments_: InspectAnnotationSidecarArguments
+): Promise<AnnotationSidecarSummary> {
+  try {
+    return await inspectAnnotationSidecarInternal(arguments_);
+  } catch {
+    throw revisionFailure("ANNOTATION_SIDECAR_INVALID", "Annotation sidecar validation failed.");
+  }
 }
 
 function resolveCropRect(
@@ -3185,7 +3768,20 @@ export async function createImagePreview(
   const maxWidth = positiveInteger(arguments_.maxWidth, 1280, "maxWidth");
   const maxHeight = positiveInteger(arguments_.maxHeight, 1280, "maxHeight");
   const normalized = await normalizedPng(loaded.bytes, loaded.limits);
-  const resized = await sharp(normalized.data)
+  const sourceRect =
+    arguments_.sourceRect === undefined
+      ? undefined
+      : resolveCropRect(arguments_.sourceRect, "pixel", normalized.dimensions);
+  let pipeline = sharp(normalized.data);
+  if (sourceRect !== undefined) {
+    pipeline = pipeline.extract({
+      left: sourceRect.x,
+      top: sourceRect.y,
+      width: sourceRect.width,
+      height: sourceRect.height
+    });
+  }
+  const resized = await pipeline
     .resize({
       width: maxWidth,
       height: maxHeight,
@@ -3205,7 +3801,11 @@ export async function createImagePreview(
     outputDimensions,
     inputs: [loaded.inspection],
     originalDimensions: loaded.inspection.dimensions,
-    operationSpec: { maxWidth, maxHeight },
+    operationSpec: {
+      maxWidth,
+      maxHeight,
+      ...(sourceRect === undefined ? {} : { sourceRect })
+    },
     annotationCount: 0,
     warnings: [],
     usesBlur: false,

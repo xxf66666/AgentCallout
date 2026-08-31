@@ -4,20 +4,20 @@
 
 ## 范围总览
 
-| 能力                                                      | MVP 0.1：已有截图批注 | Next 0.2：复核/AI 交付 | Later 0.3+    |
-| --------------------------------------------------------- | --------------------- | ---------------------- | ------------- |
-| PNG/JPEG/WebP 已有截图输入                                | **是**                | 维护                   | 维护          |
-| rectangle、ellipse、arrow、text/callout、numbered callout | **是**                | 改进布局               | 编辑器交互    |
-| highlight、spotlight、blur、安全 redact                   | **是**                | 改进检测与验证         | 更多视觉效果  |
-| append-only revision、父链与恢复                          | **是**                | 摘要/分支语义          | 显式合并      |
-| PNG + 可读 JSON sidecar 跨 AI 交付                        | **是**                | 校验/摘要工具          | 标准化互操作  |
-| 512 px 紧凑总览                                           | **是**                | **变更区域聚焦预览**   | 自适应预算    |
-| CLI + 本地 stdio MCP                                      | **是**                | 维护兼容               | 更多宿主集成  |
-| Claude Code/Codex GitHub 直接安装                         | **是**                | 持续回归               | 更多 Agent    |
-| OCR 文字定位                                              | **否**                | 否                     | 可选本地适配  |
-| Playwright/DOM selector 定位                              | **否**                | 否                     | 可选 DOM 适配 |
-| 完整桌面 GUI/截图快捷键/GIF/视频                          | **否**                | 否                     | **以后**      |
-| 云同步、账号、计费                                        | **否**                | 否                     | 未承诺        |
+| 能力                                                      | MVP 0.1：已有截图批注 | 0.2：复核/AI 交付（发布候选） | Later 0.3+    |
+| --------------------------------------------------------- | --------------------- | ----------------------------- | ------------- |
+| PNG/JPEG/WebP 已有截图输入                                | **是**                | 维护                          | 维护          |
+| rectangle、ellipse、arrow、text/callout、numbered callout | **是**                | 改进布局                      | 编辑器交互    |
+| highlight、spotlight、blur、安全 redact                   | **是**                | 改进检测与验证                | 更多视觉效果  |
+| append-only revision、父链与恢复                          | **是**                | 摘要/分支语义                 | 显式合并      |
+| PNG + 可读 JSON sidecar 跨 AI 交付                        | **是**                | 校验/摘要工具                 | 标准化互操作  |
+| 512 px 紧凑总览                                           | **是**                | **变更区域聚焦预览**          | 自适应预算    |
+| CLI + 本地 stdio MCP                                      | **是**                | 维护兼容                      | 更多宿主集成  |
+| Claude Code/Codex GitHub 直接安装                         | **是**                | 持续回归                      | 更多 Agent    |
+| OCR 文字定位                                              | **否**                | 否                            | 可选本地适配  |
+| Playwright/DOM selector 定位                              | **否**                | 否                            | 可选 DOM 适配 |
+| 完整桌面 GUI/截图快捷键/GIF/视频                          | **否**                | 否                            | **以后**      |
+| 云同步、账号、计费                                        | **否**                | 否                            | 未承诺        |
 
 ## MVP 0.1：给 Agent 一支“截图批注笔”
 
@@ -50,22 +50,24 @@ MVP 只解决一个闭环：Agent 对用户已有的截图执行 `inspect → �
 
 只有以下证据齐备才发布 0.1：干净 clone 安装成功；lint/typecheck/test/build 通过；CLI 真实生成并重新解码图片；MCP Server 启动及 tool 调用成功；三组示例可重放；中英文和自动布局通过视觉检查；redact 通过像素验证；Claude Code/Codex 安装、发现、调用、二次渲染和卸载按兼容矩阵完成。未验证项必须保留为 NOT VERIFIED，不能用文档或 mock 替代。
 
-## Next 0.2：低 token 复核与跨 AI 语义交付
+## 0.2：低 token 复核与跨 AI 语义交付（发布候选）
 
-0.1.3 的真实 Claude/Codex 验收证明 512 px 总览足以发现遮挡，但 Claude 为确认小区域又调用了一次 crop。下一阶段先减少这类重复图片轮次，并把现有 sidecar 变成更容易校验、摘要和交接的公共接口；不把私有 payload 或可逆编辑层塞进 PNG metadata。
+0.1.3 的真实 Claude/Codex 验收证明 512 px 总览足以发现遮挡，但 Claude 为确认小区域又调用了一次 crop。0.2 已实现单张变更区域预览和安全 sidecar 摘要，目标是减少重复图片轮次，并让普通 JSON sidecar 更容易校验和交接；仍不把私有 payload 或可逆编辑层塞进 PNG metadata。
 
 ### 变更区域聚焦预览
 
-- `revise_annotation` 根据本次 touched IDs 和 resolved geometry 自动计算目标、label、leader 的并集与安全边距；单一区域时返回局部高可读预览，多处分散改动才降级为整图总览。
-- 每次默认只返回一个 ImageContent，避免“整图总览后再 crop”重复计入上下文；完整 PNG 始终落盘。
-- preview TextContent 明确记录 `mode`、原图 bbox、缩放、宽高、字节数和降级原因。Agent 可以显式再 crop，但不能把聚焦预览误当完整画布。
+- `revise_annotation` 把父/子输出的实际像素差异与本次 touched、连带自动排版迁移的 resolved geometry 合并；单一且不超过半幅画布的区域返回 `changed-region`。
+- 分散、过大、全局效果、几何不足或 renderer 无法可靠重放时返回 `compact-overview`；既有 blur/redact 覆盖被改动时返回 `none`，不发送图片。
+- 每次最多返回一个 ImageContent，避免“整图总览后再 crop”重复计入上下文；完整 PNG 始终落盘。
+- preview TextContent 明确记录 `mode`、原画布 `sourceRect`、宽高、字节数和固定降级原因。Agent 可以显式再 crop，但不能把聚焦预览误当完整画布。
 - 验收以真实 Claude/Codex A/B 为准：同一遮挡场景保持判断正确，图片轮次减少，记录宿主 usage；不把总 usage 误归因为单一图片 token。
 
 ### Sidecar 校验与 AI 摘要
 
-- 增加只读 `inspect_annotation_sidecar` CLI/MCP：严格验证 manifest/父链/hash 后，返回紧凑的 annotation ID/type/语义 tone、target、resolved label/marker/leader、warning、revision 和输入/输出关联。
+- 增加只读 core、CLI `inspect-sidecar` 和 MCP `inspect_annotation_sidecar`：严格验证 sidecar、配对输出和完整父链后，只返回不超过 4 KiB 的 allowlist 摘要。
+- 摘要只公开版本、尺寸、按类型计数、revision 链长度、warning 数量、完整性状态和 blur/redact 安全布尔值；默认不返回路径、hash、annotation ID、文字、style、raw warning 或 resolved geometry。
 - JSON 继续是普通开放数据；别的 AI 不安装 AgentCallout 也能读取。安装工具只增加可信校验、路径解析、重渲染和修订能力，不制造专有“解码许可”。
-- 提供可选 Markdown handoff 片段：同时链接 PNG 与 sidecar，并可附不含批注全文/绝对路径的紧凑语义摘要。
+- 跨 AI 的 Markdown 交接应同时链接 PNG 与 sidecar；需要机器校验时再附上述安全摘要，而不是复制完整 sidecar 到上下文。
 - 只拿到 flattened PNG 时明确标记“无法可靠区分原图与覆盖层”；不使用隐写、水印或图片 metadata 假装解决。
 
 ### 同阶段体验改进

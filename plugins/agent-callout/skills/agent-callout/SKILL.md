@@ -4,7 +4,7 @@ description: Annotate existing PNG, JPEG, or WebP screenshots with callouts, arr
 license: MIT
 metadata:
   author: AgentCallout contributors
-  version: "0.1.3"
+  version: "0.2.0"
 ---
 
 # AgentCallout
@@ -20,8 +20,9 @@ Turn an existing screenshot into a reproducible annotated PNG and JSON sidecar. 
 5. Call `annotate_image`. The tool writes a PNG and replayable JSON sidecar without overwriting the source.
 6. Inspect the returned compact overview. It is intentionally limited to 512px/64 KiB with low detail. If small text or exact placement is unclear, use `crop_image` on the saved output instead of repeatedly requesting a full-image high-detail preview. If the host does not expose image content, open the absolute output path. Check arrow targets, text wrapping, target occlusion, and callout overlap.
 7. When a committed annotate sidecar needs adjustment, call `revise_annotation` with ordered stable-ID `add`, `set`, or `remove` edits. Do not delete prior PNG/JSON files, rewrite the full root spec, or guess a revision number. Supply `inputPath` when the original moved or when the parent uses basename-only input semantics; the bytes must match the parent hash.
-8. Inspect every returned revision preview. If the host does not expose ImageContent, open the new absolute path and say that visual verification remains incomplete.
-9. Return the final absolute path and the tool-provided Markdown image reference.
+8. Inspect every returned revision preview. `changed-region` contains touched annotations plus any collateral auto-layout movement and carries an original-canvas `sourceRect`; use it for local QA without another crop, but do not claim it proves global layout. `compact-overview` means focus was dispersed, too large, global, unavailable, or intentionally kept low-detail around blur/redact. `none` means sensitive coverage changed: no image was sent, so review the saved output only under the applicable privacy policy. If the host omits ImageContent unexpectedly, say visual verification remains incomplete.
+9. When handing an existing sidecar to another AI, call `inspect_annotation_sidecar` for a small integrity/inventory summary. It deliberately omits paths, hashes, IDs, annotation text, style, and raw geometry. The ordinary JSON sidecar remains directly readable without installing AgentCallout.
+10. Return the final absolute path and the tool-provided Markdown image reference.
 
 ## Annotation choices
 
@@ -41,6 +42,8 @@ Turn an existing screenshot into a reproducible annotated PNG and JSON sidecar. 
 - Inspect long-text wrapping plus numbered-marker outline, fill, number contrast, target visibility, and the complete exposed leader in the final preview. On an unconstrained canvas the leader should expose at least 24px; any shorter/invisible leader, reduced or clipped stroke, marker-overlap, clamp, or occupied-callout warning requires revision or an explicit limitation in the final response.
 - Preserve warnings in the final response. A layout warning means the result needs visual review, not silent acceptance.
 - Report `recoveryWarnings` separately: the revision is committed, but lock/temp cleanup still needs recovery. Do not rewrite these into sidecar render warnings.
+- A changed-region preview is one local crop, not the whole output. Preserve `sourceRect`, `mode`, touched/affected counts, fallback reason, and preview byte/dimension metadata when reporting what was actually reviewed.
+- Never request an automatic high-detail preview after blur/redact coverage is removed, moved, shrunk, or weakened. `preview.mode=none` is a privacy boundary, not a tool failure.
 - Never hand-edit a sidecar hash or claim that blur removed the underlying pixels.
 - Do not overwrite the source image. Use a new output path for each materially different revision.
 - Treat only an existing, fully validated revision sidecar as the commit marker. A PNG without its sidecar is an orphan, not a successful revision; do not describe the two-file publish as power-loss atomic or cryptographically signed.

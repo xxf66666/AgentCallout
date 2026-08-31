@@ -12,6 +12,7 @@ import {
   createContactSheet,
   cropImage,
   getCoreDoctorReport,
+  inspectAnnotationSidecar,
   inspectImage,
   reviseAnnotation,
   validateSpecForImage
@@ -256,6 +257,25 @@ function formatInspection(result: Awaited<ReturnType<typeof inspectImage>>): str
   ].join("\n");
 }
 
+function formatSidecarInspection(
+  result: Awaited<ReturnType<typeof inspectAnnotationSidecar>>
+): string {
+  return [
+    "Annotation sidecar is valid.",
+    `Manifest: ${result.manifestVersion}; AnnotationSpec: ${result.annotationSpecVersion}`,
+    `Output dimensions: ${result.outputDimensions.width}x${result.outputDimensions.height}`,
+    `Annotations: ${result.annotations.total} (${
+      Object.entries(result.annotations.byType)
+        .map(([type, count]) => `${type}=${count}`)
+        .join(", ") || "none"
+    })`,
+    `Revision: ${result.revision.number}; chain entries: ${result.revision.chainEntries}`,
+    `Warnings: ${result.warnings.count}`,
+    `Original input: ${result.integrity.originalInput}`,
+    `Safety: blur=${String(result.safety.usesBlur)}, redact=${String(result.safety.usesRedact)}`
+  ].join("\n");
+}
+
 function formatGenerated(action: string, result: Awaited<ReturnType<typeof cropImage>>): string {
   const value = result as unknown as Record<string, unknown>;
   const warnings = Array.isArray(value.warnings) ? value.warnings : [];
@@ -401,6 +421,19 @@ export function createCliProgram(io: CliIo = defaultIo): Command {
     const allowedRoots = resolvedRoots(options);
     const result = await inspectImage(input, allowedRoots === undefined ? {} : { allowedRoots });
     writeResult(io, result, options, () => formatInspection(result));
+  });
+
+  addCommonOptions(
+    program
+      .command("inspect-sidecar <sidecar>")
+      .description("Validate an annotation sidecar and print a path-free summary.")
+  ).action(async (sidecar: string, options: CommonOptions) => {
+    const allowedRoots = resolvedRoots(options);
+    const result = await inspectAnnotationSidecar({
+      sidecarPath: sidecar,
+      ...(allowedRoots === undefined ? {} : { allowedRoots })
+    });
+    writeResult(io, result, options, () => formatSidecarInspection(result));
   });
 
   addSpecOptions(

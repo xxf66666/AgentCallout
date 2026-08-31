@@ -9,7 +9,7 @@ export default defineConfig({
       exclude: ["src/cli/**", "src/mcp/**"]
     },
     environment: "node",
-    include: ["tests/**/*.test.ts"],
+    include: ["tests/**/*.test.ts", "tests/**/*.test.mjs"],
     testTimeout: 30_000
   }
 });

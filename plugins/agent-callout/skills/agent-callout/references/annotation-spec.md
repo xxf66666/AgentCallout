@@ -141,6 +141,18 @@ One transaction accepts 1–400 edits. Parent sidecars are limited to 10 MiB; on
 
 The lock coordinates one sidecar directory, not every copied checkout. A full lineage copied elsewhere is an independent working copy and can fork. When handing the result to another AI, include both PNG and JSON sidecar: the JSON is readable without AgentCallout, while validation, replay, or further revision requires the CLI/MCP.
 
+## Focused revision review and safe inventory
+
+A successful revision result contains `review`:
+
+- `changed-region`: one connected crop containing every actual changed RGBA pixel, every directly touched annotation, and collateral auto-layout movement. `sourceRect` is in original output pixels. This is local QA only, not proof of global layout.
+- `compact-overview`: focus was dispersed, larger than half the canvas, global (`spotlight`), unavailable, not reproducible under the current renderer, or deliberately kept low-detail because the direct parent/revised spec contains blur/redact.
+- `none`: existing blur/redact coverage was removed, moved, resized, or otherwise changed. No ImageContent is returned because the new output may reveal previously covered pixels.
+
+The MCP `preview` adds detail, dimensions, byte count, and the same mode/sourceRect. Each call returns at most one image, with longest side 512px and at most 64 KiB. Encoding failure returns the planned mode plus `fallbackReason: "encoding-failed"` and no image. Do not issue another crop when changed-region already shows the complete local interaction; open the saved full output only for global layout review.
+
+`inspect_annotation_sidecar` is read-only and accepts only `sidecarPath`. It validates the strict manifest, paired output and entire parent chain, then returns a ≤4 KiB inventory with versions, dimensions, counts by type, revision depth, warning count, integrity states and blur/redact flags. It does not open the original input and reports it as `record-only`. It intentionally excludes every path/file name, hash, lineage/edits, annotation ID/text/style/raw warning/resolved geometry, renderer/font detail and ImageContent.
+
 ## Validation and replay loop
 
 1. Inspect the image and use its orientation-corrected dimensions.

@@ -90,7 +90,7 @@ Agent 会检查图片、必要时放大局部、生成批注、查看结果，�
 - 只有存在且完整校验通过的 JSON sidecar 才是提交标志。PNG 已发布但 sidecar 未成功时不算已提交，也不能把双文件发布描述为断电级原子事务。
 - 若版本已提交、但 lock/temp 清理不完整，结果会单独返回 `recoveryWarnings`；这类告警不能当成普通排版 warning 忽略。
 
-MCP 默认返回最长边 512 px、最多 64 KiB 的低细节总览，旨在通常降低整张截图反复进入模型的 token 消耗；实际成本仍取决于宿主和模型。总览看不清小字或精确位置时，Agent 应裁剪已保存的输出局部再看，而不是反复请求整图高细节。sidecar、hash 和成功返回仍不能代替视觉复核。
+MCP 每次最多返回一张、最长边 512 px、最多 64 KiB 的图片。新建批注使用 low-detail 总览；修订优先把实际变化像素、touched 批注和连带重排区域合成 `changed-region`。分散、过大、全局效果、几何不足、renderer 不匹配或当前结果仍有 blur/redact 时回退 `compact-overview`；父版本 blur/redact 被删除或任一字段变化时返回 `none`，完全不发送图片，避免自动放大新暴露像素。聚焦图会带原画布 `sourceRect`，不能冒充完整画布；局部足够时不要再 crop。实际 token 成本仍取决于宿主和模型，sidecar、hash 和成功返回也不能代替视觉复核。
 
 ## 把结果交给另一个 AI
 
@@ -100,7 +100,7 @@ MCP 默认返回最长边 512 px、最多 64 KiB 的低细节总览，旨在通�
 - 同名 `*.annotated.json`：机器可读的批注层，包含原图/输出 hash、AnnotationSpec、稳定 ID、解析后位置、warning 和修订父链；
 - 需要复核来源时，再附原图。原图含秘密时先按安全策略处理，不要为了做 diff 而泄露它。
 
-另一个 AI **不必安装 AgentCallout 才能读 JSON**；sidecar 是普通、版本化的 JSON。只有在需要校验 hash、重渲染、继续修订或生成预览时，才需要 CLI/MCP。Sidecar 不是签名或加密证明，也可能包含批注文字和文件关联信息，分享前应按敏感文档检查。
+另一个 AI **不必安装 AgentCallout 才能读 JSON**；sidecar 是普通、版本化的 JSON。只有在需要校验、重渲染、继续修订或生成预览时，才需要 CLI/MCP。`inspect-sidecar` / `inspect_annotation_sidecar` 会验证 sidecar、配对输出和完整父链，然后返回不含路径、文件名、hash、annotation ID/文字/style 的 4 KiB 内摘要；原图不会被打开，只标记 `record-only`。完整 sidecar 仍可能包含批注文字和文件关联信息，且不是签名或加密证明，分享前应按敏感文档检查。
 
 修订 lock 只协调 sidecar 所在目录。复制完整 PNG/JSON lineage 到另一个目录会创建可独立继续、也可能分叉的工作副本；它不是跨目录或跨机器的全局 head。
 
@@ -169,6 +169,7 @@ npm uninstall --global agent-callout
 ```powershell
 agent-callout doctor --self-test --json
 agent-callout inspect .\screenshot.png --json
+agent-callout inspect-sidecar .\screenshot.annotated.json --json
 agent-callout annotate .\screenshot.png --spec .\annotations.json --output .\screenshot.annotated.png
 agent-callout revise .\screenshot.annotated.json --edits .\edits.json
 agent-callout --help
@@ -197,13 +198,14 @@ agent-callout --help
 <details>
 <summary><strong>给开发者：MCP、Skill 和 AnnotationSpec</strong></summary>
 
-MCP 提供 7 个工具：
+MCP 提供 8 个工具：
 
 - `doctor`：检查运行环境。
 - `inspect_image`：读取图片尺寸、格式和哈希。
+- `inspect_annotation_sidecar`：校验批注 sidecar/输出/父链并返回路径与文字脱敏的紧凑摘要。
 - `validate_annotation_spec`：检查批注参数和坐标。
 - `annotate_image`：生成批注图和预览。
-- `revise_annotation`：从可信 annotate sidecar 按稳定 ID 创建下一版本并返回预览。
+- `revise_annotation`：从已验证 annotate sidecar 按稳定 ID 创建下一版本，并在安全时返回变更区域聚焦预览。
 - `crop_image`：裁剪局部，便于 Agent 放大检查。
 - `create_contact_sheet`：把多张图片合成联系表。
 
@@ -242,7 +244,7 @@ codex plugin marketplace remove agent-callout
 
 中文和英文文字、PNG/JPEG/WebP、版本化修订及自动化安全矩阵已在 GitHub `c75ce96` 的 Windows clean clone 验证；0.1.3 全局 GitHub 安装、Claude Plugin 更新及两边真实“发现遮挡 → 再修订”预览闭环也已完成。Codex 的可选 Skills-only Git Marketplace 更新仍可能触发客户端固定 30 秒 clone 超时，不影响已验证的全局 CLI+MCP 主路径，详见[兼容性记录](docs/compatibility.md)。当前 MVP 不包含 OCR 自动找字、浏览器 DOM 定位、系统截图快捷键、GUI、录屏或视频编辑。
 
-下一阶段优先生成“变更区域聚焦预览”，减少修订后额外 crop 与图片 token；随后提供 sidecar 校验/摘要入口并继续改进密集说明框排版，详见[路线图](docs/roadmap.md)。
+下一阶段继续改进密集说明框的全局排版/引线绕行，并评估可选 OCR/DOM 定位适配器；聚焦预览与 sidecar 安全摘要已进入 0.2，详见[路线图](docs/roadmap.md)。
 
 ## 详细文档
 

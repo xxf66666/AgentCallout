@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, test } from "vitest";
 
 import type { CliIo, CliWritable } from "../src/cli/index.js";
 import { runCli } from "../src/cli/index.js";
-import { annotateImage } from "../src/core/index.js";
+import { annotateImage, inspectAnnotationSidecar } from "../src/core/index.js";
 import {
   NUMBERED_CALLOUT_CANVAS,
   NUMBERED_CALLOUT_V11_SPEC
@@ -179,6 +179,67 @@ describe("AgentCallout CLI", () => {
       annotationSpec: { annotations: [] },
       revision: { number: 1 }
     });
+
+    const inspected = captureIo();
+    expect(
+      await runCli(
+        [
+          "node",
+          "agent-callout",
+          "inspect-sidecar",
+          result.sidecarPath,
+          "--allow-root",
+          directory,
+          "--json"
+        ],
+        inspected.io
+      )
+    ).toBe(0);
+    const summary = JSON.parse(inspected.stdout.value) as Record<string, unknown>;
+    const coreSummary = await inspectAnnotationSidecar({
+      sidecarPath: result.sidecarPath,
+      allowedRoots: [directory]
+    });
+    expect(summary).toEqual(coreSummary);
+    expect(summary).toMatchObject({
+      summaryVersion: "1.0",
+      valid: true,
+      annotations: { total: 0, byType: {}, resolvedInventory: "identity-aligned" },
+      revision: { number: 1, chainEntries: 2 },
+      integrity: { originalInput: "record-only" }
+    });
+    expect(inspected.stderr.value).toBe("");
+    expect(inspected.stdout.value).not.toContain(directory);
+    expect(inspected.stdout.value).not.toContain("cli-box");
+    expect(inspected.stdout.value).not.toMatch(/[0-9a-f]{64}/u);
+
+    const invalidManifest = JSON.parse(await readFile(result.sidecarPath, "utf8")) as Record<
+      string,
+      unknown
+    >;
+    invalidManifest.manifestVersion = "CUSTOMER_SECRET";
+    await writeFile(result.sidecarPath, `${JSON.stringify(invalidManifest)}\n`);
+    const invalidInspection = captureIo();
+    expect(
+      await runCli(
+        [
+          "node",
+          "agent-callout",
+          "inspect-sidecar",
+          result.sidecarPath,
+          "--allow-root",
+          directory,
+          "--json"
+        ],
+        invalidInspection.io
+      )
+    ).toBe(1);
+    expect(invalidInspection.stdout.value).toBe("");
+    expect(invalidInspection.stderr.value).toContain(
+      "[ANNOTATION_SIDECAR_INVALID] Annotation sidecar validation failed."
+    );
+    expect(invalidInspection.stderr.value).not.toContain("CUSTOMER_SECRET");
+    expect(invalidInspection.stderr.value).not.toContain(directory);
 
     const stale = captureIo();
     expect(

@@ -16,6 +16,7 @@ import {
   createImagePreview,
   cropImage,
   getCoreDoctorReport,
+  inspectAnnotationSidecar,
   inspectImage,
   reviseAnnotation,
   validateSpecForImage
@@ -43,10 +44,84 @@ const rectSchema = z
   })
   .strict();
 const structuredOutputSchema = z.object({}).catchall(z.unknown());
+const dimensionsSchema = z
+  .object({
+    width: z.number().int().positive(),
+    height: z.number().int().positive()
+  })
+  .strict();
+const annotationTypeCountSchema = z
+  .object({
+    rectangle: z.number().int().nonnegative().optional(),
+    ellipse: z.number().int().nonnegative().optional(),
+    arrow: z.number().int().nonnegative().optional(),
+    text: z.number().int().nonnegative().optional(),
+    callout: z.number().int().nonnegative().optional(),
+    "numbered-callout": z.number().int().nonnegative().optional(),
+    highlight: z.number().int().nonnegative().optional(),
+    spotlight: z.number().int().nonnegative().optional(),
+    blur: z.number().int().nonnegative().optional(),
+    redact: z.number().int().nonnegative().optional()
+  })
+  .strict();
+const sidecarSummaryOutputSchema = z
+  .object({
+    summaryVersion: z.literal("1.0"),
+    valid: z.literal(true),
+    artifact: z.literal("agent-callout-annotation"),
+    manifestVersion: z.enum(["1.0", "1.1"]),
+    annotationSpecVersion: z.enum(["1.0", "1.1"]),
+    outputDimensions: dimensionsSchema,
+    annotations: z
+      .object({
+        total: z.number().int().nonnegative(),
+        byType: annotationTypeCountSchema,
+        resolvedInventory: z.literal("identity-aligned")
+      })
+      .strict(),
+    revision: z
+      .object({
+        number: z.number().int().nonnegative(),
+        chainEntries: z.number().int().positive(),
+        coordinationScope: z.literal("sidecar-directory"),
+        copiedLineageMayFork: z.literal(true)
+      })
+      .strict(),
+    warnings: z.object({ count: z.number().int().nonnegative() }).strict(),
+    integrity: z
+      .object({
+        sidecar: z.literal("validated"),
+        output: z.literal("hash-verified"),
+        parentChain: z.literal("hash-verified"),
+        originalInput: z.literal("record-only")
+      })
+      .strict(),
+    safety: z
+      .object({
+        usesBlur: z.boolean(),
+        usesRedact: z.boolean(),
+        blurIsSecureRedaction: z.literal(false),
+        redactUsesOpaqueOverwrite: z.boolean()
+      })
+      .strict(),
+    portability: z
+      .object({
+        flattenedPngSeparatesLayers: z.literal(false),
+        sidecarRequiredForAnnotationSemantics: z.literal(true)
+      })
+      .strict()
+  })
+  .strict();
 
 const inspectInputSchema = z
   .object({
     inputPath: pathSchema.describe("PNG, JPEG, or WebP file to inspect.")
+  })
+  .strict();
+
+const inspectSidecarInputSchema = z
+  .object({
+    sidecarPath: pathSchema.describe("AgentCallout annotate sidecar to validate.")
   })
   .strict();
 
@@ -100,16 +175,22 @@ const contactSheetInputSchema = z
 const doctorInputSchema = z.object({}).strict();
 
 type GeneratedImageResult = Awaited<ReturnType<typeof cropImage>>;
+type ImageToolResult = GeneratedImageResult | Awaited<ReturnType<typeof reviseAnnotation>>;
 
 interface PreviewPayload {
   data: string;
+  fallbackReason?: string | undefined;
   height: number;
+  mode: "changed-region" | "compact-overview";
   sizeBytes: number;
+  sourceRect?: { x: number; y: number; width: number; height: number } | undefined;
   width: number;
 }
 
 export interface AgentCalloutMcpServerOptions {
   fixedAllowedRoots?: string[];
+  /** Test-only hook used to exercise committed-output replacement before preview encoding. */
+  beforePreview?: ((result: { outputPath: string }) => void | Promise<void>) | undefined;
 }
 
 interface RootAuthority {
@@ -249,30 +330,47 @@ async function safeToolCall(operation: () => Promise<CallToolResult>): Promise<C
 }
 
 async function createBoundedPreview(
-  result: GeneratedImageResult,
+  result: ImageToolResult,
   requestedRoots: string[]
 ): Promise<PreviewPayload> {
   const temporaryRoot = await mkdtemp(join(tmpdir(), "agent-callout-mcp-preview-"));
   try {
     const roots = [...requestedRoots, temporaryRoot];
     const allowedRoots = [...new Set(roots.map((root) => resolve(root)))];
+    const review = "review" in result ? result.review : undefined;
+    const sourceRect = review?.mode === "changed-region" ? review.sourceRect : undefined;
+    const mode = sourceRect === undefined ? "compact-overview" : "changed-region";
 
     for (const size of PREVIEW_SIZES) {
-      const outputPath = join(temporaryRoot, `preview-${size}.png`);
+      const outputPath = join(temporaryRoot, `preview-${mode}-${size}.png`);
       const preview = await createImagePreview({
         inputPath: result.outputPath,
         outputPath,
         maxWidth: size,
         maxHeight: size,
+        ...(sourceRect === undefined ? {} : { sourceRect }),
         allowedRoots
       });
+      if (
+        preview.inputSha256 !== result.outputSha256 ||
+        Array.isArray(preview.originalDimensions) ||
+        preview.originalDimensions.width !== result.outputDimensions.width ||
+        preview.originalDimensions.height !== result.outputDimensions.height
+      ) {
+        throw new Error("Preview input no longer matches the committed output hash or dimensions.");
+      }
       const bytes = await readFile(preview.outputPath);
       if (bytes.byteLength <= MAX_PREVIEW_BYTES) {
         return {
           data: bytes.toString("base64"),
+          ...(review?.fallbackReason === undefined
+            ? {}
+            : { fallbackReason: review.fallbackReason }),
           width: preview.outputDimensions.width,
           height: preview.outputDimensions.height,
-          sizeBytes: bytes.byteLength
+          sizeBytes: bytes.byteLength,
+          mode,
+          ...(sourceRect === undefined ? {} : { sourceRect })
         };
       }
     }
@@ -283,10 +381,29 @@ async function createBoundedPreview(
 }
 
 async function imageToolResult(
-  result: GeneratedImageResult,
-  allowedRoots: string[]
+  result: ImageToolResult,
+  allowedRoots: string[],
+  beforePreview?: (result: { outputPath: string }) => void | Promise<void>
 ): Promise<CallToolResult> {
+  if ("review" in result && result.review.mode === "none") {
+    return {
+      content: [
+        textContent({
+          ...result,
+          preview: {
+            available: false,
+            mode: "none",
+            fallbackReason: result.review.fallbackReason,
+            message:
+              "Preview was suppressed because this revision may reveal pixels previously covered by blur or redact. Review the saved local output under the applicable privacy policy."
+          }
+        })
+      ],
+      isError: false
+    };
+  }
   try {
+    await beforePreview?.(result);
     const preview = await createBoundedPreview(result, allowedRoots);
     return {
       content: [
@@ -294,12 +411,19 @@ async function imageToolResult(
           ...result,
           preview: {
             available: true,
-            mode: "compact-overview",
+            mode: preview.mode,
             detail: "low",
             width: preview.width,
             height: preview.height,
             sizeBytes: preview.sizeBytes,
-            fineDetailHint: "Crop the saved output when small text or exact placement needs review."
+            ...(preview.sourceRect === undefined ? {} : { sourceRect: preview.sourceRect }),
+            ...(preview.fallbackReason === undefined
+              ? {}
+              : { fallbackReason: preview.fallbackReason }),
+            fineDetailHint:
+              preview.mode === "changed-region"
+                ? "This image shows only the changed region; open the saved output to review global layout."
+                : "Crop the saved output when small text or exact placement needs review."
           }
         }),
         {
@@ -308,23 +432,33 @@ async function imageToolResult(
           mimeType: "image/png",
           _meta: {
             "codex/imageDetail": "low",
-            "agent-callout/previewMode": "compact-overview",
+            "agent-callout/previewMode": preview.mode,
             "agent-callout/previewWidth": preview.width,
             "agent-callout/previewHeight": preview.height,
-            "agent-callout/previewBytes": preview.sizeBytes
+            "agent-callout/previewBytes": preview.sizeBytes,
+            ...(preview.sourceRect === undefined
+              ? {}
+              : { "agent-callout/sourceRect": preview.sourceRect })
           }
         }
       ],
       isError: false
     };
-  } catch (error) {
+  } catch {
+    const mode =
+      "review" in result && result.review.mode === "changed-region"
+        ? "changed-region"
+        : "compact-overview";
     return {
       content: [
         textContent({
           ...result,
           preview: {
             available: false,
-            message: `Output was written successfully, but its MCP preview failed: ${errorMessage(error)}`
+            mode,
+            fallbackReason: "encoding-failed",
+            message:
+              "Output was written successfully, but its preview could not be encoded and verified safely."
           }
         })
       ],
@@ -334,7 +468,7 @@ async function imageToolResult(
 }
 
 export const SERVER_INSTRUCTIONS = [
-  "Inspect the screenshot before annotating it. If a target is uncertain, crop the relevant area and inspect it again. Validate the AnnotationSpec, render the annotation, and examine the returned compact overview. Crop the saved output for small text or exact placement instead of repeatedly requesting a full-image high-detail preview. For a committed annotate sidecar, use revise_annotation with stable-ID edits instead of deleting files or rewriting the whole spec. Return the final absolute output path and Markdown reference only after visual review.",
+  "Inspect the screenshot before annotating it. If a target is uncertain, crop the relevant area and inspect it again. Validate the AnnotationSpec, render the annotation, and examine the returned preview. A revision may return only its changed region with sourceRect metadata; use it for local overlap and text checks, and open the saved output only when global layout still needs review. Avoid an extra crop when the changed-region preview is already sufficient. Use inspect_annotation_sidecar for a path-free integrity/inventory summary when handing an existing sidecar to another AI; it does not verify the original input bytes. For a committed annotate sidecar, use revise_annotation with stable-ID edits instead of deleting files or rewriting the whole spec. Return the final absolute output path and Markdown reference only after visual review.",
   "Blur is visual weakening only. Use redact for secrets that require irreversible opaque pixel replacement. Never claim an image was visually checked when the client omitted ImageContent; use the absolute path as a fallback and say what remains unverified."
 ].join(" ");
 
@@ -364,6 +498,28 @@ export function createAgentCalloutMcpServer(options: AgentCalloutMcpServerOption
       safeToolCall(async () => {
         const allowedRoots = await rootAuthority.roots();
         return structuredToolResult(await inspectImage(inputPath, { allowedRoots }));
+      })
+  );
+
+  server.registerTool(
+    "inspect_annotation_sidecar",
+    {
+      title: "Inspect annotation sidecar",
+      description:
+        "Validate an annotate sidecar, paired output, and parent chain; return a small path-free summary without image content.",
+      inputSchema: inspectSidecarInputSchema,
+      outputSchema: sidecarSummaryOutputSchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ sidecarPath }) =>
+      safeToolCall(async () => {
+        const allowedRoots = await rootAuthority.roots();
+        return structuredToolResult(await inspectAnnotationSidecar({ sidecarPath, allowedRoots }));
       })
   );
 
@@ -412,7 +568,7 @@ export function createAgentCalloutMcpServer(options: AgentCalloutMcpServerOption
           ...(outputPath === undefined ? {} : { outputPath }),
           allowedRoots
         });
-        return imageToolResult(result, allowedRoots);
+        return imageToolResult(result, allowedRoots, options.beforePreview);
       })
   );
 
@@ -421,7 +577,7 @@ export function createAgentCalloutMcpServer(options: AgentCalloutMcpServerOption
     {
       title: "Revise annotation",
       description:
-        "Validate an annotate sidecar, create its next append-only .revN pair, and return a compact preview.",
+        "Validate an annotate sidecar, create its next append-only .revN pair, and return a changed-region preview when bounded.",
       inputSchema: reviseAnnotationInputSchema,
       annotations: {
         readOnlyHint: false,
@@ -439,7 +595,7 @@ export function createAgentCalloutMcpServer(options: AgentCalloutMcpServerOption
           ...(inputPath === undefined ? {} : { inputPath }),
           allowedRoots
         });
-        return imageToolResult(result, allowedRoots);
+        return imageToolResult(result, allowedRoots, options.beforePreview);
       })
   );
 
@@ -466,7 +622,7 @@ export function createAgentCalloutMcpServer(options: AgentCalloutMcpServerOption
           ...(outputPath === undefined ? {} : { outputPath }),
           allowedRoots
         });
-        return imageToolResult(result, allowedRoots);
+        return imageToolResult(result, allowedRoots, options.beforePreview);
       })
   );
 
@@ -506,7 +662,7 @@ export function createAgentCalloutMcpServer(options: AgentCalloutMcpServerOption
           ...(background === undefined ? {} : { background }),
           allowedRoots
         });
-        return imageToolResult(result, allowedRoots);
+        return imageToolResult(result, allowedRoots, options.beforePreview);
       })
   );
 
@@ -531,7 +687,8 @@ export function createAgentCalloutMcpServer(options: AgentCalloutMcpServerOption
           mcp: {
             maxPreviewBytes: MAX_PREVIEW_BYTES,
             maxPreviewDimension: PREVIEW_SIZES[0],
-            previewDetail: "low"
+            previewDetail: "low",
+            revisionPreviewMode: "changed-region-when-bounded"
           }
         })
       )

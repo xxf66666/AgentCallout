@@ -10,7 +10,7 @@
       "name": "agent-callout",
       "source": "./plugins/agent-callout",
       "description": "Give AI agents a pen for existing screenshots.",
-      "version": "0.1.3",
+      "version": "0.2.0",
       "author": {
         "name": "AgentCallout contributors"
       },

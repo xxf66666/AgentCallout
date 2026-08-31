@@ -422,3 +422,17 @@ Every revision is rendered from the original image and written as the next `.rev
 One transaction accepts 1–400 edits. A parent sidecar is limited to 10 MiB; one working copy supports at most 255 revisions/256 sidecars and a 512 MiB cumulative sidecar+output chain budget. The valid, read-back-verified JSON sidecar is published last as the commit marker; this is not a power-loss-atomic two-file transaction. Dead-process residue is cleaned only when lock token, lineage, parent, paths and hashes prove ownership. A committed result can separately return `recoveryWarnings` when post-commit lock/temp cleanup needs recovery.
 
 The lock coordinates one sidecar directory. Copying the whole lineage elsewhere creates an independent working copy that can fork. A flattened PNG alone cannot tell another AI which pixels are annotations; pass the versioned sidecar with the PNG. Reading that JSON needs no AgentCallout installation, while validation, re-rendering and further revisions do.
+
+### Revision review result
+
+The transient `review` result does not change the sidecar or renderer:
+
+- `changed-region` returns one crop covering every actual changed RGBA pixel together with directly touched annotations and any untargeted annotation whose auto-layout geometry moved. `sourceRect` is expressed in full-output pixels; the crop proves only local review.
+- `compact-overview` retains the 512px/64 KiB low-detail full output when edits are dispersed, exceed half the canvas, affect a global spotlight, lack reliable geometry, cannot reproduce the parent output with the current renderer, or the direct parent/revised spec contains blur/redact.
+- `none` returns no ImageContent when an existing blur/redact annotation is removed or any of its fields change. This avoids automatically transmitting pixels that may have become newly readable.
+
+Each MCP result contains at most one preview image. Focus and compact-overview encoding failures do not undo an already committed revision; they return `preview.available=false`, `fallbackReason: "encoding-failed"`, and the full local output path.
+
+### Safe sidecar summary
+
+`inspectAnnotationSidecar`, `agent-callout inspect-sidecar`, and MCP `inspect_annotation_sidecar` validate the strict manifest, paired output and complete parent chain without opening the original input. The result is a path/text/hash-free summary of at most 4 KiB: versions, output dimensions, counts by annotation type, identity alignment of the resolved inventory, revision number/depth and coordination boundary, warning count, integrity states, blur/redact flags, and flattened-PNG portability facts. It deliberately excludes annotation IDs/text/style/resolved geometry, raw warnings, paths/Markdown, hashes/lineage/edits, renderer/font metadata and ImageContent. The original input is therefore reported as `record-only`, never “verified.”

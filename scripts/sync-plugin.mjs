@@ -27,6 +27,14 @@ const marketplaceEntry = marketplace.plugins?.find((entry) => entry.name === "ag
 if (marketplaceEntry === undefined) {
   throw new Error("AgentCallout is missing from the repository marketplace.");
 }
+const rendererVersion = await versionFromText(
+  path.join(repositoryRoot, "src", "renderer", "index.ts"),
+  /RENDERER_VERSION\s*=\s*"([^"]+)"/u,
+  "renderer"
+);
+if (!/^\d+\.\d+\.\d+$/u.test(rendererVersion)) {
+  throw new Error(`Renderer version is not semantic: ${rendererVersion}`);
+}
 
 const versionRecords = {
   package: rootPackage.version,
@@ -42,11 +50,6 @@ const versionRecords = {
     path.join(repositoryRoot, "src", "index.ts"),
     /AGENT_CALLOUT_VERSION\s*=\s*"([^"]+)"/u,
     "core"
-  ),
-  renderer: await versionFromText(
-    path.join(repositoryRoot, "src", "renderer", "index.ts"),
-    /RENDERER_VERSION\s*=\s*"([^"]+)"/u,
-    "renderer"
   ),
   skill: await versionFromText(
     path.join(pluginRoot, "skills", "agent-callout", "SKILL.md"),
@@ -76,4 +79,6 @@ for (const [sourceRelative, destinationRelative] of copies) {
   await copyFile(source, destination);
 }
 
-process.stdout.write(`Synced AgentCallout ${rootPackage.version} runtime into the plugin.\n`);
+process.stdout.write(
+  `Synced AgentCallout ${rootPackage.version} runtime (renderer ${rendererVersion}) into the plugin.\n`
+);
