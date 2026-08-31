@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-- 阶段：MVP 已完成；0.1.3 功能、安装与双客户端验收完成，正在固化标签
+- 阶段：MVP 与 0.1.3 已发布；开始 0.2 低 token 聚焦预览/sidecar 摘要迭代
 - GitHub：`https://github.com/xxf66666/AgentCallout`（公开仓库，`main` 已推送）
 - 本地分支：`main`
 - 阻塞：主路径无；Codex 可选 Skills-only Marketplace 0.1.3 更新受客户端固定 30 秒 clone 超时影响
@@ -53,10 +53,12 @@
 - [x] Claude Plugin 0.1.2→0.1.3 更新成功；真实 rev1 视觉否决、局部 crop、rev2 修正并确认中文/无遮挡
 - [x] Codex 全局 MCP 0.1.3 完成 rev1 视觉否决、rev2 修正并确认中文/无遮挡
 - [x] Node 20.10 构建后 CLI 完成 annotate→revise；Node 20.19 revision/MCP 28 tests 通过
+- [x] 创建并推送 `v0.1.3` annotated tag（release commit `7016356`）
 
 ## 进行中
 
-- [ ] 提交并推送 0.1.3 验收证据，创建/推送 `v0.1.3` 标签
+- [ ] 设计并实现 touched-ID 变更区域聚焦预览，减少 revision 后额外 crop
+- [ ] 增加只读 sidecar 校验/紧凑 AI 摘要入口
 
 ## 待完成
 
@@ -90,3 +92,4 @@
 | 2026-08-31 | Claude Code 2.1.251 真实修订         | Plugin 0.1.3；rev1 判定遮挡并 crop；rev2 left 后确认中文清晰、按钮无遮挡                              |
 | 2026-08-31 | Codex 可选 Skill 0.1.3               | manifest/Skill 本地校验通过；Git marketplace checkout 100% 后仍因客户端 30 秒 clone timeout 判失败    |
 | 2026-08-31 | Node 20 迭代回归                     | 20.10 doctor/self-test + CLI annotate/revise；20.19 revision/MCP 28 tests 全通过                      |
+| 2026-08-31 | v0.1.3 发布                          | 验收文档 commit `7016356`；annotated tag `v0.1.3` 已推送 GitHub                                       |
