@@ -25,7 +25,7 @@ const customOutdir = buildArguments.includes("--outdir");
 const outdir = outputDirectory(buildArguments);
 await mkdir(outdir, { recursive: true });
 await Promise.all(
-  ["cli.js.map", "mcp.js.map", "index.js.map"].map((file) =>
+  ["cli.js.map", "mcp.js.map", "index.js.map", "editor.js.map"].map((file) =>
     rm(join(outdir, file), { force: true })
   )
 );
@@ -67,7 +67,21 @@ await build({
   entryPoints: { index: "src/index.ts" }
 });
 
-for (const file of ["cli.js", "mcp.js", "index.js"]) {
+await build({
+  absWorkingDir: repositoryRoot,
+  bundle: true,
+  charset: "utf8",
+  entryPoints: { editor: "src/editor/client.ts" },
+  format: "iife",
+  logLevel: "info",
+  minifyWhitespace: true,
+  outdir,
+  platform: "browser",
+  sourcemap: false,
+  target: "es2020"
+});
+
+for (const file of ["cli.js", "mcp.js", "index.js", "editor.js"]) {
   const outputPath = join(outdir, file);
   const source = await readFile(outputPath, "utf8");
   await writeFile(outputPath, source.replace(/[ \t]+$/gmu, ""), "utf8");
