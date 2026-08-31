@@ -1,6 +1,6 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 import sharp from "sharp";
@@ -14,6 +14,7 @@ import {
   inspectImage,
   validateSpecForImage
 } from "../index.js";
+import { startRedactionEditor } from "../editor/server.js";
 import { startStdioMcpServer } from "../mcp/server.js";
 
 export interface CliWritable {
@@ -59,6 +60,12 @@ interface ContactSheetOptions extends OutputOptions {
 interface DoctorOptions {
   json?: boolean;
   selfTest?: boolean;
+}
+
+interface EditOptions {
+  output?: string;
+  project?: string;
+  json?: boolean;
 }
 
 interface Rect {
@@ -438,7 +445,40 @@ export function createCliProgram(io: CliIo = defaultIo): Command {
         ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
         ...(allowedRoots === undefined ? {} : { allowedRoots })
       });
+
       writeResult(io, result, options, () => formatGenerated("Crop", result));
+    });
+
+  program
+    .command("edit <input>")
+    .description("Start a localhost editor for movable, resizable opaque redactions.")
+    .option("-o, --output <path>", "Output PNG path (must not already exist)")
+    .option("-p, --project <path>", "Editable redaction project JSON path")
+    .option("--json", "Write the editor URL as JSON")
+    .action(async (input: string, options: EditOptions) => {
+      const absoluteInput = resolve(input);
+      const inputDirectory = dirname(absoluteInput);
+      const inputName = basename(absoluteInput);
+      const extensionIndex = inputName.lastIndexOf(".");
+      const stem = extensionIndex > 0 ? inputName.slice(0, extensionIndex) : inputName;
+      const session = await startRedactionEditor({
+        inputPath: absoluteInput,
+        outputPath:
+          options.output === undefined
+            ? join(inputDirectory, `${stem}.redacted.png`)
+            : options.output,
+        projectPath:
+          options.project === undefined
+            ? join(inputDirectory, `${stem}.agentcallout.project.json`)
+            : options.project
+      });
+      writeResult(io, { url: session.url }, options, () => {
+        return [
+          "AgentCallout redaction editor is running locally.",
+          `Open: ${session.url}`,
+          "Press Ctrl+C in this terminal when you are done."
+        ].join("\n");
+      });
     });
 
   addOutputOptions(
