@@ -82,6 +82,35 @@ Agent 会检查图片、必要时放大局部、生成批注、查看结果，�
 
 原图默认不会被覆盖。
 
+如果 Agent 需要调整一份已经提交的批注，它会从可信 sidecar 创建不可覆盖的新版本：
+
+- `screenshot.annotated.rev1.png/.json`、`rev2`、`rev3`……按父链递增；
+- `add`、`set`、`remove` 按稳定 ID 有序执行，`set` 是完整替换，不是字段合并；
+- 每次都从原图重渲染，旧 PNG、JSON 和原图不会被改写；
+- 只有存在且完整校验通过的 JSON sidecar 才是提交标志。PNG 已发布但 sidecar 未成功时不算已提交，也不能把双文件发布描述为断电级原子事务。
+- 若版本已提交、但 lock/temp 清理不完整，结果会单独返回 `recoveryWarnings`；这类告警不能当成普通排版 warning 忽略。
+
+MCP 默认返回最长边 512 px、最多 64 KiB 的低细节总览，旨在通常降低整张截图反复进入模型的 token 消耗；实际成本仍取决于宿主和模型。总览看不清小字或精确位置时，Agent 应裁剪已保存的输出局部再看，而不是反复请求整图高细节。sidecar、hash 和成功返回仍不能代替视觉复核。
+
+## 把结果交给另一个 AI
+
+不要只交一张已经“压平”的 PNG。单看像素，任何 AI 都无法可靠判断哪些内容来自原图、哪些是后加批注。应同时交付：
+
+- `*.annotated.png`：给人和视觉模型看的结果；
+- 同名 `*.annotated.json`：机器可读的批注层，包含原图/输出 hash、AnnotationSpec、稳定 ID、解析后位置、warning 和修订父链；
+- 需要复核来源时，再附原图。原图含秘密时先按安全策略处理，不要为了做 diff 而泄露它。
+
+另一个 AI **不必安装 AgentCallout 才能读 JSON**；sidecar 是普通、版本化的 JSON。只有在需要校验 hash、重渲染、继续修订或生成预览时，才需要 CLI/MCP。Sidecar 不是签名或加密证明，也可能包含批注文字和文件关联信息，分享前应按敏感文档检查。
+
+修订 lock 只协调 sidecar 所在目录。复制完整 PNG/JSON lineage 到另一个目录会创建可独立继续、也可能分叉的工作副本；它不是跨目录或跨机器的全局 head。
+
+Markdown 交付可同时链接两份文件：
+
+```markdown
+![批注结果](./screenshot.annotated.png)
+[机器可读批注层](./screenshot.annotated.json)
+```
+
 ## 模糊和安全遮挡不是一回事
 
 - `blur`（模糊）：只是让内容不易看清，不能保证无法恢复。
@@ -110,6 +139,7 @@ Agent 会检查图片、必要时放大局部、生成批注、查看结果，�
 # 更新
 claude plugin marketplace update agent-callout
 claude plugin update agent-callout@agent-callout
+# 更新后新开会话，再运行 doctor
 
 # 卸载
 claude plugin uninstall agent-callout@agent-callout
@@ -123,6 +153,8 @@ claude plugin marketplace remove agent-callout
 ```powershell
 # 更新
 npm install --global --install-links=true git+https://github.com/xxf66666/AgentCallout.git
+agent-callout --version
+# 更新后新开 Codex 会话，再运行 doctor
 
 # 卸载
 codex mcp remove agent-callout
@@ -138,20 +170,40 @@ npm uninstall --global agent-callout
 agent-callout doctor --self-test --json
 agent-callout inspect .\screenshot.png --json
 agent-callout annotate .\screenshot.png --spec .\annotations.json --output .\screenshot.annotated.png
+agent-callout revise .\screenshot.annotated.json --edits .\edits.json
 agent-callout --help
 ```
+
+`edits.json` 是严格数组。例如：
+
+```json
+[
+  {
+    "op": "set",
+    "id": "save-button",
+    "annotation": {
+      "id": "save-button",
+      "type": "rectangle",
+      "rect": { "x": 120, "y": 80, "width": 160, "height": 48 }
+    }
+  }
+]
+```
+
+`add` 必须带新 ID，可用 `afterId` 指定插入位置；`remove` 只接收现有 ID。若原图移动，追加 `--input <新路径>`，工具会核对父 sidecar 记录的 SHA-256。命令没有 `--output`、`--overwrite` 或修订号参数。
 
 </details>
 
 <details>
 <summary><strong>给开发者：MCP、Skill 和 AnnotationSpec</strong></summary>
 
-MCP 提供 6 个工具：
+MCP 提供 7 个工具：
 
 - `doctor`：检查运行环境。
 - `inspect_image`：读取图片尺寸、格式和哈希。
 - `validate_annotation_spec`：检查批注参数和坐标。
 - `annotate_image`：生成批注图和预览。
+- `revise_annotation`：从可信 annotate sidecar 按稳定 ID 创建下一版本并返回预览。
 - `crop_image`：裁剪局部，便于 Agent 放大检查。
 - `create_contact_sheet`：把多张图片合成联系表。
 
@@ -186,7 +238,7 @@ codex plugin marketplace remove agent-callout
 | Codex CLI 0.151.0           | 已完成真实安装和 Agent 调用 |
 | macOS、Linux                | 尚未完成项目级验证          |
 
-中文和英文文字、PNG/JPEG/WebP 及 52 项自动化测试已验证。当前 MVP 不包含 OCR 自动找字、浏览器 DOM 定位、系统截图快捷键、GUI、录屏或视频编辑。
+中文和英文文字、PNG/JPEG/WebP、版本化修订及自动化安全矩阵已在 Windows/Node 24 的 0.1.3 当前工作树验证；0.1.3 的全局 GitHub 安装和真实 Claude/Codex 修订预览仍以[兼容性记录](docs/compatibility.md)为准，不能从旧版 annotate 验收外推。当前 MVP 不包含 OCR 自动找字、浏览器 DOM 定位、系统截图快捷键、GUI、录屏或视频编辑。
 
 下一阶段优先改进密集说明框的自动排版，并评估可选的 OCR/DOM 定位适配器，详见[路线图](docs/roadmap.md)。
 

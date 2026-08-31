@@ -59,11 +59,11 @@ interface ResolvedNumberedExample {
 const UNAFFECTED_BASELINE_HASHES = {
   "ui-bug": {
     output: "bb3d3b9faf8c249b3fefafb44b74c8a579c13868a2a191d544cf0511c5a46bf6",
-    sidecar: "212de7d22b7ed2f799e55a66482d49840a562fc44a390de6aea8407112d02bcd"
+    sidecar: "c5ac3712fbf7a2d635279313f553a9848b6aa37cb8295425d12bc57504216d0a"
   },
   privacy: {
     output: "c3e52a99d622a3c5cad5eda7c7a0e86bcca0d5e5a543e29f3961476032c727b6",
-    sidecar: "dea550c2d1972453b744670686b3335bc576498744e47119e2a1366151acaedb"
+    sidecar: "a9f8a532734fd01ac6ad827c5cf5207076381dda6ec543fd1846bb936cdfe3f2"
   }
 } as const;
 
@@ -413,7 +413,7 @@ for (const definition of definitions) {
   const isVerifiedWindowsBaseline =
     process.platform === "win32" &&
     second.renderer.name === "sharp-svg-pango" &&
-    second.renderer.version === "0.1.2" &&
+    second.renderer.version === "0.1.3" &&
     second.renderer.sharp === "0.35.4" &&
     second.renderer.libvips === "8.18.6" &&
     second.renderer.font.sha256 === BUNDLED_FONT_SHA256;

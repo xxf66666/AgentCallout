@@ -13,7 +13,7 @@ import {
 } from "../layout/index.js";
 
 export const RENDERER_NAME = "sharp-svg-pango";
-export const RENDERER_VERSION = "0.1.2";
+export const RENDERER_VERSION = "0.1.3";
 export const BUNDLED_FONT_FILENAME = "NotoSansCJKsc-Regular.otf";
 export const BUNDLED_FONT_SHA256 =
   "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b";

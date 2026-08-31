@@ -127,6 +127,78 @@ describe("AgentCallout CLI", () => {
     expect(capture.stdout.value).toContain(
       `agent-callout annotate screenshot.png --spec-json '{"version":"1.1","annotations":[]}'`
     );
+    expect(capture.stdout.value).toContain(
+      "agent-callout revise screenshot.annotated.json --edits edits.json"
+    );
+  });
+
+  test("revise accepts ordered edits only and reports stale-parent conflicts by code", async () => {
+    const base = await annotateImage({
+      inputPath,
+      outputPath: join(directory, "cli-revision-base.png"),
+      spec: {
+        version: "1.1",
+        annotations: [
+          {
+            id: "cli-box",
+            type: "rectangle",
+            rect: { x: 8, y: 8, width: 30, height: 20 }
+          }
+        ]
+      },
+      allowedRoots: [directory]
+    });
+    const editsPath = join(directory, "revision-edits.json");
+    await writeFile(editsPath, JSON.stringify([{ op: "remove", id: "cli-box" }]));
+    const revised = captureIo();
+    expect(
+      await runCli(
+        [
+          "node",
+          "agent-callout",
+          "revise",
+          base.sidecarPath,
+          "--edits",
+          editsPath,
+          "--allow-root",
+          directory,
+          "--json"
+        ],
+        revised.io
+      )
+    ).toBe(0);
+    expect(revised.stderr.value).toBe("");
+    const result = JSON.parse(revised.stdout.value) as {
+      outputPath: string;
+      sidecarPath: string;
+      revision: { number: number };
+    };
+    expect(result.outputPath).toBe(join(directory, "cli-revision-base.rev1.png"));
+    expect(result.revision.number).toBe(1);
+    expect(JSON.parse(await readFile(result.sidecarPath, "utf8"))).toMatchObject({
+      annotationSpec: { annotations: [] },
+      revision: { number: 1 }
+    });
+
+    const stale = captureIo();
+    expect(
+      await runCli(
+        [
+          "node",
+          "agent-callout",
+          "revise",
+          base.sidecarPath,
+          "--edits-json",
+          JSON.stringify([{ op: "remove", id: "cli-box" }]),
+          "--allow-root",
+          directory,
+          "--json"
+        ],
+        stale.io
+      )
+    ).toBe(1);
+    expect(stale.stdout.value).toBe("");
+    expect(stale.stderr.value).toContain("[REVISION_CONFLICT]");
   });
 
   test("validate and annotate exercise AnnotationSpec 1.1 through the real CLI", async () => {

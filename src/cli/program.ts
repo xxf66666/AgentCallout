@@ -7,11 +7,13 @@ import sharp from "sharp";
 
 import {
   AGENT_CALLOUT_VERSION,
+  AgentCalloutRevisionError,
   annotateImage,
   createContactSheet,
   cropImage,
   getCoreDoctorReport,
   inspectImage,
+  reviseAnnotation,
   validateSpecForImage
 } from "../index.js";
 import { startStdioMcpServer } from "../mcp/server.js";
@@ -41,6 +43,12 @@ interface OutputOptions extends CommonOptions {
 }
 
 interface AnnotateOptions extends SpecOptions, OutputOptions {}
+
+interface RevisionOptions extends CommonOptions {
+  edits?: string;
+  editsJson?: string;
+  input?: string;
+}
 
 interface CropOptions extends OutputOptions {
   coordinateSpace: "pixel" | "normalized";
@@ -140,6 +148,9 @@ function parseRect(value: string): Rect {
 }
 
 function errorMessage(error: unknown): string {
+  if (error instanceof AgentCalloutRevisionError) {
+    return `[${error.code}] ${error.message}`;
+  }
   if (error instanceof Error && error.message.trim() !== "") {
     return error.message;
   }
@@ -188,6 +199,22 @@ async function loadSpec(options: SpecOptions): Promise<unknown> {
   }
 }
 
+async function loadRevisionEdits(options: RevisionOptions): Promise<unknown> {
+  if ((options.edits === undefined) === (options.editsJson === undefined)) {
+    throw new Error("Provide exactly one of --edits <file> or --edits-json <json>.");
+  }
+
+  const source =
+    options.editsJson ?? (await readFile(resolve(options.edits as string), { encoding: "utf8" }));
+  try {
+    return JSON.parse(source);
+  } catch (error) {
+    const origin =
+      options.editsJson === undefined ? resolve(options.edits as string) : "--edits-json";
+    throw new Error(`Could not parse revision edits from ${origin}: ${errorMessage(error)}`);
+  }
+}
+
 function formatDimensions(value: unknown): string {
   if (value !== null && typeof value === "object") {
     const record = value as Record<string, unknown>;
@@ -232,13 +259,15 @@ function formatInspection(result: Awaited<ReturnType<typeof inspectImage>>): str
 function formatGenerated(action: string, result: Awaited<ReturnType<typeof cropImage>>): string {
   const value = result as unknown as Record<string, unknown>;
   const warnings = Array.isArray(value.warnings) ? value.warnings : [];
+  const recoveryWarnings = Array.isArray(value.recoveryWarnings) ? value.recoveryWarnings : [];
   return [
     `${action} complete.`,
     `Output: ${scalarText(value.outputPath)}`,
     `Sidecar: ${scalarText(value.sidecarPath)}`,
     `Markdown: ${scalarText(value.markdown)}`,
     `SHA-256: ${scalarText(value.outputSha256)}`,
-    ...warningLines(warnings)
+    ...warningLines(warnings),
+    ...recoveryWarnings.map((warning) => `Recovery warning: ${scalarText(warning)}`)
   ].join("\n");
 }
 
@@ -410,6 +439,24 @@ export function createCliProgram(io: CliIo = defaultIo): Command {
     writeResult(io, result, options, () => formatGenerated("Annotation", result));
   });
 
+  addCommonOptions(
+    program
+      .command("revise <parentSidecar>")
+      .description("Validate a sidecar and create its next append-only annotation revision.")
+      .option("--edits <file>", "Ordered add/set/remove edits JSON file")
+      .option("--edits-json <json>", "Inline ordered add/set/remove edits JSON")
+      .option("--input <path>", "Moved or basename-only original with the parent-recorded SHA-256")
+  ).action(async (parentSidecar: string, options: RevisionOptions) => {
+    const allowedRoots = resolvedRoots(options);
+    const result = await reviseAnnotation({
+      parentSidecarPath: parentSidecar,
+      edits: await loadRevisionEdits(options),
+      ...(options.input === undefined ? {} : { inputPath: options.input }),
+      ...(allowedRoots === undefined ? {} : { allowedRoots })
+    });
+    writeResult(io, result, options, () => formatGenerated("Revision", result));
+  });
+
   addOutputOptions(
     program.command("crop <input>").description("Crop an image for close inspection.")
   )
@@ -504,7 +551,7 @@ export function createCliProgram(io: CliIo = defaultIo): Command {
 
   program.addHelpText(
     "after",
-    `\nAnnotationSpec:\n  Use AnnotationSpec 1.1 for new specs. Replay existing 1.0 sidecars unchanged when compatibility matters.\n\nExamples:\n  agent-callout inspect screenshot.png --json\n  agent-callout validate screenshot.png --spec annotations.json --json\n  agent-callout annotate screenshot.png --spec-json '{"version":"1.1","annotations":[]}'\n  agent-callout crop screenshot.png --rect 20,30,400,240 -o crop.png\n`
+    `\nAnnotationSpec:\n  Use AnnotationSpec 1.1 for new specs. Replay existing 1.0 sidecars unchanged when compatibility matters.\n\nExamples:\n  agent-callout inspect screenshot.png --json\n  agent-callout validate screenshot.png --spec annotations.json --json\n  agent-callout annotate screenshot.png --spec-json '{"version":"1.1","annotations":[]}'\n  agent-callout revise screenshot.annotated.json --edits edits.json\n  agent-callout crop screenshot.png --rect 20,30,400,240 -o crop.png\n`
   );
   return program;
 }

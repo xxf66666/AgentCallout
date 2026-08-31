@@ -58,7 +58,7 @@ describe("AgentCallout MCP server", () => {
     await rm(directory, { recursive: true, force: true });
   });
 
-  test("initializes with workflow instructions and exactly six strict tools", async () => {
+  test("initializes with workflow instructions and exactly seven strict tools", async () => {
     expect(client.getInstructions()).toContain("Inspect the screenshot before annotating");
     const listed = await client.listTools();
     expect(listed.tools.map((tool) => tool.name).sort()).toEqual([
@@ -67,19 +67,31 @@ describe("AgentCallout MCP server", () => {
       "crop_image",
       "doctor",
       "inspect_image",
+      "revise_annotation",
       "validate_annotation_spec"
     ]);
 
     for (const tool of listed.tools) {
       expect(tool.inputSchema.additionalProperties).toBe(false);
       expect(tool.inputSchema.properties).not.toHaveProperty("allowedRoots");
-      if (["annotate_image", "create_contact_sheet", "crop_image"].includes(tool.name)) {
+      if (
+        ["annotate_image", "create_contact_sheet", "crop_image", "revise_annotation"].includes(
+          tool.name
+        )
+      ) {
         expect(tool.inputSchema.properties).not.toHaveProperty("overwrite");
+        expect(tool.inputSchema.properties).not.toHaveProperty("revisionNumber");
         expect(tool.outputSchema).toBeUndefined();
       } else {
         expect(tool.outputSchema?.type).toBe("object");
       }
     }
+
+    const revise = listed.tools.find((tool) => tool.name === "revise_annotation");
+    expect(revise?.inputSchema.properties).toHaveProperty("parentSidecarPath");
+    expect(revise?.inputSchema.properties).toHaveProperty("edits");
+    expect(revise?.inputSchema.properties).toHaveProperty("inputPath");
+    expect(revise?.inputSchema.properties).not.toHaveProperty("outputPath");
 
     const annotate = listed.tools.find((tool) => tool.name === "annotate_image");
     const advertisedSpec = JSON.stringify(annotate?.inputSchema.properties?.spec);
@@ -140,7 +152,7 @@ describe("AgentCallout MCP server", () => {
     expect(doctor.structuredContent).toMatchObject({
       ok: true,
       limits: { maxPixels: 40_000_000, maxAnnotations: 200 },
-      mcp: { maxPreviewBytes: 128 * 1024 }
+      mcp: { maxPreviewBytes: 64 * 1024, maxPreviewDimension: 512, previewDetail: "low" }
     });
   });
 
@@ -216,6 +228,76 @@ describe("AgentCallout MCP server", () => {
     });
   });
 
+  test("creates a strict versioned revision with preview and revision-specific errors", async () => {
+    const baseOutputPath = join(directory, "mcp-revision-base.png");
+    const base = (await client.callTool({
+      name: "annotate_image",
+      arguments: {
+        inputPath,
+        outputPath: baseOutputPath,
+        spec: {
+          version: "1.1",
+          annotations: [
+            {
+              id: "mcp-box",
+              type: "rectangle",
+              rect: { x: 10, y: 10, width: 30, height: 20 }
+            }
+          ]
+        }
+      }
+    })) as CallToolResult;
+    const baseText = base.content.find((item) => item.type === "text");
+    const baseResult = (baseText?.type === "text" ? JSON.parse(baseText.text) : undefined) as
+      { sidecarPath?: string } | undefined;
+    if (baseResult?.sidecarPath === undefined) throw new Error("Missing base sidecar path");
+
+    const revised = (await client.callTool({
+      name: "revise_annotation",
+      arguments: {
+        parentSidecarPath: baseResult.sidecarPath,
+        edits: [
+          {
+            op: "set",
+            id: "mcp-box",
+            annotation: {
+              id: "mcp-box",
+              type: "ellipse",
+              rect: { x: 12, y: 11, width: 34, height: 24 }
+            }
+          }
+        ]
+      }
+    })) as CallToolResult;
+    expect(revised.isError).not.toBe(true);
+    expect(revised.structuredContent).toBeUndefined();
+    expect(revised.content.some((item) => item.type === "image")).toBe(true);
+    const revisedText = revised.content.find((item) => item.type === "text");
+    const revisedResult = (
+      revisedText?.type === "text" ? JSON.parse(revisedText.text) : undefined
+    ) as { outputPath?: string; sidecarPath?: string; revision?: { number?: number } } | undefined;
+    expect(revisedResult?.revision?.number).toBe(1);
+    expect(revisedResult?.outputPath).toBe(join(directory, "mcp-revision-base.rev1.png"));
+    expect(JSON.parse(await readFile(revisedResult?.sidecarPath as string, "utf8"))).toMatchObject({
+      manifestVersion: "1.1",
+      annotationSpec: { annotations: [{ id: "mcp-box", type: "ellipse" }] },
+      revision: { number: 1 }
+    });
+
+    const stale = (await client.callTool({
+      name: "revise_annotation",
+      arguments: {
+        parentSidecarPath: baseResult.sidecarPath,
+        edits: [{ op: "remove", id: "mcp-box" }]
+      }
+    })) as CallToolResult;
+    expect(stale.isError).toBe(true);
+    const staleText = stale.content.find((item) => item.type === "text");
+    const payload = (staleText?.type === "text" ? JSON.parse(staleText.text) : undefined) as
+      { error?: { code?: string } } | undefined;
+    expect(payload?.error?.code).toBe("REVISION_CONFLICT");
+  });
+
   test("matches core numbered target/marker/label/leader geometry through MCP", async () => {
     const publicInputPath = join(directory, "mcp-public-input.png");
     await sharp({
@@ -288,14 +370,55 @@ describe("AgentCallout MCP server", () => {
     expect(manifest?.outputPath).toBe(outputPath);
     expect(typeof manifest?.sidecarPath).toBe("string");
     expect(typeof manifest?.markdown).toBe("string");
+    expect(manifest?.preview).toMatchObject({
+      available: true,
+      mode: "compact-overview",
+      detail: "low"
+    });
     expect(image?.type).toBe("image");
     if (image?.type !== "image") {
       throw new Error("Expected MCP image content");
     }
     expect(image.mimeType).toBe("image/png");
     const bytes = Buffer.from(image.data, "base64");
-    expect(bytes.byteLength).toBeLessThanOrEqual(128 * 1024);
+    expect(bytes.byteLength).toBeLessThanOrEqual(64 * 1024);
+    expect(image._meta).toMatchObject({
+      "codex/imageDetail": "low",
+      "agent-callout/previewMode": "compact-overview"
+    });
     expect(await sharp(bytes).metadata()).toMatchObject({ format: "png", width: 50, height: 40 });
+  });
+
+  test("large image results default to a 512px low-detail overview", async () => {
+    const largeInputPath = join(directory, "large-input.png");
+    const outputPath = join(directory, "large-output.png");
+    await sharp({
+      create: {
+        width: 1600,
+        height: 900,
+        channels: 4,
+        background: { r: 245, g: 245, b: 245, alpha: 1 }
+      }
+    })
+      .png()
+      .toFile(largeInputPath);
+    const result = (await client.callTool({
+      name: "annotate_image",
+      arguments: {
+        inputPath: largeInputPath,
+        outputPath,
+        spec: { version: "1.1", annotations: [] }
+      }
+    })) as CallToolResult;
+    const image = result.content.find((item) => item.type === "image");
+    if (image?.type !== "image") throw new Error("Expected compact MCP preview");
+    expect(image._meta).toMatchObject({ "codex/imageDetail": "low" });
+    expect(await sharp(Buffer.from(image.data, "base64")).metadata()).toMatchObject({
+      format: "png",
+      width: 512,
+      height: 288
+    });
+    expect(await sharp(outputPath).metadata()).toMatchObject({ width: 1600, height: 900 });
   });
 
   test("returns tool-level errors with isError instead of a successful error object", async () => {
@@ -356,6 +479,28 @@ describe("AgentCallout MCP server", () => {
       expect(text?.type === "text" ? text.text : "").toContain("overwrite");
       await expect(access(call.outputPath)).rejects.toThrow();
     }
+  });
+
+  test("never recommends the CLI-only overwrite switch after an MCP collision", async () => {
+    const outputPath = join(directory, "mcp-existing-output.png");
+    const arguments_ = {
+      inputPath,
+      outputPath,
+      spec: { version: "1.0", annotations: [] }
+    };
+    expect(
+      ((await client.callTool({ name: "annotate_image", arguments: arguments_ })) as CallToolResult)
+        .isError
+    ).not.toBe(true);
+    const collision = (await client.callTool({
+      name: "annotate_image",
+      arguments: arguments_
+    })) as CallToolResult;
+    expect(collision.isError).toBe(true);
+    const text = collision.content.find((item) => item.type === "text");
+    const message = text?.type === "text" ? text.text : "";
+    expect(message).not.toContain("pass overwrite: true");
+    expect(message).toContain("MCP does not expose overwrite authority");
   });
 
   test("returns an actionable error when a path is outside startup and client roots", async () => {

@@ -149,7 +149,7 @@ Numbered geometry is versioned without adding public input fields:
 
 The 1.1 sidecar records `target`, `marker` (including painted bounds), `label`, and `leader` (start, end, and exposed length). These are resolved output fields, not AnnotationSpec input fields; supplying `marker`, `label`, or `leader` in an input annotation is still rejected as an unknown field.
 
-Until the planned v0.1.3 renderer-version bump, this 1.1 numbered geometry is renderer-version-dependent. A pre-release 1.1 sidecar is not a promise of pixel-equivalent replay under a different renderer build: retain and check the sidecar's renderer/font metadata, then regenerate and visually review it. This caveat does not apply to the frozen 1.0 replay path.
+The marker-aware 1.1 numbered geometry is versioned with renderer 0.1.3. A sidecar is not a promise of pixel-equivalent replay under a different renderer build: retain and check its renderer/font metadata, then regenerate and visually review it. This caveat does not apply to the frozen 1.0 replay path.
 
 ### `highlight`
 
@@ -399,10 +399,26 @@ The canonical string is stable for semantically identical valid input regardless
 
 ## Migrating from 1.0
 
-Do not rewrite a stored 1.0 sidecar merely to adopt new colors; replay it as 1.0 when the old canonical and pixels matter. For a newly authored revision, change `version` to `"1.1"`, choose a preset only when the `docs-light` default is unsuitable, move shared dimensions into root `defaults`, and use `tone` for semantic color. Keep ordinary explanations non-red; use `danger` only for an actual error or risk. Use `classic-red` only when the legacy red visual is explicitly desired.
+Do not rewrite a stored 1.0 sidecar merely to adopt new colors; replay it as 1.0 when the old canonical and pixels matter. For a newly authored standalone 1.1 spec, change `version` to `"1.1"`, choose a preset only when the `docs-light` default is unsuitable, move shared dimensions into root `defaults`, and use `tone` for semantic color. Keep ordinary explanations non-red; use `danger` only for an actual error or risk. Use `classic-red` only when the legacy red visual is explicitly desired. The revision API below deliberately preserves the parent root version and cannot perform this migration.
 
-Version 1.0 has no `marker*` fields: a `numbered-callout` marker takes its outline from the resolved `strokeColor`, its fill from the resolved `backgroundColor`, and its number from the resolved `textColor`. Version 1.1 resolves those marker colors independently. When converting a custom 1.0 numbered callout and preserving its marker appearance matters, copy those former resolved values explicitly to `markerStrokeColor`, `markerFillColor`, and `markerTextColor`, respectively, in the 1.1 revision. Omit them when intentionally adopting the selected 1.1 preset/tone marker palette, and never add them to a 1.0 spec because 1.0 rejects those fields.
+Version 1.0 has no `marker*` fields: a `numbered-callout` marker takes its outline from the resolved `strokeColor`, its fill from the resolved `backgroundColor`, and its number from the resolved `textColor`. Version 1.1 resolves those marker colors independently. When converting a custom 1.0 numbered callout and preserving its marker appearance matters, copy those former resolved values explicitly to `markerStrokeColor`, `markerFillColor`, and `markerTextColor`, respectively, in the standalone migrated 1.1 spec. Omit them when intentionally adopting the selected 1.1 preset/tone marker palette, and never add them to a 1.0 spec because 1.0 rejects those fields.
 
 Plain `callout` layout keeps the existing candidate order and fixed leader gap in both versions. A 1.1 `numbered-callout` uses the same deterministic candidate scoring with a larger marker-aware footprint and boundary-to-boundary leader clearance; 1.0 retains the old numbered gap and paint order. `maxWidth` can still change wrapping and therefore the selected label position.
 
 Validate a spec before rendering, resolve it against the inspected image dimensions, retain its warnings, and save the canonical or sidecar representation needed for replay.
+
+## Revising a committed annotation
+
+`revise_annotation` changes only the `annotations` array of a trusted annotate sidecar. It accepts an ordered array of strict edits:
+
+- `{ "op": "add", "annotation": { ... } }` appends a complete annotation with a new explicit ID; optional `afterId` inserts it immediately after a current ID.
+- `{ "op": "set", "id": "...", "annotation": { ... } }` replaces the complete annotation at that position. The annotation must carry the same ID.
+- `{ "op": "remove", "id": "..." }` removes one current annotation.
+
+Unknown IDs, duplicate IDs, a second edit touching the same ID, no-op sets, unknown fields, and invalid final specs fail the whole transaction. The API deliberately has no root-spec patch, merge/JSON Patch, output path, overwrite switch, or caller-selected revision number.
+
+Every revision is rendered from the original image and written as the next `.revN.png/.json` pair. If a relative original moved, explicitly supply its new path; a basename-only record always requires the explicit path. SHA-256 must match the validated parent record. `manifestVersion: "1.1"` describes the sidecar revision envelope; it is independent of `AnnotationSpec.version`, which remains the parent root version. The `revision` block stores the number, lineage ID, parent sidecar/output/spec hashes, normalized edits, and edits hash so the canonical spec/edit chain can be replayed. Pixel-identical replay additionally requires the same input, renderer, font and platform.
+
+One transaction accepts 1–400 edits. A parent sidecar is limited to 10 MiB; one working copy supports at most 255 revisions/256 sidecars and a 512 MiB cumulative sidecar+output chain budget. The valid, read-back-verified JSON sidecar is published last as the commit marker; this is not a power-loss-atomic two-file transaction. Dead-process residue is cleaned only when lock token, lineage, parent, paths and hashes prove ownership. A committed result can separately return `recoveryWarnings` when post-commit lock/temp cleanup needs recovery.
+
+The lock coordinates one sidecar directory. Copying the whole lineage elsewhere creates an independent working copy that can fork. A flattened PNG alone cannot tell another AI which pixels are annotations; pass the versioned sidecar with the PNG. Reading that JSON needs no AgentCallout installation, while validation, re-rendering and further revisions do.

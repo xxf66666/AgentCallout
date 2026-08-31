@@ -58,7 +58,7 @@ For callouts, omit `placement` or use `auto` first. Other values are `top`, `rig
 
 For a 1.1 `numbered-callout`, keep `target` on the reviewed point or rectangle. The renderer separately resolves the label, attaches the marker immediately outside the label edge facing that target, and connects the painted marker boundary to the point or rectangular boundary. It reserves at least 24px of exposed leader when the canvas and occupied annotations permit. The sidecar records `target`, `marker`, `label`, and `leader`; these are audit output only and remain invalid as input fields. Version 1.0 deliberately retains its original target-centered marker and paint order.
 
-Until the planned v0.1.3 renderer-version bump, treat pre-release 1.1 numbered geometry as renderer-version-dependent. Check the sidecar renderer/font metadata and regenerate plus visually review under a changed renderer; do not claim cross-build pixel equivalence. Frozen 1.0 replay remains unchanged.
+The marker-aware 1.1 numbered geometry is versioned with renderer 0.1.3. Check sidecar renderer/font metadata and regenerate plus visually review under a changed renderer; do not claim cross-build pixel equivalence. Frozen 1.0 replay remains unchanged.
 
 ## Style without repetition
 
@@ -100,11 +100,46 @@ The built-in palette emits red only through `danger` and `classic-red`. Keep ord
 
 Replay a stored 1.0 spec as 1.0 when its canonical JSON or pixels matter; do not add 1.1-only fields to it. Version 1.0 has no `marker*` fields: a `numbered-callout` marker takes its outline from the resolved `strokeColor`, its fill from the resolved `backgroundColor`, and its number from the resolved `textColor`.
 
-Version 1.1 resolves marker colors independently. When authoring a 1.1 revision of a custom 1.0 numbered callout and preserving its marker appearance matters, copy those former resolved values to `markerStrokeColor`, `markerFillColor`, and `markerTextColor`, respectively. Omit the three fields when intentionally adopting the selected 1.1 preset/tone marker palette.
+Version 1.1 resolves marker colors independently. When authoring a standalone migrated 1.1 spec from a custom 1.0 numbered callout and preserving its marker appearance matters, copy those former resolved values to `markerStrokeColor`, `markerFillColor`, and `markerTextColor`, respectively. Omit the three fields when intentionally adopting the selected 1.1 preset/tone marker palette. `revise_annotation` preserves the parent root version and cannot perform this migration.
 
 ## Redact is the safety boundary
 
 `blur` is reversible visual weakening, not safe deletion. Use `redact` for credentials, tokens, identifiers, or anything that must not survive in output pixels. `redact.color` is opaque `#RRGGBB`. After all preset/default/tone/style resolution, redact still forces `fillColor` to that color and `opacity` to `1`; a local redact opacity other than `1` is rejected.
+
+## Safe versioned revisions
+
+Once `annotate_image` has committed a PNG and sidecar, modify it with `revise_annotation` instead of deleting files, overwriting output, or submitting a replacement root spec. The tool accepts:
+
+```json
+{
+  "parentSidecarPath": "C:\\work\\shot.annotated.json",
+  "edits": [
+    {
+      "op": "add",
+      "afterId": "save-button",
+      "annotation": {
+        "id": "save-note",
+        "type": "callout",
+        "target": { "x": 420, "y": 260, "width": 120, "height": 44 },
+        "text": "Save does not respond"
+      }
+    }
+  ]
+}
+```
+
+- `add` requires a new explicit annotation ID. Omit `afterId` to append, or name an annotation that exists at that point in the ordered edit sequence.
+- `set` requires both `id` and a complete `annotation` with the same ID. It replaces the whole annotation in place; it is not merge or JSON Patch.
+- `remove` contains only `op` and an existing `id`.
+- One transaction may not touch the same ID twice. Unknown IDs, duplicate IDs, missing IDs, no-op sets, unknown fields, or an invalid final AnnotationSpec reject the whole transaction.
+- Do not pass `outputPath`, `overwrite`, or `revisionNumber`; the next `.revN.png/.json` is derived from the committed head.
+- If the recorded relative original is missing, pass `inputPath` for the moved original. Basename-only records always require it. Different bytes fail with `INPUT_HASH_MISMATCH`; the tool never scans the disk to guess.
+
+The renderer always starts from the original image, not from the annotated parent PNG and never from `resolvedAnnotations`. The new sidecar records the parent hashes and normalized edits. `manifestVersion: "1.1"` is the revision envelope and does not change `AnnotationSpec.version`. Only a sidecar that exists and passes complete readback validation is the commit marker; a PNG without it is not a committed revision. A revision-aware reader can therefore reject a half-published pair, but this is not a power-loss-atomic two-file transaction.
+
+One transaction accepts 1–400 edits. Parent sidecars are limited to 10 MiB; one working copy supports 255 revisions/256 sidecars and a 512 MiB cumulative sidecar+output chain budget. Dead-process residue is auto-cleaned only when token, lineage, parent, paths, and hashes prove ownership. Report `recoveryWarnings` separately from render/layout `warnings`.
+
+The lock coordinates one sidecar directory, not every copied checkout. A full lineage copied elsewhere is an independent working copy and can fork. When handing the result to another AI, include both PNG and JSON sidecar: the JSON is readable without AgentCallout, while validation, replay, or further revision requires the CLI/MCP.
 
 ## Validation and replay loop
 

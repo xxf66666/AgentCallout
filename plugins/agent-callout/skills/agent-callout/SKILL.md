@@ -4,7 +4,7 @@ description: Annotate existing PNG, JPEG, or WebP screenshots with callouts, arr
 license: MIT
 metadata:
   author: AgentCallout contributors
-  version: "0.1.2"
+  version: "0.1.3"
 ---
 
 # AgentCallout
@@ -18,9 +18,10 @@ Turn an existing screenshot into a reproducible annotated PNG and JSON sidecar. 
 3. Build new work as AnnotationSpec 1.1 with stable, meaningful IDs. Replay an existing 1.0 sidecar unchanged when compatibility matters. Prefer normalized coordinates when the spec should survive resolution changes; use pixels for exact crops or known screenshots.
 4. Call `validate_annotation_spec`. Correct errors and review warnings before rendering.
 5. Call `annotate_image`. The tool writes a PNG and replayable JSON sidecar without overwriting the source.
-6. Inspect the returned preview. If the host does not expose image content, open the absolute output path or use `crop_image` on the result. Check arrow targets, text wrapping, target occlusion, and callout overlap.
-7. Revise the same spec and render again when placement is weak. Do not claim success until the final image has been viewed.
-8. Return the final absolute path and the tool-provided Markdown image reference.
+6. Inspect the returned compact overview. It is intentionally limited to 512px/64 KiB with low detail. If small text or exact placement is unclear, use `crop_image` on the saved output instead of repeatedly requesting a full-image high-detail preview. If the host does not expose image content, open the absolute output path. Check arrow targets, text wrapping, target occlusion, and callout overlap.
+7. When a committed annotate sidecar needs adjustment, call `revise_annotation` with ordered stable-ID `add`, `set`, or `remove` edits. Do not delete prior PNG/JSON files, rewrite the full root spec, or guess a revision number. Supply `inputPath` when the original moved or when the parent uses basename-only input semantics; the bytes must match the parent hash.
+8. Inspect every returned revision preview. If the host does not expose ImageContent, open the new absolute path and say that visual verification remains incomplete.
+9. Return the final absolute path and the tool-provided Markdown image reference.
 
 ## Annotation choices
 
@@ -39,7 +40,12 @@ Turn an existing screenshot into a reproducible annotated PNG and JSON sidecar. 
 - Prefer preset/defaults/tone over repeating full style objects. Use annotation `style` only for a deliberate local override.
 - Inspect long-text wrapping plus numbered-marker outline, fill, number contrast, target visibility, and the complete exposed leader in the final preview. On an unconstrained canvas the leader should expose at least 24px; any shorter/invisible leader, reduced or clipped stroke, marker-overlap, clamp, or occupied-callout warning requires revision or an explicit limitation in the final response.
 - Preserve warnings in the final response. A layout warning means the result needs visual review, not silent acceptance.
+- Report `recoveryWarnings` separately: the revision is committed, but lock/temp cleanup still needs recovery. Do not rewrite these into sidecar render warnings.
 - Never hand-edit a sidecar hash or claim that blur removed the underlying pixels.
 - Do not overwrite the source image. Use a new output path for each materially different revision.
+- Treat only an existing, fully validated revision sidecar as the commit marker. A PNG without its sidecar is an orphan, not a successful revision; do not describe the two-file publish as power-loss atomic or cryptographically signed.
+- For revisions, `set` is a full same-ID replacement that preserves order. `add` needs a new explicit ID and may use `afterId`; never touch the same ID twice in one edit batch.
+- Revision locks coordinate one sidecar directory. A complete lineage copied elsewhere is an independent working copy that can fork; never describe it as a global cross-directory head.
+- When another AI will consume the deliverable, include both the flattened PNG and the versioned JSON sidecar. The JSON is directly readable without AgentCallout and identifies annotation IDs, geometry, warnings, hashes, and lineage; the PNG alone cannot reliably separate original pixels from overlays.
 
 Read [AnnotationSpec reference](references/annotation-spec.md) when constructing or modifying a spec beyond a simple single annotation.

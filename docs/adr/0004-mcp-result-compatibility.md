@@ -22,15 +22,15 @@ MCP 2026-07-28 允许一个 Tool 结果同时包含 `structuredContent`、TextCo
 
 1. core 只生成一个 result manifest；CLI、MCP 文本和 `structuredContent` 都由它派生，禁止分别拼装产生事实漂移。
 2. `inspect_image`、`validate_annotation_spec` 等纯结构化工具声明对象型 `outputSchema`，成功时返回符合 Schema 的 `structuredContent`，并附同内容的紧凑 JSON TextContent。
-3. `annotate_image`、`crop_image`、`create_contact_sheet` 等图片工具不声明协议层 `outputSchema`，并统一省略 `structuredContent`；返回同一 manifest 的 JSON TextContent、受大小限制的 ImageContent、sidecar 绝对路径、输出绝对路径和 Markdown 引用。
+3. `annotate_image`、`revise_annotation`、`crop_image`、`create_contact_sheet` 等图片工具不声明协议层 `outputSchema`，并统一省略 `structuredContent`；返回同一 manifest 的 JSON TextContent、受大小限制的 ImageContent、sidecar 绝对路径、输出绝对路径和 Markdown 引用。
 4. MVP 不依赖客户端名称/版本识别来选择返回形态。Codex 升级后必须重测；只有确认主流宿主都能同时保留结构化结果和图片时，才考虑恢复图片工具的 `structuredContent`。
-5. 大图的 ImageContent 使用受控 PNG 预览；完整 PNG 永远落盘并通过文本 manifest 指向。base64 体积限制、预览尺寸和完整文件 hash 必须显式记录，不能静默截断。
+5. 大图的 ImageContent 默认是最长边 512 px、最多 64 KiB 的 `low` detail 紧凑总览；完整 PNG 永远落盘并通过文本 manifest 指向。TextContent 与 ImageContent `_meta` 显式记录 preview mode、尺寸和字节数。小字或精确位置用 `crop_image` 对已保存输出做局部复核，不反复发送整图高细节。
 6. 错误使用 `isError` 和可修正的 TextContent；绝不把错误包装成结构化“成功”。stdout 只输出 MCP JSON-RPC，日志和 bootstrap 信息只写 stderr。
 7. MVP 不返回未经受限 `resources/read` 支持的 ResourceLink。绝对路径是同机宿主的实用降级，不宣称为远程可移植语义。
 
 ## 后果
 
-所有图片客户端优先获得图片闭环，同时仍能从 JSON 文本读取 hash、warning、路径和 Markdown；纯结构化工具保留正式 `structuredContent`。core 无客户端分支，差异仅存在于 MCP 结果编码层。
+所有图片客户端优先获得轻量图片闭环，同时仍能从 JSON 文本读取 hash、warning、路径、预览元数据和 Markdown；纯结构化工具保留正式 `structuredContent`。core 无客户端分支，差异仅存在于 MCP 结果编码层。紧凑总览降低常见整图 token，但不能保证每个模型的 `low` 都比 `high` 便宜；服务端先物理缩到 512 px，避免把成本控制完全交给宿主。
 
 代价是图片工具失去协议层 output schema 强制，必须在服务器内部和测试中校验 manifest；消费端需要解析 JSON TextContent。客户端行为变化后仍须维护 compatibility matrix。
 
@@ -45,5 +45,6 @@ MCP 2026-07-28 允许一个 Tool 结果同时包含 `structuredContent`、TextCo
 - [MCP Lifecycle：initialize 与客户端信息](https://modelcontextprotocol.io/specification/2026-07-28/basic/lifecycle)
 - [MCP stdio 规范](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/stdio)
 - [MCP Resources 规范](https://modelcontextprotocol.io/specification/2026-07-28/server/resources)
+- [OpenAI Images and vision：detail 与图片 token 规则](https://developers.openai.com/api/docs/guides/images-vision)
 - [调研中的协议兼容结论](../research.md#24-兼容性风险)
 - [调研中的 Codex 0.151 客户端差异](../research.md#9-codex-专项调研)

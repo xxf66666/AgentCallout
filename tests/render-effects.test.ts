@@ -312,7 +312,7 @@ describe("Sharp annotation renderer", () => {
     const verifiedWindowsRenderer =
       process.platform === "win32" &&
       result.renderer.name === "sharp-svg-pango" &&
-      result.renderer.version === "0.1.2" &&
+      result.renderer.version === "0.1.3" &&
       result.renderer.sharp === "0.35.4" &&
       result.renderer.libvips === "8.18.6" &&
       result.renderer.font.sha256 ===

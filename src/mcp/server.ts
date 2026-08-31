@@ -10,21 +10,23 @@ import { z } from "zod";
 
 import {
   AGENT_CALLOUT_VERSION,
+  AgentCalloutRevisionError,
   annotateImage,
   createContactSheet,
   createImagePreview,
   cropImage,
   getCoreDoctorReport,
   inspectImage,
+  reviseAnnotation,
   validateSpecForImage
 } from "../index.js";
-import { annotationSpecSchema } from "../spec/index.js";
+import { annotationRevisionEditsSchema, annotationSpecSchema } from "../spec/index.js";
 
 const MAX_PATH_LENGTH = 32_767;
 const MAX_ALLOWED_ROOTS = 32;
 const MAX_CONTACT_SHEET_INPUTS = 64;
-const MAX_PREVIEW_BYTES = 128 * 1024;
-const PREVIEW_SIZES = [1024, 768, 512, 384, 256, 192, 128, 96, 64] as const;
+const MAX_PREVIEW_BYTES = 64 * 1024;
+const PREVIEW_SIZES = [512, 384, 256, 192, 128, 96, 64] as const;
 const CLIENT_ROOT_CACHE_MS = 2_000;
 const CLIENT_ROOT_TIMEOUT_MS = 2_000;
 const STARTUP_ROOTS_ENV = "AGENT_CALLOUT_ALLOWED_ROOTS";
@@ -60,6 +62,16 @@ const annotateInputSchema = z
     inputPath: pathSchema,
     spec: specSchema,
     outputPath: pathSchema.optional()
+  })
+  .strict();
+
+const reviseAnnotationInputSchema = z
+  .object({
+    parentSidecarPath: pathSchema.describe("Annotate sidecar to validate and revise."),
+    edits: annotationRevisionEditsSchema.describe("Ordered add/set/remove edits."),
+    inputPath: pathSchema
+      .describe("Moved original image whose SHA-256 matches the parent sidecar.")
+      .optional()
   })
   .strict();
 
@@ -116,6 +128,12 @@ function actionableToolErrorMessage(error: unknown): string {
   if (message.toLowerCase().includes("outside the allowed roots")) {
     return `${message} Add that directory to the MCP client's file roots, pass --allow-root when starting AgentCallout MCP, or set ${STARTUP_ROOTS_ENV}.`;
   }
+  if (message.includes("pass overwrite: true")) {
+    return message.replace(
+      /pass overwrite: true to replace it/gu,
+      "choose a new outputPath; MCP does not expose overwrite authority"
+    );
+  }
   return message;
 }
 
@@ -152,7 +170,7 @@ function toolError(error: unknown): CallToolResult {
   const payload = {
     ok: false,
     error: {
-      code: "AGENT_CALLOUT_ERROR",
+      code: error instanceof AgentCalloutRevisionError ? error.code : "AGENT_CALLOUT_ERROR",
       message: actionableToolErrorMessage(error)
     }
   };
@@ -272,13 +290,25 @@ async function imageToolResult(
     const preview = await createBoundedPreview(result, allowedRoots);
     return {
       content: [
-        textContent(result),
+        textContent({
+          ...result,
+          preview: {
+            available: true,
+            mode: "compact-overview",
+            detail: "low",
+            width: preview.width,
+            height: preview.height,
+            sizeBytes: preview.sizeBytes,
+            fineDetailHint: "Crop the saved output when small text or exact placement needs review."
+          }
+        }),
         {
           type: "image",
           data: preview.data,
           mimeType: "image/png",
           _meta: {
-            "codex/imageDetail": "original",
+            "codex/imageDetail": "low",
+            "agent-callout/previewMode": "compact-overview",
             "agent-callout/previewWidth": preview.width,
             "agent-callout/previewHeight": preview.height,
             "agent-callout/previewBytes": preview.sizeBytes
@@ -290,8 +320,8 @@ async function imageToolResult(
   } catch (error) {
     return {
       content: [
-        textContent(result),
         textContent({
+          ...result,
           preview: {
             available: false,
             message: `Output was written successfully, but its MCP preview failed: ${errorMessage(error)}`
@@ -304,7 +334,7 @@ async function imageToolResult(
 }
 
 export const SERVER_INSTRUCTIONS = [
-  "Inspect the screenshot before annotating it. If a target is uncertain, crop the relevant area and inspect it again. Validate the AnnotationSpec, render the annotation, examine the returned image preview, and revise the spec when placement is inaccurate or obscures the target. Return the final absolute output path and Markdown reference only after visual review.",
+  "Inspect the screenshot before annotating it. If a target is uncertain, crop the relevant area and inspect it again. Validate the AnnotationSpec, render the annotation, and examine the returned compact overview. Crop the saved output for small text or exact placement instead of repeatedly requesting a full-image high-detail preview. For a committed annotate sidecar, use revise_annotation with stable-ID edits instead of deleting files or rewriting the whole spec. Return the final absolute output path and Markdown reference only after visual review.",
   "Blur is visual weakening only. Use redact for secrets that require irreversible opaque pixel replacement. Never claim an image was visually checked when the client omitted ImageContent; use the absolute path as a fallback and say what remains unverified."
 ].join(" ");
 
@@ -380,6 +410,33 @@ export function createAgentCalloutMcpServer(options: AgentCalloutMcpServerOption
           inputPath,
           spec,
           ...(outputPath === undefined ? {} : { outputPath }),
+          allowedRoots
+        });
+        return imageToolResult(result, allowedRoots);
+      })
+  );
+
+  server.registerTool(
+    "revise_annotation",
+    {
+      title: "Revise annotation",
+      description:
+        "Validate an annotate sidecar, create its next append-only .revN pair, and return a compact preview.",
+      inputSchema: reviseAnnotationInputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false
+      }
+    },
+    async ({ parentSidecarPath, edits, inputPath }) =>
+      safeToolCall(async () => {
+        const allowedRoots = await rootAuthority.roots();
+        const result = await reviseAnnotation({
+          parentSidecarPath,
+          edits,
+          ...(inputPath === undefined ? {} : { inputPath }),
           allowedRoots
         });
         return imageToolResult(result, allowedRoots);
@@ -471,7 +528,11 @@ export function createAgentCalloutMcpServer(options: AgentCalloutMcpServerOption
       safeToolCall(async () =>
         structuredToolResult({
           ...(await getCoreDoctorReport()),
-          mcp: { maxPreviewBytes: MAX_PREVIEW_BYTES }
+          mcp: {
+            maxPreviewBytes: MAX_PREVIEW_BYTES,
+            maxPreviewDimension: PREVIEW_SIZES[0],
+            previewDetail: "low"
+          }
         })
       )
   );

@@ -44,7 +44,7 @@ Agent 需要保存、修改并重放批注，而不是只执行一次性的绘�
 - 1.1 不增加公开输入字段，而是在 resolved sidecar 中分别记录业务 `target`、`label`、`marker` 与 `leader`。marker 位于 label 朝向 target 的外侧，圆的绘制外边界与 label 相切；leader 从 marker 绘制外边界连接到 point target 或矩形 target 边界。
 - 1.1 候选沿用固定的上、右、下、左次序与确定性评分，但 occupied/overflow 评分使用包含 label/marker 绘制外沿与 leader corridor 的朝向性组合占位，并将已解析的 leader bounds 带入后续批注。可行时为外露 leader 预留至少 24px，并按 `leader → label → marker` 合成，避免引线穿过文字或编号。
 - 靠边、小画布或密集批注无法满足间距/分离时，仍返回可解码结果，并以 annotation ID 标识 clamp、冲突或可见长度不足；不得静默隐藏退化。
-- 在计划中的 v0.1.3 renderer version 正式升级前，1.1 编号 resolved 几何按 sidecar 中记录的 renderer/font metadata 解释；不得把不同 renderer build 生成的预发布 1.1 sidecar 宣称为像素等价。1.0 冻结重放边界不受此说明影响。
+- marker-aware 1.1 编号几何从 renderer 0.1.3 起正式版本化；仍须按 sidecar 中记录的 renderer/font metadata 解释，不得把不同 renderer build 的输出宣称为像素等价。1.0 冻结重放边界不受此说明影响。
 
 ## 后果
 

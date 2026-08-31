@@ -1,13 +1,13 @@
 # AgentCallout 进度
 
-最后更新：2026-08-30（Asia/Singapore）
+最后更新：2026-08-31（Asia/Singapore）
 
 ## 当前状态
 
-- 阶段：MVP 完成
+- 阶段：MVP 已完成；0.1.3 迭代候选正在发布验收
 - GitHub：`https://github.com/xxf66666/AgentCallout`（公开仓库，`main` 已推送）
 - 本地分支：`main`
-- 阻塞：无
+- 阻塞：无；0.1.3 尚未提交、推送和完成真实 Claude/Codex revision 回归
 
 ## 已完成
 
@@ -37,14 +37,26 @@
 - [x] Node 20.10 doctor 与 Node 20.19 完整 gate 通过；生产依赖 audit 为 0 漏洞
 - [x] 最终验证文档提交后，GitHub clean clone 在 `833490b` 再次通过完整 gate
 - [x] 准备并推送 `v0.1.2` 版本标签
+- [x] AnnotationSpec 1.1 增加可读 preset/defaults/tone，普通说明不再默认红底白字；1.0 golden 保持
+- [x] numbered-callout 使用目标外 marker 与可见边界引线，示例三条引线均通过 24 px 门禁
+- [x] 增加 append-only `.revN` 修订：严格 add/set/remove、父链/hash、移动或 basename-only 原图、CLI/MCP 入口
+- [x] 修订事务增加完整 lock 发布、no-replace PNG/sidecar、最终可信读回、强杀残留恢复、15 个故障点与 16 进程竞态
+- [x] 增加 255 revision/256 sidecar 与 512 MiB 累计链预算；拒绝生成下一次无法读取的版本
+- [x] MCP 默认改为 512 px/64 KiB/low-detail 紧凑总览，并引导用局部 crop 检查小字以降低图片 token
+- [x] README/Skill 说明跨 AI 交付必须附 PNG + 普通 JSON sidecar；只读 JSON 不要求安装 AgentCallout
+- [x] 0.1.3 当前工作树完整 gate：117 tests、build、三份 dist 复现；三组示例重生且 PNG 基线稳定
+- [x] 构建后 CLI base→rev1→rev2→rev3 真实运行，旧 input/base PNG/base JSON hash 与 mtime 不变，无 lock/temp residue
+- [x] 根 dist 与 Plugin dist 均完成七工具 stdio smoke；npm pack dry-run 仅包含 9 个预期文件
 
 ## 进行中
 
-- 无。
+- [ ] 0.1.3 最终文档一致性、Git 提交与推送
+- [ ] 从已推送精确 commit/tag 完成 clean clone、全局 GitHub 安装及 Claude/Codex `revise_annotation` 预览回归
 
 ## 待完成
 
 - [ ] 非 Windows 平台回归（不阻塞 Windows-first MVP）
+- [ ] 跨目录复制 lineage 的 fork 只记录不自动合并；后续评估显式 branch/merge 模型
 
 ## 验证日志
 
@@ -62,3 +74,7 @@
 | 2026-08-30 | Codex CLI 0.151.0                    | GitHub CLI + mcp add/remove/reinstall；doctor/inspect/validate + 两次 annotate；预览可见              |
 | 2026-08-30 | Clean clone                          | `npm ci`、verify、examples clean diff、doctor、MCP smoke；最终验证 commit `833490b`                   |
 | 2026-08-30 | Node 20 / audit                      | 20.10 doctor；20.19 52 tests/typecheck/build/dist/self-test；官方 registry production audit 0 漏洞    |
+| 2026-08-31 | 0.1.3 完整仓库 gate                  | Prettier、ESLint、TypeScript、Vitest `117/117`、build、3 份 dist 逐字节复现全部通过                   |
+| 2026-08-31 | 修订并发/恢复                        | 16 进程竞态连续 3 轮各仅一方提交；强杀、完整 lock、15 个故障点、chain limit 与 cleanup 通过           |
+| 2026-08-31 | 紧凑 MCP 预览                        | 1600×900 完整 PNG 落盘，ImageContent 512×288、<=64 KiB、low detail；根/Plugin 七工具 smoke 通过       |
+| 2026-08-31 | 构建后 CLI 修订 UAT                  | rev1/2/3、稳定 lineage、旧文件 hash/mtime 不变、6 个完整新文件、无 lock/temp residue                  |

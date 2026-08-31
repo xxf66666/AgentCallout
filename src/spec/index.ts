@@ -274,6 +274,64 @@ const v11AnnotationUnionSchema = z.discriminatedUnion("type", [
   v11RedactAnnotationSchema
 ]);
 
+const revisionAnnotationUnionSchema = z.discriminatedUnion("type", [
+  v11RectangleAnnotationSchema.extend({ id: annotationIdSchema }),
+  v11EllipseAnnotationSchema.extend({ id: annotationIdSchema }),
+  v11ArrowAnnotationSchema.extend({ id: annotationIdSchema }),
+  v11TextAnnotationSchema.extend({ id: annotationIdSchema }),
+  v11CalloutAnnotationSchema.extend({ id: annotationIdSchema }),
+  v11NumberedCalloutAnnotationSchema.extend({ id: annotationIdSchema }),
+  v11HighlightAnnotationSchema.extend({ id: annotationIdSchema }),
+  v11SpotlightAnnotationSchema.extend({ id: annotationIdSchema }),
+  v11BlurAnnotationSchema.extend({ id: annotationIdSchema }),
+  v11RedactAnnotationSchema.extend({ id: annotationIdSchema })
+]);
+
+const revisionAddEditSchema = z
+  .object({
+    op: z.literal("add"),
+    annotation: revisionAnnotationUnionSchema,
+    afterId: annotationIdSchema.optional()
+  })
+  .strict();
+
+const revisionSetEditSchema = z
+  .object({
+    op: z.literal("set"),
+    id: annotationIdSchema,
+    annotation: revisionAnnotationUnionSchema
+  })
+  .strict()
+  .superRefine((edit, context) => {
+    if (edit.id !== edit.annotation.id) {
+      context.addIssue({
+        code: "custom",
+        message: "set.id must equal set.annotation.id",
+        path: ["annotation", "id"]
+      });
+    }
+  });
+
+const revisionRemoveEditSchema = z
+  .object({
+    op: z.literal("remove"),
+    id: annotationIdSchema
+  })
+  .strict();
+
+/** Strict ordered edits accepted by versioned annotation revision APIs. */
+export const annotationRevisionEditSchema = z.union([
+  revisionAddEditSchema,
+  revisionSetEditSchema,
+  revisionRemoveEditSchema
+]);
+
+/** A revision can replace every current annotation and add a new set in one transaction. */
+export const annotationRevisionEditsSchema = z
+  .array(annotationRevisionEditSchema)
+  .min(1)
+  .max(MAX_ANNOTATIONS * 2);
+
 type ParsedLegacyAnnotationWithOptionalId = z.output<typeof annotationUnionSchema>;
 type ParsedV11AnnotationWithOptionalId = z.output<typeof v11AnnotationUnionSchema>;
 type ParsedAnnotationWithOptionalId =
@@ -286,6 +344,8 @@ export type AnnotationTarget = z.output<typeof targetSchema>;
 export type AnnotationStyle = z.output<typeof styleSchema>;
 export type AnnotationInput =
   z.input<typeof annotationUnionSchema> | z.input<typeof v11AnnotationUnionSchema>;
+export type AnnotationRevisionEditInput = z.input<typeof annotationRevisionEditSchema>;
+export type AnnotationRevisionEdit = z.output<typeof annotationRevisionEditSchema>;
 export type LegacyAnnotation = WithRequiredId<ParsedLegacyAnnotationWithOptionalId>;
 export type AnnotationV11 = WithRequiredId<ParsedV11AnnotationWithOptionalId>;
 export type Annotation = LegacyAnnotation | AnnotationV11;
@@ -731,6 +791,10 @@ const V11_TONE_STYLES: Record<AnnotationTone, ResolvedAnnotationStyleLayer> = {
 
 export function parseAnnotationSpec(value: unknown): AnnotationSpec {
   return annotationSpecSchema.parse(value);
+}
+
+export function parseAnnotationRevisionEdits(value: unknown): AnnotationRevisionEdit[] {
+  return annotationRevisionEditsSchema.parse(value);
 }
 
 /** Resolve every coordinate to finite integer pixels for a concrete image. */

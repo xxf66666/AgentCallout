@@ -50,6 +50,27 @@ Server 启动时必须得到一个或多个明确的输入/输出允许根目录
 - 非覆盖模式以排他写入创建 PNG 和 sidecar；sidecar 写入失败时回滚本次新建 PNG，不把半成品报告为成功。
 - 显式 CLI 覆盖时 PNG 与 sidecar 的双文件替换尚不是跨文件事务；这是已知限制。高风险自动化应写入新路径，再由调用方完成受控替换。
 
+### 2.4 版本化批注修订
+
+`revise` / `revise_annotation` 只接受通过 AgentCallout 结构与完整性校验的 annotate sidecar、严格的稳定 ID edits，以及原图移动或 parent 使用 basename-only 语义时显式提供的同字节 input。这里的“可信”不是数字签名、文件系统只读或对同目录恶意写者的防护。接口不接收 output、overwrite、revision number、JSON Patch 或 spec 根字段。开始渲染前必须验证：
+
+- parent JSON 可完整解析，manifest 版本受支持，operation 为 `annotate`；
+- `annotationSpec` 与 `operationSpec` 的 canonical 结果一致，spec hash、annotation count 一致；
+- parent sidecar 文件名、输出引用、输出尺寸及输出 SHA-256 一致；
+- 原图引用语义明确，输入 metadata 与 SHA-256 一致；basename-only 引用不得扫盘猜测，必须显式给 input；
+- 已有 revision 的直接父路径、sidecar/output/spec hash、edits hash、连续编号和 lineageId 能逐级重放到 base sidecar；
+- 原图、sidecar、所有祖先输出互不形成相同路径、符号链接或硬链接别名。
+
+edits 按数组顺序执行。`add` 必须带当前不存在的 ID，可选 `afterId`；`set` 必须以同一 ID 完整替换并保持位置；`remove` 必须命中现有 ID。同一批中重复触碰 ID、未知 ID、无变化的 `set`、最终无变化或最终 AnnotationSpec 非法都会整批拒绝。每批限制 1–400 个 edits；parent sidecar 限 10 MiB；一条工作副本最多 255 个 revision、完整链最多 256 份 sidecar，累计 sidecar+输出读取预算为 512 MiB。达到边界时在生成不可再次读取的新版本以前返回 `REVISION_LIMIT_REACHED`。
+
+同一 sidecar 目录中的 lineage 使用排他 lock，完整 lock 先在临时文件写入并同步，再以 no-replace link 发布；下一编号只能来自当前 parent。目标 PNG/JSON 同样 no-replace：PNG 先发布，经过同步且最终读回验证的 JSON 最后发布并作为提交标志。发布 JSON 以前的可捕获故障会清理本事务的 temp 和自有 orphan PNG；已有有效 sidecar 的 revision 永不自动删除。
+
+进程被强制终止或断电仍可能留下 lock、temp 或无 sidecar 的 orphan PNG。只有 dead-PID lock、token、revision/lineage/parent/path 和文件 hash 全部能证明归属时才自动清理；不完整 lock、归属不明或内容矛盾时返回 `REVISION_RECOVERY_REQUIRED` 并保留证据。若 sidecar 已提交而后续清理失败，成功结果通过独立的 `recoveryWarnings` 报告，不改写 sidecar 中只描述渲染的 `warnings`。这一机制不是跨文件断电级原子事务。
+
+Lock 是目录内协调，不是跨机器或跨目录的全局共识。把完整 lineage 复制到另一个目录后，两份工作副本可以各自继续并形成 fork；合并或选定权威 head 由交付流程负责，AgentCallout 不应声称阻止这种显式复制后的分叉。
+
+MCP 不暴露 overwrite；已有普通图片输出冲突时应要求新 `outputPath`，不得建议 MCP 调用方传入不存在的 `overwrite` 参数。修订失败使用稳定错误码（例如 `REVISION_CONFLICT`、`INPUT_INVALID`、`INPUT_HASH_MISMATCH`、`REVISION_LIMIT_REACHED`、`REVISION_RECOVERY_REQUIRED`），错误结果仍不得记录 sidecar 全文、批注文字或绝对路径到 stderr 持久日志。
+
 ## 3. 资源限制
 
 图片压缩体积很小并不代表解码成本很小。实现必须在进入 Sharp/libvips 的昂贵路径前后分别设限，并且不能允许单个 AnnotationSpec 关闭硬上限。
@@ -62,7 +83,7 @@ Server 启动时必须得到一个或多个明确的输入/输出允许根目录
 | crop 与输出总像素                | 坐标转换后、渲染前再次计算                       | **40,000,000 像素**                        |
 | annotation 数量与单条/总文字长度 | Schema 验证阶段                                  | **200 条；单条 10,000、合计 100,000 字符** |
 | contact sheet 输入               | Schema/核心双重校验                              | **64 张；16 列**                           |
-| MCP ImageContent/预览字节数      | base64 编码前逐级缩小；完整 PNG 仍保留在本地路径 | **128 KiB**                                |
+| MCP ImageContent/预览            | base64 前逐级缩小；完整 PNG 仍保留在本地路径     | **64 KiB；最长边 512 px；默认 low detail** |
 
 数值必须集中定义、由 doctor 输出，并在 README 与错误信息中保持一致。发布门槛是：每一种限制都有恰好位于边界、超过边界、畸形 metadata 和资源释放测试；在这些数值确定以前，不得把大图防护标记为 VERIFIED。
 
