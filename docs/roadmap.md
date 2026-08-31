@@ -60,7 +60,7 @@ MVP 只解决一个闭环：Agent 对用户已有的截图执行 `inspect → �
 - 分散、过大、全局效果、几何不足或 renderer 无法可靠重放时返回 `compact-overview`；既有 blur/redact 覆盖被改动时返回 `none`，不发送图片。
 - 每次最多返回一个 ImageContent，避免“整图总览后再 crop”重复计入上下文；完整 PNG 始终落盘。
 - preview TextContent 明确记录 `mode`、原画布 `sourceRect`、宽高、字节数和固定降级原因。Agent 可以显式再 crop，但不能把聚焦预览误当完整画布。
-- 验收以真实 Claude/Codex A/B 为准：同一遮挡场景保持判断正确，图片轮次减少，记录宿主 usage；不把总 usage 误归因为单一图片 token。
+- 真实 Claude/Codex A/B 已通过：两边均用两张 384×162 changed-region 完成“发现遮挡 → left 修正”，没有额外 crop；已记录宿主 usage，但不把总 usage 误归因为单一图片 token。
 
 ### Sidecar 校验与 AI 摘要
 

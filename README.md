@@ -148,11 +148,13 @@ claude plugin marketplace remove agent-callout
 
 ### Codex
 
-重装或更新前先关闭正在使用 AgentCallout 的 Codex 会话。
+重装或更新前先关闭正在使用 AgentCallout 的 Codex 会话。Codex 桌面版可能自动重启 MCP 子进程；此时先用官方命令临时移除该 MCP，安装后再原样添加，可避免 Sharp DLL 被占用。
 
 ```powershell
 # 更新
+codex mcp remove agent-callout
 npm install --global --install-links=true git+https://github.com/xxf66666/AgentCallout.git
+codex mcp add agent-callout -- agent-callout mcp
 agent-callout --version
 # 更新后新开 Codex 会话，再运行 doctor
 
@@ -238,11 +240,11 @@ codex plugin marketplace remove agent-callout
 | --------------------------- | ------------------------- |
 | Windows 11                  | 已实测                    |
 | Node.js 20.10、20.19、24.18 | 已实测                    |
-| Claude Code 2.1.251         | Plugin 0.1.3 两轮修订闭环 |
-| Codex CLI 0.151.0           | MCP 0.1.3 两轮修订闭环    |
+| Claude Code 2.1.251         | Plugin 0.2.0 聚焦修订闭环 |
+| Codex CLI 0.151.0           | MCP 0.2.0 聚焦修订闭环    |
 | macOS、Linux                | 尚未完成项目级验证        |
 
-中文和英文文字、PNG/JPEG/WebP、版本化修订及自动化安全矩阵已在 GitHub `c75ce96` 的 Windows clean clone 验证；0.1.3 全局 GitHub 安装、Claude Plugin 更新及两边真实“发现遮挡 → 再修订”预览闭环也已完成。Codex 的可选 Skills-only Git Marketplace 更新仍可能触发客户端固定 30 秒 clone 超时，不影响已验证的全局 CLI+MCP 主路径，详见[兼容性记录](docs/compatibility.md)。当前 MVP 不包含 OCR 自动找字、浏览器 DOM 定位、系统截图快捷键、GUI、录屏或视频编辑。
+中文和英文文字、PNG/JPEG/WebP、版本化修订及自动化安全矩阵已在 GitHub `a09735e` 的 Windows clean clone 验证；0.2.0 全局 GitHub 安装、Claude Plugin 刷新及两边真实“局部预览发现遮挡 → 再修订”闭环也已完成。两边每轮只返回一张 384×162 changed-region（5.5–6.6 KiB），均未额外调用 crop；完整图片仍落盘。Codex 的可选 Skills-only Git Marketplace 更新仍可能触发客户端固定 30 秒 clone 超时，不影响已验证的全局 CLI+MCP 主路径，详见[兼容性记录](docs/compatibility.md)。当前 MVP 不包含 OCR 自动找字、浏览器 DOM 定位、系统截图快捷键、GUI、录屏或视频编辑。
 
 下一阶段继续改进密集说明框的全局排版/引线绕行，并评估可选 OCR/DOM 定位适配器；聚焦预览与 sidecar 安全摘要已进入 0.2，详见[路线图](docs/roadmap.md)。
 
