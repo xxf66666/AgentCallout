@@ -33,7 +33,7 @@ review-scope 元数据只公开 touched/affected 数量、mode、sourceRect 和�
 - `agent-callout inspect-sidecar <sidecar>`；
 - `inspect_annotation_sidecar({ sidecarPath })`。
 
-它复用 revision 的严格 FileHandle 读取、manifest/spec/security、配对 output、parent 连续性、256 entries/512 MiB 门禁，并核对 resolved inventory 与 spec 的 ID/type/order一一对应。检查不打开原图，不扫描磁盘，不修改任何文件，因此明确报告 `originalInput: record-only`。
+它复用 revision 的严格 FileHandle 读取、manifest/spec/security、配对 output、parent 连续性、256 entries/512 MiB 门禁，并核对 resolved inventory 与 spec 的 ID/type/order一一对应。检查不打开原图，不扫描磁盘，不修改任何文件，因此明确报告 `originalInput: record-only`。任一验证失败统一映射为 `ANNOTATION_SIDECAR_INVALID` 和固定消息，不返回部分摘要或底层 cause。
 
 公开摘要固定不超过 4 KiB，只含版本、输出尺寸、按 type 计数、resolved inventory 身份对齐状态、revision number/chain entries、warning 数量、完整性状态、blur/redact 布尔值、目录级协调边界和压平 PNG 的可移植性事实。默认排除所有路径/文件名/Markdown、hash/lineage/parent/edits、annotation ID/文字/style/raw warning/resolved geometry、renderer/font 指纹，也不返回 ImageContent。
 

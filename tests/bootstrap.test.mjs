@@ -1,12 +1,14 @@
 import { spawn } from "node:child_process";
 import {
   appendFile,
+  link,
   mkdir,
   mkdtemp,
+  open,
   readFile,
+  readdir,
   rm,
   stat,
-  utimes,
   writeFile
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -26,6 +28,11 @@ const bootstrapUrl = pathToFileURL(
   path.join(repositoryRoot, "plugins", "agent-callout", "bootstrap.mjs")
 ).href;
 const temporaryDirectories = [];
+const LOCK_FILENAME = ".agent-callout-runtime-install.lock";
+
+function candidateLockPath(root, token) {
+  return path.join(root, `${LOCK_FILENAME}.${token}.candidate`);
+}
 
 async function makePluginFixture(name) {
   const root = await mkdtemp(path.join(tmpdir(), `agent-callout-bootstrap-${name}-`));
@@ -213,21 +220,25 @@ describe("Claude plugin bootstrap", () => {
     expect(results.map((result) => result.code)).toEqual([0, 0]);
     expect(results.every((result) => result.stdout === "")).toBe(true);
     expect(await installCount(root)).toBe(1);
+    expect((await readdir(root)).filter((name) => name.includes(LOCK_FILENAME))).toEqual([]);
   }, 15_000);
 
-  test("recovers dead-owner and old malformed locks without deleting an active lock", async () => {
+  test("recovers a dead-owner published candidate without deleting an active lock", async () => {
     const deadRoot = await makePluginFixture("dead-lock");
-    const deadLockPath = path.join(deadRoot, ".agent-callout-runtime-install.lock");
+    const deadLockPath = path.join(deadRoot, LOCK_FILENAME);
+    const deadToken = "00000000-0000-4000-8000-000000000001";
+    const deadCandidatePath = candidateLockPath(deadRoot, deadToken);
     await writeFile(
-      deadLockPath,
+      deadCandidatePath,
       `${JSON.stringify({
         version: "1.0",
-        token: "00000000-0000-4000-8000-000000000001",
+        token: deadToken,
         pid: 12345,
         createdAt: Date.now(),
         expectedSharpVersion: "0.35.4"
       })}\n`
     );
+    await link(deadCandidatePath, deadLockPath);
     await expect(
       ensureRuntimeDependencies({
         pluginRoot: deadRoot,
@@ -238,9 +249,11 @@ describe("Claude plugin bootstrap", () => {
         lockTimeoutMs: 5_000
       })
     ).resolves.toMatchObject({ installed: true });
+    await expect(stat(deadCandidatePath)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(stat(deadLockPath)).rejects.toMatchObject({ code: "ENOENT" });
 
     const activeRoot = await makePluginFixture("active-lock");
-    const activeLockPath = path.join(activeRoot, ".agent-callout-runtime-install.lock");
+    const activeLockPath = path.join(activeRoot, LOCK_FILENAME);
     const activeLock = `${JSON.stringify({
       version: "1.0",
       token: "00000000-0000-4000-8000-000000000002",
@@ -261,22 +274,55 @@ describe("Claude plugin bootstrap", () => {
     ).rejects.toThrow(/Timed out waiting/u);
     expect(await readFile(activeLockPath, "utf8")).toBe(activeLock);
     expect(await installCount(activeRoot)).toBe(0);
+  });
+
+  test("ignores a live partial candidate and preserves an invalid canonical lock", async () => {
+    const candidateRoot = await makePluginFixture("partial-candidate");
+    const partialToken = "00000000-0000-4000-8000-000000000003";
+    const partialCandidatePath = candidateLockPath(candidateRoot, partialToken);
+    const partialHandle = await open(partialCandidatePath, "wx", 0o600);
+    try {
+      await partialHandle.writeFile("{", "utf8");
+      await expect(
+        ensureRuntimeDependencies({
+          pluginRoot: candidateRoot,
+          probeRuntime: () => simulatedProbe(candidateRoot),
+          installRuntime: simulatedInstaller(candidateRoot),
+          lockPollMs: 10,
+          lockTimeoutMs: 5_000
+        })
+      ).resolves.toMatchObject({ installed: true });
+      await expect(
+        ensureRuntimeDependencies({
+          pluginRoot: candidateRoot,
+          probeRuntime: () => simulatedProbe(candidateRoot),
+          installRuntime: simulatedInstaller(candidateRoot),
+          lockPollMs: 10,
+          lockTimeoutMs: 5_000
+        })
+      ).resolves.toMatchObject({ installed: false });
+      expect(await installCount(candidateRoot)).toBe(1);
+      expect(await readFile(partialCandidatePath, "utf8")).toBe("{");
+      await expect(stat(path.join(candidateRoot, LOCK_FILENAME))).rejects.toMatchObject({
+        code: "ENOENT"
+      });
+    } finally {
+      await partialHandle.close();
+    }
 
     const malformedRoot = await makePluginFixture("malformed-lock");
-    const malformedLockPath = path.join(malformedRoot, ".agent-callout-runtime-install.lock");
+    const malformedLockPath = path.join(malformedRoot, LOCK_FILENAME);
     await writeFile(malformedLockPath, "{");
-    const old = new Date(Date.now() - 60_000);
-    await utimes(malformedLockPath, old, old);
     await expect(
       ensureRuntimeDependencies({
         pluginRoot: malformedRoot,
         probeRuntime: () => simulatedProbe(malformedRoot),
         installRuntime: simulatedInstaller(malformedRoot),
-        malformedLockStaleMs: 1_000,
         lockPollMs: 10,
         lockTimeoutMs: 5_000
       })
-    ).resolves.toMatchObject({ installed: true });
-    expect(await installCount(malformedRoot)).toBe(1);
+    ).rejects.toThrow(/incomplete or invalid; manual recovery/u);
+    expect(await readFile(malformedLockPath, "utf8")).toBe("{");
+    expect(await installCount(malformedRoot)).toBe(0);
   });
 });

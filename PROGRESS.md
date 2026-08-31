@@ -57,7 +57,7 @@
 - [x] revision 自动聚合 touched 与连带重排几何；单一簇返回 changed-region，分散/过大/全局效果回退 compact-overview
 - [x] 父版本 blur/redact 覆盖被删除、移动、缩小或弱化时 `review.mode=none`，MCP 不返回 ImageContent
 - [x] 增加 `inspectAnnotationSidecar`、CLI `inspect-sidecar` 与 MCP `inspect_annotation_sidecar`；摘要 ≤4 KiB 且默认排除路径/hash/ID/文字/style
-- [x] 0.2 当前工作树 134 tests、全 gate、三份 dist 复现；renderer 保持 0.1.3，三组示例 PNG/sidecar hash 均未变化
+- [x] 0.2 当前工作树 135 tests、全 gate、三份 dist 复现；renderer 保持 0.1.3，三组示例 PNG/sidecar hash 均未变化
 - [x] 构建后 CLI 0.2 UAT：focus sourceRect `540,446,384,162`；sidecar 摘要 1,012 bytes，零目录/annotation ID
 - [x] Claude bootstrap 增加 pinned Sharp/native PNG probe 与跨进程安装锁；干净副本首次、幂等、双进程并发及损坏 marker 真实修复通过
 
@@ -99,6 +99,6 @@
 | 2026-08-31 | Codex 可选 Skill 0.1.3               | manifest/Skill 本地校验通过；Git marketplace checkout 100% 后仍因客户端 30 秒 clone timeout 判失败            |
 | 2026-08-31 | Node 20 迭代回归                     | 20.10 doctor/self-test + CLI annotate/revise；20.19 revision/MCP 28 tests 全通过                              |
 | 2026-08-31 | v0.1.3 发布                          | 验收文档 commit `7016356`；annotated tag `v0.1.3` 已推送 GitHub                                               |
-| 2026-08-31 | 0.2 自动化 gate                      | 134 tests；实际像素覆盖、连带重排、隐私抑制、单图 MCP、4 KiB 摘要、完整 lineage no-write 与 dist 复现全部通过 |
+| 2026-08-31 | 0.2 自动化 gate                      | 135 tests；实际像素覆盖、连带重排、隐私抑制、单图 MCP、4 KiB 摘要、完整 lineage no-write 与 dist 复现全部通过 |
 | 2026-08-31 | 0.2 CLI UAT                          | changed-region `540,446,384,162`；摘要 1,012 B、父链/输出已验证、无路径/hash/ID/文字                          |
 | 2026-08-31 | 0.2 Plugin bootstrap                 | 干净副本真实 npm 首装/二次幂等、两个 MCP 并发仅一次安装、损坏 Sharp marker 自动修复；8 工具 doctor 均通过     |

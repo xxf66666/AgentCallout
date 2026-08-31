@@ -100,7 +100,7 @@ MCP 每次最多返回一张、最长边 512 px、最多 64 KiB 的图片。新�
 - 同名 `*.annotated.json`：机器可读的批注层，包含原图/输出 hash、AnnotationSpec、稳定 ID、解析后位置、warning 和修订父链；
 - 需要复核来源时，再附原图。原图含秘密时先按安全策略处理，不要为了做 diff 而泄露它。
 
-另一个 AI **不必安装 AgentCallout 才能读 JSON**；sidecar 是普通、版本化的 JSON。只有在需要校验、重渲染、继续修订或生成预览时，才需要 CLI/MCP。`inspect-sidecar` / `inspect_annotation_sidecar` 会验证 sidecar、配对输出和完整父链，然后返回不含路径、文件名、hash、annotation ID/文字/style 的 4 KiB 内摘要；原图不会被打开，只标记 `record-only`。完整 sidecar 仍可能包含批注文字和文件关联信息，且不是签名或加密证明，分享前应按敏感文档检查。
+另一个 AI **不必安装 AgentCallout 才能读 JSON**；sidecar 是普通、版本化的 JSON。只有在需要校验、重渲染、继续修订或生成预览时，才需要 CLI/MCP。`inspect-sidecar` / `inspect_annotation_sidecar` 会验证 sidecar、配对输出和完整父链，然后返回不含路径、文件名、hash、annotation ID/文字/style 的 4 KiB 内摘要；原图不会被打开，只标记 `record-only`。任一校验失败统一返回 `ANNOTATION_SIDECAR_INVALID`，不返回部分摘要或原始错误内容。完整 sidecar 仍可能包含批注文字和文件关联信息，且不是签名或加密证明，分享前应按敏感文档检查。
 
 修订 lock 只协调 sidecar 所在目录。复制完整 PNG/JSON lineage 到另一个目录会创建可独立继续、也可能分叉的工作副本；它不是跨目录或跨机器的全局 head。
 

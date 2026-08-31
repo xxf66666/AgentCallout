@@ -69,7 +69,7 @@ edits 按数组顺序执行。`add` 必须带当前不存在的 ID，可选 `aft
 
 Lock 是目录内协调，不是跨机器或跨目录的全局共识。把完整 lineage 复制到另一个目录后，两份工作副本可以各自继续并形成 fork；合并或选定权威 head 由交付流程负责，AgentCallout 不应声称阻止这种显式复制后的分叉。
 
-MCP 不暴露 overwrite；已有普通图片输出冲突时应要求新 `outputPath`，不得建议 MCP 调用方传入不存在的 `overwrite` 参数。修订失败使用稳定错误码（例如 `REVISION_CONFLICT`、`INPUT_INVALID`、`INPUT_HASH_MISMATCH`、`REVISION_LIMIT_REACHED`、`REVISION_RECOVERY_REQUIRED`），错误结果仍不得记录 sidecar 全文、批注文字或绝对路径到 stderr 持久日志。
+MCP 不暴露 overwrite；已有普通图片输出冲突时应要求新 `outputPath`，不得建议 MCP 调用方传入不存在的 `overwrite` 参数。修订失败使用稳定错误码（例如 `REVISION_CONFLICT`、`INPUT_INVALID`、`INPUT_HASH_MISMATCH`、`REVISION_LIMIT_REACHED`、`REVISION_RECOVERY_REQUIRED`）；sidecar 检查的任一验证失败统一映射为 `ANNOTATION_SIDECAR_INVALID`，不返回部分摘要或底层错误 cause。错误结果仍不得记录 sidecar 全文、批注文字或绝对路径到 stderr 持久日志。
 
 ### 2.5 聚焦预览与 sidecar 摘要
 
@@ -158,7 +158,7 @@ Tool 的显式结果可以按接口返回输出绝对路径、Markdown 引用和
 - 支持 dry-run、重复安装、升级和卸载；卸载只删除本项目创建的条目和受控运行目录，不删除用户其他 MCP/Plugin 配置。
 - 不读取、输出或写入凭据；不请求管理员权限，不修改系统级 PATH，不执行用户输入拼接出的 shell 字符串。
 - 子进程使用固定 executable 与参数数组；校验 Node 版本和所有路径，避免 PowerShell/cmd 注入。
-- Codex Git marketplace 首次启动所需的 Sharp runtime bootstrap 必须幂等、有并发锁、失败可重试，并在依赖已存在且完整时立即 no-op。
+- Claude Code Git marketplace Plugin 首次启动所需的 Sharp runtime bootstrap 必须幂等、有并发锁、失败可重试，并在依赖已存在且完整时立即 no-op；Codex 主路径使用全局 CLI+MCP，不依赖该 bootstrap。
 - bootstrap 只按提交的 lockfile 安装固定依赖，禁用 lifecycle scripts；不得下载并执行任意脚本、跟随可变分支或静默切换 registry。
 - 安装/更新期间的 GitHub/npm 网络访问必须明确显示；普通 render、inspect、validate、crop 和 doctor 不得触网。
 

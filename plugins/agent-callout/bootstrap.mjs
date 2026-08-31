@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { existsSync } from "node:fs";
-import { lstat, open, readFile, rm } from "node:fs/promises";
+import { link, lstat, open, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -13,8 +13,11 @@ const LOCK_FILENAME = ".agent-callout-runtime-install.lock";
 const LOCK_VERSION = "1.0";
 const DEFAULT_LOCK_TIMEOUT_MS = 180_000;
 const DEFAULT_LOCK_POLL_MS = 200;
-const DEFAULT_MALFORMED_LOCK_STALE_MS = 30_000;
 const MAX_LOCK_BYTES = 64 * 1024;
+
+function candidateLockPath(lockPath, token) {
+  return `${lockPath}.${token}.candidate`;
+}
 
 function isFileSystemError(error, code) {
   return typeof error === "object" && error !== null && "code" in error && error.code === code;
@@ -226,7 +229,7 @@ function processIsAlive(pid) {
   }
 }
 
-async function readExistingLock(lockPath, malformedLockStaleMs, isProcessAlive) {
+async function readExistingLock(lockPath, isProcessAlive) {
   let before;
   try {
     before = await lstat(lockPath, { bigint: true });
@@ -264,10 +267,9 @@ async function readExistingLock(lockPath, malformedLockStaleMs, isProcessAlive) 
   try {
     record = JSON.parse(bytes.toString("utf8"));
   } catch {
-    const ageMs = Date.now() - Number(after.mtimeNs / 1_000_000n);
-    if (ageMs < malformedLockStaleMs) return { state: "active" };
-    await removeLockIfOwned(lockPath, after);
-    return { state: "recovered" };
+    throw new Error(
+      "Runtime installation lock is incomplete or invalid; manual recovery is required."
+    );
   }
   const exactKeys = ["version", "token", "pid", "createdAt", "expectedSharpVersion"];
   if (
@@ -286,6 +288,7 @@ async function readExistingLock(lockPath, malformedLockStaleMs, isProcessAlive) 
     throw new Error("Runtime installation lock is invalid; manual recovery is required.");
   }
   if (isProcessAlive(record.pid)) return { state: "active" };
+  await removeLockIfOwned(candidateLockPath(lockPath, record.token), after, record.token);
   await removeLockIfOwned(lockPath, after, record.token);
   return { state: "recovered" };
 }
@@ -294,8 +297,9 @@ async function tryAcquireLock(lockPath, expectedSharpVersion) {
   let handle;
   let identity;
   const token = randomUUID();
+  const candidatePath = candidateLockPath(lockPath, token);
   try {
-    handle = await open(lockPath, "wx", 0o600);
+    handle = await open(candidatePath, "wx", 0o600);
     identity = await handle.stat({ bigint: true });
     await handle.writeFile(
       `${JSON.stringify({
@@ -310,23 +314,56 @@ async function tryAcquireLock(lockPath, expectedSharpVersion) {
     await handle.sync();
     await handle.close();
     handle = undefined;
-    return { identity, token };
   } catch (error) {
     try {
       await handle?.close();
     } catch {
       // Preserve the original acquisition error.
     }
-    if (isFileSystemError(error, "EEXIST")) return undefined;
     if (identity !== undefined) {
       try {
-        await removeLockIfOwned(lockPath, identity, token);
+        await removeLockIfOwned(candidatePath, identity);
       } catch {
-        // The caller receives the acquisition error; ownership failures remain on disk for diagnosis.
+        // The caller receives the write error; an identity mismatch remains for diagnosis.
       }
     }
     throw error;
   }
+
+  try {
+    await link(candidatePath, lockPath);
+  } catch (error) {
+    let cleanupError;
+    try {
+      await removeLockIfOwned(candidatePath, identity, token);
+    } catch (candidateError) {
+      cleanupError = candidateError;
+    }
+    if (cleanupError !== undefined) {
+      throw new Error("Runtime lock candidate could not be cleaned safely.", {
+        cause: cleanupError
+      });
+    }
+    if (isFileSystemError(error, "EEXIST")) return undefined;
+    throw error;
+  }
+
+  try {
+    await removeLockIfOwned(candidatePath, identity, token);
+  } catch (candidateError) {
+    try {
+      await removeLockIfOwned(lockPath, identity, token);
+    } catch (lockError) {
+      throw new Error(
+        "Runtime lock candidate cleanup failed after publication; manual recovery is required.",
+        { cause: lockError }
+      );
+    }
+    throw new Error("Runtime lock candidate cleanup failed; lock acquisition was aborted.", {
+      cause: candidateError
+    });
+  }
+  return { identity, token };
 }
 
 export async function ensureRuntimeDependencies(options = {}) {
@@ -338,7 +375,6 @@ export async function ensureRuntimeDependencies(options = {}) {
   const installRuntime = options.installRuntime ?? (() => installPinnedRuntime(pluginRoot));
   const lockTimeoutMs = options.lockTimeoutMs ?? DEFAULT_LOCK_TIMEOUT_MS;
   const lockPollMs = options.lockPollMs ?? DEFAULT_LOCK_POLL_MS;
-  const malformedLockStaleMs = options.malformedLockStaleMs ?? DEFAULT_MALFORMED_LOCK_STALE_MS;
   const isProcessAlive = options.isProcessAlive ?? processIsAlive;
   const lockPath = path.join(pluginRoot, LOCK_FILENAME);
   const deadline = Date.now() + lockTimeoutMs;
@@ -374,7 +410,7 @@ export async function ensureRuntimeDependencies(options = {}) {
       };
     }
 
-    const lock = await readExistingLock(lockPath, malformedLockStaleMs, isProcessAlive);
+    const lock = await readExistingLock(lockPath, isProcessAlive);
     if (lock.state === "missing" || lock.state === "recovered") continue;
     if (Date.now() >= deadline) {
       throw new Error("Timed out waiting for another AgentCallout runtime installation.");
