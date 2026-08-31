@@ -226,21 +226,23 @@ codex plugin marketplace remove agent-callout
 
 安装后可对 Codex 说：`使用 $agent-callout 给这张截图添加批注。`
 
+> Codex CLI 0.151 在部分 Windows 机器上会把 Git Marketplace clone 固定限制为 30 秒；即使 checkout 已到 100%，也可能返回 timeout。这个可选 Skill 更新失败时，继续使用上面已验证的全局 CLI+MCP 主路径，不要手改 Codex 插件缓存。
+
 </details>
 
 ## 兼容性与限制
 
-| 环境                        | 状态                        |
-| --------------------------- | --------------------------- |
-| Windows 11                  | 已实测                      |
-| Node.js 20.10、20.19、24.18 | 已实测                      |
-| Claude Code 2.1.251         | 已完成真实安装和 Agent 调用 |
-| Codex CLI 0.151.0           | 已完成真实安装和 Agent 调用 |
-| macOS、Linux                | 尚未完成项目级验证          |
+| 环境                        | 状态                      |
+| --------------------------- | ------------------------- |
+| Windows 11                  | 已实测                    |
+| Node.js 20.10、20.19、24.18 | 已实测                    |
+| Claude Code 2.1.251         | Plugin 0.1.3 两轮修订闭环 |
+| Codex CLI 0.151.0           | MCP 0.1.3 两轮修订闭环    |
+| macOS、Linux                | 尚未完成项目级验证        |
 
-中文和英文文字、PNG/JPEG/WebP、版本化修订及自动化安全矩阵已在 Windows/Node 24 的 0.1.3 当前工作树验证；0.1.3 的全局 GitHub 安装和真实 Claude/Codex 修订预览仍以[兼容性记录](docs/compatibility.md)为准，不能从旧版 annotate 验收外推。当前 MVP 不包含 OCR 自动找字、浏览器 DOM 定位、系统截图快捷键、GUI、录屏或视频编辑。
+中文和英文文字、PNG/JPEG/WebP、版本化修订及自动化安全矩阵已在 GitHub `c75ce96` 的 Windows clean clone 验证；0.1.3 全局 GitHub 安装、Claude Plugin 更新及两边真实“发现遮挡 → 再修订”预览闭环也已完成。Codex 的可选 Skills-only Git Marketplace 更新仍可能触发客户端固定 30 秒 clone 超时，不影响已验证的全局 CLI+MCP 主路径，详见[兼容性记录](docs/compatibility.md)。当前 MVP 不包含 OCR 自动找字、浏览器 DOM 定位、系统截图快捷键、GUI、录屏或视频编辑。
 
-下一阶段优先改进密集说明框的自动排版，并评估可选的 OCR/DOM 定位适配器，详见[路线图](docs/roadmap.md)。
+下一阶段优先生成“变更区域聚焦预览”，减少修订后额外 crop 与图片 token；随后提供 sidecar 校验/摘要入口并继续改进密集说明框排版，详见[路线图](docs/roadmap.md)。
 
 ## 详细文档
 

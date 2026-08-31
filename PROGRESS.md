@@ -4,10 +4,10 @@
 
 ## 当前状态
 
-- 阶段：MVP 已完成；0.1.3 迭代候选正在发布验收
+- 阶段：MVP 已完成；0.1.3 功能、安装与双客户端验收完成，正在固化标签
 - GitHub：`https://github.com/xxf66666/AgentCallout`（公开仓库，`main` 已推送）
 - 本地分支：`main`
-- 阻塞：无；0.1.3 尚未提交、推送和完成真实 Claude/Codex revision 回归
+- 阻塞：主路径无；Codex 可选 Skills-only Marketplace 0.1.3 更新受客户端固定 30 秒 clone 超时影响
 
 ## 已完成
 
@@ -47,16 +47,22 @@
 - [x] 0.1.3 当前工作树完整 gate：117 tests、build、三份 dist 复现；三组示例重生且 PNG 基线稳定
 - [x] 构建后 CLI base→rev1→rev2→rev3 真实运行，旧 input/base PNG/base JSON hash 与 mtime 不变，无 lock/temp residue
 - [x] 根 dist 与 Plugin dist 均完成七工具 stdio smoke；npm pack dry-run 仅包含 9 个预期文件
+- [x] 推送 `427c860`、`9e9ea0f`、`c75ce96` 三个迭代里程碑到 GitHub `main`
+- [x] GitHub `c75ce96` clean clone 完成 `npm ci`、117 tests/全 gate、示例 clean diff、doctor/self-test 与 MCP smoke
+- [x] 停止 12 个旧 MCP 子进程后，从 GitHub 精确 commit 全局安装 0.1.3；doctor、revise help 与七工具通过
+- [x] Claude Plugin 0.1.2→0.1.3 更新成功；真实 rev1 视觉否决、局部 crop、rev2 修正并确认中文/无遮挡
+- [x] Codex 全局 MCP 0.1.3 完成 rev1 视觉否决、rev2 修正并确认中文/无遮挡
+- [x] Node 20.10 构建后 CLI 完成 annotate→revise；Node 20.19 revision/MCP 28 tests 通过
 
 ## 进行中
 
-- [ ] 0.1.3 最终文档一致性、Git 提交与推送
-- [ ] 从已推送精确 commit/tag 完成 clean clone、全局 GitHub 安装及 Claude/Codex `revise_annotation` 预览回归
+- [ ] 提交并推送 0.1.3 验收证据，创建/推送 `v0.1.3` 标签
 
 ## 待完成
 
 - [ ] 非 Windows 平台回归（不阻塞 Windows-first MVP）
 - [ ] 跨目录复制 lineage 的 fork 只记录不自动合并；后续评估显式 branch/merge 模型
+- [ ] 解决或规避 Codex Git Marketplace 内部 30 秒 clone 超时（不阻塞 CLI+MCP 主路径）
 
 ## 验证日志
 
@@ -78,3 +84,9 @@
 | 2026-08-31 | 修订并发/恢复                        | 16 进程竞态连续 3 轮各仅一方提交；强杀、完整 lock、15 个故障点、chain limit 与 cleanup 通过           |
 | 2026-08-31 | 紧凑 MCP 预览                        | 1600×900 完整 PNG 落盘，ImageContent 512×288、<=64 KiB、low detail；根/Plugin 七工具 smoke 通过       |
 | 2026-08-31 | 构建后 CLI 修订 UAT                  | rev1/2/3、稳定 lineage、旧文件 hash/mtime 不变、6 个完整新文件、无 lock/temp residue                  |
+| 2026-08-31 | GitHub clean clone 0.1.3             | `c75ce96`：`npm ci`、117 tests、dist 复现、examples clean、doctor/self-test、七工具 smoke 全通过      |
+| 2026-08-31 | GitHub 全局安装 0.1.3                | 关闭旧 MCP 后安装成功；version/doctor/revise/全局 stdio MCP 通过，无 `EPERM`/`EBUSY`                  |
+| 2026-08-31 | Codex 0.151.0 真实修订               | rev1 判定遮挡；rev2 bottom 后确认 512×328 low-detail 总览中中文清晰、按钮无遮挡                       |
+| 2026-08-31 | Claude Code 2.1.251 真实修订         | Plugin 0.1.3；rev1 判定遮挡并 crop；rev2 left 后确认中文清晰、按钮无遮挡                              |
+| 2026-08-31 | Codex 可选 Skill 0.1.3               | manifest/Skill 本地校验通过；Git marketplace checkout 100% 后仍因客户端 30 秒 clone timeout 判失败    |
+| 2026-08-31 | Node 20 迭代回归                     | 20.10 doctor/self-test + CLI annotate/revise；20.19 revision/MCP 28 tests 全通过                      |

@@ -4,20 +4,20 @@
 
 ## 范围总览
 
-| 能力                                                      | MVP 0.1：已有截图批注 | Next 0.2：定位适配器    | Later         |
-| --------------------------------------------------------- | --------------------- | ----------------------- | ------------- |
-| PNG/JPEG/WebP 已有截图输入                                | **是**                | 维护                    | 维护          |
-| rectangle、ellipse、arrow、text/callout、numbered callout | **是**                | 改进布局                | 编辑器交互    |
-| highlight、spotlight、blur、安全 redact                   | **是**                | 改进检测与验证          | 更多视觉效果  |
-| 像素/归一化坐标、sidecar、hash、warning、可重放           | **是**                | 适配器继续输出同一 spec | 跨媒体 spec   |
-| CLI + 本地 stdio MCP                                      | **是**                | 维护兼容                | 更多宿主集成  |
-| Claude Code/Codex GitHub 直接安装                         | **是**                | 持续回归                | 更多 Agent    |
-| OCR 文字定位                                              | **否**                | **可选本地 adapter**    | 语言/版面扩展 |
-| Playwright/DOM selector 定位                              | **否**                | **可选 DOM adapter**    | 更多 UI 框架  |
-| 完整桌面 GUI                                              | **否**                | 否                      | **以后**      |
-| 系统截图快捷键/桌面捕屏                                   | **否**                | 否                      | **以后**      |
-| GIF/录屏/视频编辑                                         | **否**                | 否                      | **以后**      |
-| 云同步、账号、计费                                        | **否**                | 否                      | 未承诺        |
+| 能力                                                      | MVP 0.1：已有截图批注 | Next 0.2：复核/AI 交付 | Later 0.3+    |
+| --------------------------------------------------------- | --------------------- | ---------------------- | ------------- |
+| PNG/JPEG/WebP 已有截图输入                                | **是**                | 维护                   | 维护          |
+| rectangle、ellipse、arrow、text/callout、numbered callout | **是**                | 改进布局               | 编辑器交互    |
+| highlight、spotlight、blur、安全 redact                   | **是**                | 改进检测与验证         | 更多视觉效果  |
+| append-only revision、父链与恢复                          | **是**                | 摘要/分支语义          | 显式合并      |
+| PNG + 可读 JSON sidecar 跨 AI 交付                        | **是**                | 校验/摘要工具          | 标准化互操作  |
+| 512 px 紧凑总览                                           | **是**                | **变更区域聚焦预览**   | 自适应预算    |
+| CLI + 本地 stdio MCP                                      | **是**                | 维护兼容               | 更多宿主集成  |
+| Claude Code/Codex GitHub 直接安装                         | **是**                | 持续回归               | 更多 Agent    |
+| OCR 文字定位                                              | **否**                | 否                     | 可选本地适配  |
+| Playwright/DOM selector 定位                              | **否**                | 否                     | 可选 DOM 适配 |
+| 完整桌面 GUI/截图快捷键/GIF/视频                          | **否**                | 否                     | **以后**      |
+| 云同步、账号、计费                                        | **否**                | 否                     | 未承诺        |
 
 ## MVP 0.1：给 Agent 一支“截图批注笔”
 
@@ -40,7 +40,7 @@ MVP 只解决一个闭环：Agent 对用户已有的截图执行 `inspect → �
 
 ### 工具与交付
 
-- 一个纯 core 同时服务 CLI 与 stdio MCP，MCP 首批工具为 `inspect_image`、`validate_annotation_spec`、`annotate_image`、`crop_image`。
+- 一个纯 core 同时服务 CLI 与 stdio MCP，当前工具为 `inspect_image`、`validate_annotation_spec`、`annotate_image`、`revise_annotation`、`crop_image`、`create_contact_sheet`、`doctor`。
 - 返回原图/输出尺寸、annotation 数量、warning、输入/输出 hash、renderer/font 版本、输出绝对路径、Markdown 引用和 sidecar。
 - 图片工具在兼容宿主中返回受控 ImageContent；不支持时仍有 JSON TextContent、本地路径和 Markdown 降级。
 - Claude Code 与 Codex 各提供最多两条主要命令的 GitHub marketplace 安装路径，以及 doctor/self-test、升级和卸载。
@@ -50,9 +50,34 @@ MVP 只解决一个闭环：Agent 对用户已有的截图执行 `inspect → �
 
 只有以下证据齐备才发布 0.1：干净 clone 安装成功；lint/typecheck/test/build 通过；CLI 真实生成并重新解码图片；MCP Server 启动及 tool 调用成功；三组示例可重放；中英文和自动布局通过视觉检查；redact 通过像素验证；Claude Code/Codex 安装、发现、调用、二次渲染和卸载按兼容矩阵完成。未验证项必须保留为 NOT VERIFIED，不能用文档或 mock 替代。
 
-## Next 0.2：可插拔定位，而不是扩大渲染内核
+## Next 0.2：低 token 复核与跨 AI 语义交付
 
-MVP 稳定后，下一项优先工作是让 Agent 更可靠地获得目标 bbox。适配器只产生同一个 AnnotationSpec 的坐标/目标区域，不能复制渲染器。
+0.1.3 的真实 Claude/Codex 验收证明 512 px 总览足以发现遮挡，但 Claude 为确认小区域又调用了一次 crop。下一阶段先减少这类重复图片轮次，并把现有 sidecar 变成更容易校验、摘要和交接的公共接口；不把私有 payload 或可逆编辑层塞进 PNG metadata。
+
+### 变更区域聚焦预览
+
+- `revise_annotation` 根据本次 touched IDs 和 resolved geometry 自动计算目标、label、leader 的并集与安全边距；单一区域时返回局部高可读预览，多处分散改动才降级为整图总览。
+- 每次默认只返回一个 ImageContent，避免“整图总览后再 crop”重复计入上下文；完整 PNG 始终落盘。
+- preview TextContent 明确记录 `mode`、原图 bbox、缩放、宽高、字节数和降级原因。Agent 可以显式再 crop，但不能把聚焦预览误当完整画布。
+- 验收以真实 Claude/Codex A/B 为准：同一遮挡场景保持判断正确，图片轮次减少，记录宿主 usage；不把总 usage 误归因为单一图片 token。
+
+### Sidecar 校验与 AI 摘要
+
+- 增加只读 `inspect_annotation_sidecar` CLI/MCP：严格验证 manifest/父链/hash 后，返回紧凑的 annotation ID/type/语义 tone、target、resolved label/marker/leader、warning、revision 和输入/输出关联。
+- JSON 继续是普通开放数据；别的 AI 不安装 AgentCallout 也能读取。安装工具只增加可信校验、路径解析、重渲染和修订能力，不制造专有“解码许可”。
+- 提供可选 Markdown handoff 片段：同时链接 PNG 与 sidecar，并可附不含批注全文/绝对路径的紧凑语义摘要。
+- 只拿到 flattened PNG 时明确标记“无法可靠区分原图与覆盖层”；不使用隐写、水印或图片 metadata 假装解决。
+
+### 同阶段体验改进
+
+- 更好的多 callout 全局碰撞评分、引线绕行和密集区域 warning。
+- 评估显式 working-copy/fork 标记；目录 lock 仍不冒充跨目录全局 head。
+- 修复或规避 Codex Git Marketplace 的 30 秒 clone 超时，同时保持 CLI+MCP 主路径不受影响。
+- 对更多宿主和 Node LTS/操作系统建立 CI 与兼容性回归。
+
+## Following 0.3：可插拔定位，而不是扩大渲染内核
+
+复核与语义交付稳定后，再让 Agent 更可靠地获得目标 bbox。适配器只产生同一个 AnnotationSpec 的坐标/目标区域，不能复制渲染器。
 
 ### OCR locator adapter
 
@@ -67,12 +92,10 @@ MVP 稳定后，下一项优先工作是让 Agent 更可靠地获得目标 bbox�
 - Chromium/Playwright 是可选 integration，不进入默认运行依赖，也不让任意网页脚本进入渲染进程。
 - 处理 viewport、device scale factor、滚动、iframe、元素遮挡和截图时序，并保存定位证据供重放。
 
-### 同阶段体验改进
+### 定位阶段体验改进
 
-- contact sheet/局部放大镜，帮助 Agent 在多个 crop 间选择目标。
-- 更好的多 callout 全局碰撞评分、引线绕行和密集区域 warning。
+- contact sheet/局部放大镜，帮助 Agent 在多个 OCR/DOM 候选间选择目标。
 - 在实现安全、受限的 `resources/read` 后评估 ResourceLink；在此之前继续使用 ImageContent + 路径降级。
-- 对更多宿主和 Node LTS/操作系统建立 CI 与兼容性回归。
 
 ## Later：桌面创作与时间媒体
 
