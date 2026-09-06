@@ -24,7 +24,7 @@ MCP 2026-07-28 允许一个 Tool 结果同时包含 `structuredContent`、TextCo
 2. `inspect_image`、`inspect_annotation_sidecar`、`validate_annotation_spec` 等纯结构化工具声明对象型 `outputSchema`，成功时返回符合 Schema 的 `structuredContent`，并附同内容的紧凑 JSON TextContent。sidecar 摘要另有 4 KiB 和字段 allowlist，不复用完整 manifest。
 3. `annotate_image`、`revise_annotation`、`crop_image`、`create_contact_sheet` 等图片工具不声明协议层 `outputSchema`，并统一省略 `structuredContent`；返回同一 manifest 的 JSON TextContent、受大小限制的 ImageContent、sidecar 绝对路径、输出绝对路径和 Markdown 引用。
 4. MVP 不依赖客户端名称/版本识别来选择返回形态。Codex 升级后必须重测；只有确认主流宿主都能同时保留结构化结果和图片时，才考虑恢复图片工具的 `structuredContent`。
-5. annotate 等图片工具默认返回最长边 512 px、最多 64 KiB 的 `low` detail 紧凑总览；revision 在安全且单一区域时改为单张 changed-region，否则 compact-overview，敏感覆盖变化则零图片。完整 PNG 永远落盘并通过文本 manifest 指向。TextContent 与 ImageContent `_meta` 显式记录 preview mode、sourceRect、尺寸和字节数。每次最多一个 ImageContent。
+5. annotate 等图片工具默认返回最长边 512 px、最多 64 KiB 的紧凑总览；revision 在安全且单一区域时改为单张 changed-region，否则 compact-overview，敏感覆盖变化则零图片。v0.2.1 显示 hint 使用 `auto`，让宿主选择支持的 detail；不依赖 hint 控制像素预算。完整 PNG 永远落盘并通过文本 manifest 指向。TextContent 与 ImageContent `_meta` 显式记录 preview mode、sourceRect、尺寸和字节数。每次最多一个 ImageContent。
 6. 错误使用 `isError` 和可修正的 TextContent；绝不把错误包装成结构化“成功”。stdout 只输出 MCP JSON-RPC，日志和 bootstrap 信息只写 stderr。
 7. MVP 不返回未经受限 `resources/read` 支持的 ResourceLink。绝对路径是同机宿主的实用降级，不宣称为远程可移植语义。
 
@@ -36,6 +36,7 @@ MCP 2026-07-28 允许一个 Tool 结果同时包含 `structuredContent`、TextCo
 
 ## 验证状态
 
+- 2026-09-06 的 Codex CLI 0.153.4 实测拒绝旧 `codex/imageDetail: low`，原始工具结果为 `image content omitted because detail 'low' is not supported; use 'high', 'original', or 'auto'`。相同字节用兼容 hint 可见，因此 v0.2.1 改为 `auto`；512 px/64 KiB 与像素指标保持不变，修复后的真实客户端复验单独记录。
 - 已有证据：stdio/SDK 测试确认图片工具返回 JSON TextContent + 可解码、受限 ImageContent，且省略 structuredContent。Codex 0.151 与 Claude Code 2.1.251 均真实完成两次 `annotate_image`；两个模型都确认两张预览可见，并给出不同输出 hash 与第二轮视觉评价。
 - 仍需回归：客户端升级、非 Windows 宿主、超大预览退化和远程宿主路径 fallback。当前证据不外推为所有 MCP 客户端等价。
 

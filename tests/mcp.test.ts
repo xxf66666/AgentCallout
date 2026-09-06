@@ -206,7 +206,7 @@ describe("AgentCallout MCP server", () => {
       product: { name: "agent-callout", version: "0.2.1" },
       ok: true,
       limits: { maxPixels: 40_000_000, maxAnnotations: 200 },
-      mcp: { maxPreviewBytes: 64 * 1024, maxPreviewDimension: 512, previewDetail: "low" }
+      mcp: { maxPreviewBytes: 64 * 1024, maxPreviewDimension: 512, previewDetail: "auto" }
     });
   });
 
@@ -653,7 +653,7 @@ describe("AgentCallout MCP server", () => {
     expect(manifest?.preview).toMatchObject({
       available: true,
       mode: "compact-overview",
-      detail: "low",
+      detail: "auto",
       pixelMetrics: {
         fullRasterPixelCount: 2_000,
         sourceRegionPixelCount: 2_000,
@@ -672,7 +672,7 @@ describe("AgentCallout MCP server", () => {
     const bytes = Buffer.from(image.data, "base64");
     expect(bytes.byteLength).toBeLessThanOrEqual(64 * 1024);
     expect(image._meta).toMatchObject({
-      "codex/imageDetail": "low",
+      "codex/imageDetail": "auto",
       "agent-callout/previewMode": "compact-overview",
       "agent-callout/pixelMetrics": (manifest?.preview as Record<string, unknown> | undefined)
         ?.pixelMetrics
@@ -686,7 +686,7 @@ describe("AgentCallout MCP server", () => {
     expect(await sharp(bytes).metadata()).toMatchObject({ format: "png", width: 50, height: 40 });
   });
 
-  test("large image results default to a 512px low-detail overview", async () => {
+  test("large previews stay bounded and use a Codex-supported display hint", async () => {
     const largeInputPath = join(directory, "large-input.png");
     const outputPath = join(directory, "large-output.png");
     await sharp({
@@ -713,7 +713,7 @@ describe("AgentCallout MCP server", () => {
     const text = result.content.find((item) => item.type === "text");
     const manifest = (text?.type === "text" ? JSON.parse(text.text) : undefined) as
       { preview?: { pixelMetrics?: Record<string, number> } } | undefined;
-    expect(image._meta).toMatchObject({ "codex/imageDetail": "low" });
+    expect(image._meta).toMatchObject({ "codex/imageDetail": "auto" });
     expect(await sharp(Buffer.from(image.data, "base64")).metadata()).toMatchObject({
       format: "png",
       width: 512,

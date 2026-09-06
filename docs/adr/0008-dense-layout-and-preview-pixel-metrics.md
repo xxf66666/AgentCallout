@@ -41,6 +41,8 @@ AnnotationSpec 1.0 保留旧的逐条排版和绘制分支，不增加新默认�
 
 成功发送 MCP 图片时，JSON TextContent 的 `preview.pixelMetrics` 与 ImageContent `_meta["agent-callout/pixelMetrics"]` 完全相同。不发送图片就不返回这些指标；它们不写入 AnnotationSpec 或持久 preview sidecar。像素比例不等价于细节保留率、图片 token、费用或压缩比。
 
+实际 Codex 0.153.4 图像转发拒绝 `low` hint，故显示 hint 统一改为 `auto`；固定的 512 px/64 KiB raster 预算仍由服务端执行。doctor、TextContent 和 ImageContent metadata 保持一致，见 ADR-0004 的运行证据。
+
 MCP 先确认预览输入匹配已提交输出的 hash/尺寸，再对最终读取的预览字节比对生成 hash，并检查 PNG 单页 metadata、尺寸和字节/像素预算。发送的是经过这些检查的同一个 Buffer。绑定失败按 `encoding-failed` 返回 text-only 成功结果，保留已提交文件，不发送替换图片或像素指标。
 
 ## 取舍与范围

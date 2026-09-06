@@ -201,6 +201,8 @@ After label and marker placement, leaders and standalone arrows use straight or 
 
 `placement` remains a side preference. Avoiding covered targets, overlapping labels, and canvas overflow can require another side. Space can be insufficient even for a valid spec. In that case the renderer preserves a deterministic result with explicit diagnostics rather than promising a globally optimal or collision-free layout. Intentional effects such as `redact`, `blur`, and `highlight` keep their specified regions; the planner does not discover screenshot content or move these effects.
 
+Target protection covers supplied geometry. A 14px checkbox target does not protect its adjacent caption unless that caption is included in the target rectangle. Empty warnings therefore cannot prove that all unmarked source text is visible; inspect the full result and revise placement or the deliberately protected region when needed.
+
 The search is bounded independently of image size: at most 200 callouts, at most 128 label candidates per item, and a beam width capped at 128 (default 96). Candidate/beam budgets decrease above 10, 32, and 96 items. Routing also caps its candidate channels. These are library implementation limits, not additional AnnotationSpec fields; the low-level layout API rejects non-finite or excessive geometry options and an out-of-range `beamWidth`.
 
 ### Routed output contract
@@ -486,6 +488,8 @@ Each MCP result contains at most one preview image. Focus and compact-overview e
 ### Preview pixel metrics (v0.2.1)
 
 Successful MCP ImageContent results include `preview.pixelMetrics` in JSON TextContent and the identical object in image `_meta["agent-callout/pixelMetrics"]`. Core `createImagePreview` returns it as `pixelMetrics`. It describes the final encoded preview after EXIF orientation, optional crop, and resize. It is transient result data; it is not added to AnnotationSpec or persisted in the preview sidecar.
+
+`preview.detail`, doctor `mcp.previewDetail`, and image `_meta["codex/imageDetail"]` use `auto`. Current Codex image forwarding rejects the former `low` hint; raster/byte limits are applied before forwarding and do not depend on the model's detail choice.
 
 Let `F` be the full oriented input raster's pixel count, `S` the selected source region's pixel count (`F` for an overview), and `P` the final preview width times height:
 

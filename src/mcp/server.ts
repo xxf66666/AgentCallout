@@ -31,6 +31,9 @@ const MAX_ALLOWED_ROOTS = 32;
 const MAX_CONTACT_SHEET_INPUTS = 64;
 const MAX_PREVIEW_BYTES = 64 * 1024;
 const PREVIEW_SIZES = [512, 384, 256, 192, 128, 96, 64] as const;
+// Codex's current image bridge accepts auto/high/original, but rejects low.
+// Bound the actual raster above; leave model-specific detail selection to the host.
+const PREVIEW_DETAIL = "auto";
 const CLIENT_ROOT_CACHE_MS = 2_000;
 const CLIENT_ROOT_TIMEOUT_MS = 2_000;
 const STARTUP_ROOTS_ENV = "AGENT_CALLOUT_ALLOWED_ROOTS";
@@ -440,7 +443,7 @@ async function imageToolResult(
           preview: {
             available: true,
             mode: preview.mode,
-            detail: "low",
+            detail: PREVIEW_DETAIL,
             width: preview.width,
             height: preview.height,
             sizeBytes: preview.sizeBytes,
@@ -460,7 +463,7 @@ async function imageToolResult(
           data: preview.data,
           mimeType: "image/png",
           _meta: {
-            "codex/imageDetail": "low",
+            "codex/imageDetail": PREVIEW_DETAIL,
             "agent-callout/previewMode": preview.mode,
             "agent-callout/previewWidth": preview.width,
             "agent-callout/previewHeight": preview.height,
@@ -740,7 +743,7 @@ export function createAgentCalloutMcpServer(options: AgentCalloutMcpServerOption
           mcp: {
             maxPreviewBytes: MAX_PREVIEW_BYTES,
             maxPreviewDimension: PREVIEW_SIZES[0],
-            previewDetail: "low",
+            previewDetail: PREVIEW_DETAIL,
             revisionPreviewMode: "changed-region-when-bounded"
           }
         })
