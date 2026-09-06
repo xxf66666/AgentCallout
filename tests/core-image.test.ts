@@ -86,6 +86,15 @@ describe("core image I/O and security", () => {
     });
     const metadata = await sharp(preview.outputPath).metadata();
     expect(preview.outputDimensions).toEqual({ width: 20, height: 40 });
+    expect(preview.pixelMetrics).toEqual({
+      fullRasterPixelCount: 800,
+      sourceRegionPixelCount: 800,
+      previewRasterPixelCount: 800,
+      sourceRegionCoverageRatio: 1,
+      previewToSourceRegionRatio: 1,
+      previewToFullRasterRatio: 1,
+      previewPixelReductionRatio: 0
+    });
     expect(metadata.orientation).toBeUndefined();
     expect(metadata.exif).toBeUndefined();
   });
@@ -104,6 +113,15 @@ describe("core image I/O and security", () => {
       allowedRoots: [temporaryDirectory]
     });
     expect(preview.outputDimensions).toEqual({ width: 80, height: 40 });
+    expect(preview.pixelMetrics).toEqual({
+      fullRasterPixelCount: 20_000,
+      sourceRegionPixelCount: 3_200,
+      previewRasterPixelCount: 3_200,
+      sourceRegionCoverageRatio: 0.16,
+      previewToSourceRegionRatio: 1,
+      previewToFullRasterRatio: 0.16,
+      previewPixelReductionRatio: 0.84
+    });
     const [actual, expected] = await Promise.all([
       sharp(preview.outputPath).removeAlpha().raw().toBuffer(),
       sharp(inputPath).extract({ left: 50, top: 20, width: 80, height: 40 }).raw().toBuffer()
@@ -112,6 +130,41 @@ describe("core image I/O and security", () => {
     expect(JSON.parse(await readFile(preview.sidecarPath, "utf8"))).toMatchObject({
       operationSpec: { maxWidth: 512, maxHeight: 512, sourceRect }
     });
+  });
+
+  it("reports final raster ratios rounded to six decimal places without persisting them", async () => {
+    const inputPath = path.join(temporaryDirectory, "ratio-source.png");
+    await writeGradient(inputPath, 1600, 900);
+    const common = {
+      inputPath,
+      sourceRect: { x: 0, y: 0, width: 800, height: 400 },
+      maxWidth: 512,
+      maxHeight: 512,
+      allowedRoots: [temporaryDirectory]
+    };
+    const [first, second] = await Promise.all([
+      createImagePreview({
+        ...common,
+        outputPath: path.join(temporaryDirectory, "ratio-preview-first.png")
+      }),
+      createImagePreview({
+        ...common,
+        outputPath: path.join(temporaryDirectory, "ratio-preview-second.png")
+      })
+    ]);
+
+    expect(first.outputDimensions).toEqual({ width: 512, height: 256 });
+    expect(first.pixelMetrics).toEqual({
+      fullRasterPixelCount: 1_440_000,
+      sourceRegionPixelCount: 320_000,
+      previewRasterPixelCount: 131_072,
+      sourceRegionCoverageRatio: 0.222222,
+      previewToSourceRegionRatio: 0.4096,
+      previewToFullRasterRatio: 0.091022,
+      previewPixelReductionRatio: 0.908978
+    });
+    expect(second.pixelMetrics).toEqual(first.pixelMetrics);
+    expect(await readFile(first.sidecarPath, "utf8")).not.toContain("pixelMetrics");
   });
 
   it("enforces byte and pixel limits before processing", async () => {

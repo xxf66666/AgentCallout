@@ -1,6 +1,8 @@
 export type PlacementPreference = "auto" | "top" | "right" | "bottom" | "left";
 export type CardinalPlacement = Exclude<PlacementPreference, "auto">;
 
+export * from "./dense.js";
+
 export interface LayoutPoint {
   x: number;
   y: number;

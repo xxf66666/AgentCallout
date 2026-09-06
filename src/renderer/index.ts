@@ -8,12 +8,19 @@ import sharp, { type OverlayOptions, type PngOptions } from "sharp";
 import {
   circleOverlapsTarget,
   connectCircleToTarget,
+  layoutDenseCallouts,
   placeCallout,
-  type CardinalPlacement
+  routeLeader,
+  type CardinalPlacement,
+  type DenseCalloutPlacement,
+  type DenseLayoutDiagnostic,
+  type DenseLayoutDiagnosticCode,
+  type LeaderRoute,
+  type RouteObstacle
 } from "../layout/index.js";
 
 export const RENDERER_NAME = "sharp-svg-pango";
-export const RENDERER_VERSION = "0.1.3";
+export const RENDERER_VERSION = "0.2.1";
 export const BUNDLED_FONT_FILENAME = "NotoSansCJKsc-Regular.otf";
 export const BUNDLED_FONT_SHA256 =
   "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b";
@@ -114,6 +121,9 @@ interface TextSprite {
   height: number;
   fontSize: number;
   wasShrunk: boolean;
+  wasClipped: boolean;
+  unclippedDimensions: { width: number; height: number };
+  clippedAlphaPixelCount: number;
 }
 
 export interface PaintedSegment {
@@ -158,6 +168,106 @@ interface NumberedGeometryCandidate {
   placementScore: number;
   markerWasClamped: boolean;
   preferredFace: CardinalPlacement;
+}
+
+type RendererLayoutIssueCode =
+  DenseLayoutDiagnosticCode | "TEXT_CLIPPED" | "TEXT_SIZE_REDUCED" | "GEOMETRY_CLIPPED";
+
+interface RendererLayoutIssue {
+  code: RendererLayoutIssueCode;
+  annotationId: string;
+  relatedIds: string[];
+  message: string;
+  metrics?: Record<string, number>;
+}
+
+interface PreparedTextAnnotation {
+  annotation: RenderableAnnotation;
+  position: PixelPoint;
+  box: PixelRect;
+  sprite: TextSprite;
+  issues: RendererLayoutIssue[];
+}
+
+interface PreparedMarker {
+  center: PixelPoint;
+  radius: number;
+  paintedRadius: number;
+  strokeWidth: number;
+  labelSide: CardinalPlacement;
+  bounds: PixelRect;
+}
+
+interface PreparedDenseAnnotation {
+  annotation: RenderableAnnotation;
+  target: PixelPoint | PixelRect;
+  layoutTarget: PixelRect;
+  text: string;
+  number?: number;
+  padding: number;
+  sprite: TextSprite;
+  labelStrokeWidth: number;
+  leaderStrokeWidth: number;
+  placement: DenseCalloutPlacement;
+  paintedLabelBox: PixelRect;
+  marker?: PreparedMarker;
+  route: LeaderRoute;
+  arrowHead?: PreparedArrowAnnotation["arrowHead"];
+  issues: RendererLayoutIssue[];
+}
+
+interface PreparedArrowAnnotation {
+  annotation: RenderableAnnotation;
+  start: PixelPoint;
+  target: PixelPoint | PixelRect;
+  end: PixelPoint;
+  route: LeaderRoute;
+  arrowHead: {
+    tip: PixelPoint;
+    wings: [PixelPoint, PixelPoint];
+    bounds: PixelRect;
+  };
+  issues: RendererLayoutIssue[];
+}
+
+interface ArrowRouteEndpointCandidate {
+  end: PixelPoint;
+  approach?: PixelPoint;
+  ownTarget?: RouteObstacle;
+}
+
+interface Version11LayoutPlan {
+  text: Map<string, PreparedTextAnnotation>;
+  dense: Map<string, PreparedDenseAnnotation>;
+  arrows: Map<string, PreparedArrowAnnotation>;
+  warnings: string[];
+}
+
+interface DenseAnnotationMeasurement {
+  annotation: RenderableAnnotation;
+  target: PixelPoint | PixelRect;
+  layoutTarget: PixelRect;
+  text: string;
+  number?: number;
+  padding: number;
+  sprite: TextSprite;
+  labelStrokeWidth: number;
+  leaderStrokeWidth: number;
+  labelWidth: number;
+  labelHeight: number;
+  gap: number;
+  paintedOutset: number;
+  facingDecorationDepth: number;
+  facingDecorationSpan: number;
+  markerSize?: ReturnType<typeof numberedMarkerRadius>;
+  issues: RendererLayoutIssue[];
+}
+
+interface ArrowMeasurement {
+  annotation: RenderableAnnotation;
+  start: PixelPoint;
+  target: PixelPoint | PixelRect;
+  end: PixelPoint;
 }
 
 const DEFAULT_STROKE = "#ff2d20";
@@ -470,6 +580,330 @@ function leaderBody(start: PixelPoint, end: PixelPoint, style: RenderStyle): str
   return `<path d="M ${svgNumber(start.x)} ${svgNumber(start.y)} L ${svgNumber(end.x)} ${svgNumber(end.y)}" fill="none" stroke="${style.strokeColor}" stroke-opacity="${svgNumber(style.opacity)}" stroke-width="${svgNumber(style.strokeWidth)}" stroke-linecap="round"/>`;
 }
 
+function routedPathData(points: readonly PixelPoint[]): string {
+  if (points.length < 2) throw new Error("A routed path requires at least two points.");
+  return points
+    .map((point, index) =>
+      index === 0
+        ? `M ${svgNumber(point.x)} ${svgNumber(point.y)}`
+        : `L ${svgNumber(point.x)} ${svgNumber(point.y)}`
+    )
+    .join(" ");
+}
+
+function routedLeaderBody(points: readonly PixelPoint[], style: RenderStyle): string {
+  return `<path d="${routedPathData(points)}" fill="none" stroke="${style.strokeColor}" stroke-opacity="${svgNumber(style.opacity)}" stroke-width="${svgNumber(style.strokeWidth)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+}
+
+function arrowHeadGeometry(
+  points: readonly PixelPoint[],
+  style: RenderStyle
+): { tip: PixelPoint; wings: [PixelPoint, PixelPoint]; bounds: PixelRect } {
+  const end = points.at(-1);
+  if (end === undefined) throw new Error("A routed arrow is missing its endpoint.");
+  let previous: PixelPoint | undefined;
+  for (let index = points.length - 2; index >= 0; index -= 1) {
+    const candidate = points[index];
+    if (candidate !== undefined && (candidate.x !== end.x || candidate.y !== end.y)) {
+      previous = candidate;
+      break;
+    }
+  }
+  if (previous === undefined) {
+    const radius = Math.max(0.5, style.strokeWidth / 2);
+    return {
+      tip: end,
+      wings: [end, end],
+      bounds: { x: end.x - radius, y: end.y - radius, width: radius * 2, height: radius * 2 }
+    };
+  }
+  const angle = Math.atan2(end.y - previous.y, end.x - previous.x);
+  const headLength = Math.max(style.arrowHeadSize, style.strokeWidth * 2);
+  const wing = Math.PI / 7;
+  const first = {
+    x: end.x - headLength * Math.cos(angle - wing),
+    y: end.y - headLength * Math.sin(angle - wing)
+  };
+  const second = {
+    x: end.x - headLength * Math.cos(angle + wing),
+    y: end.y - headLength * Math.sin(angle + wing)
+  };
+  const left = Math.min(end.x, first.x, second.x);
+  const top = Math.min(end.y, first.y, second.y);
+  const right = Math.max(end.x, first.x, second.x);
+  const bottom = Math.max(end.y, first.y, second.y);
+  return {
+    tip: end,
+    wings: [first, second],
+    bounds: { x: left, y: top, width: Math.max(1, right - left), height: Math.max(1, bottom - top) }
+  };
+}
+
+function routeCollisionIds(
+  route: LeaderRoute,
+  strokeWidth: number,
+  obstacles: readonly RouteObstacle[]
+): string[] {
+  return [
+    ...new Set(
+      obstacles
+        .filter((obstacle) =>
+          route.segments.some((segment) =>
+            paintedSegmentIntersectsRect({ ...segment, strokeWidth }, obstacle.rect)
+          )
+        )
+        .map((obstacle) => obstacle.id)
+    )
+  ].sort((left, right) => left.localeCompare(right, "en"));
+}
+
+function routeWithArrowHeadAvoidance(
+  canvas: { width: number; height: number },
+  start: PixelPoint,
+  endpoints: readonly ArrowRouteEndpointCandidate[],
+  obstacles: readonly RouteObstacle[],
+  style: RenderStyle,
+  strokeWidth: number,
+  headObstacles: readonly RouteObstacle[] = obstacles
+): {
+  route: LeaderRoute;
+  arrowHead: PreparedArrowAnnotation["arrowHead"];
+  headCollisionIds: string[];
+} {
+  const headLength = Math.max(style.arrowHeadSize, strokeWidth * 2);
+  const obstacleSets = [
+    obstacles,
+    obstacles.map((obstacle) => ({
+      ...obstacle,
+      clearance: Math.max(obstacle.clearance ?? 0, headLength + 2)
+    }))
+  ];
+  const attempts = endpoints.flatMap((endpoint, endpointOrder) =>
+    obstacleSets.map((attemptObstacles, obstacleOrder) => {
+      const ownTargetId = endpoint.ownTarget?.id;
+      const routedPrefix = routeLeader({
+        canvas,
+        start,
+        end: endpoint.approach ?? endpoint.end,
+        obstacles:
+          endpoint.ownTarget === undefined
+            ? attemptObstacles
+            : [...attemptObstacles, endpoint.ownTarget],
+        clearance: 0,
+        strokeWidth,
+        orthogonalOnly: endpoint.approach !== undefined
+      });
+      const routed = appendRouteEndpoint(routedPrefix, endpoint.end, strokeWidth);
+      const collisionIds = [
+        ...new Set([
+          ...routeCollisionIds(routed, strokeWidth, obstacles),
+          ...(ownTargetId !== undefined && routedPrefix.collisionIds.includes(ownTargetId)
+            ? [ownTargetId]
+            : [])
+        ])
+      ].sort((left, right) => left.localeCompare(right, "en"));
+      const route: LeaderRoute = {
+        ...routed,
+        collisionIds,
+        diagnostics:
+          collisionIds.length === 0
+            ? []
+            : [
+                {
+                  code: "LEADER_ROUTE_BLOCKED",
+                  collisionIds,
+                  message: `No collision-free leader route was available; the least-blocked route intersects ${collisionIds.length} obstacle${collisionIds.length === 1 ? "" : "s"}.`
+                }
+              ]
+      };
+      const arrowHead = arrowHeadGeometry(route.points, style);
+      const headCollisionIds = [
+        ...new Set(
+          headObstacles
+            .filter((obstacle) => rectsOverlap(arrowHead.bounds, obstacle.rect))
+            .map((obstacle) => obstacle.id)
+        )
+      ].sort((left, right) => left.localeCompare(right, "en"));
+      return { route, arrowHead, headCollisionIds, endpointOrder, obstacleOrder };
+    })
+  );
+  return attempts.reduce((best, candidate) => {
+    const comparison = compareNumericTuple(
+      [
+        candidate.headCollisionIds.length,
+        candidate.route.collisionIds.length,
+        candidate.route.bendCount,
+        candidate.route.pathLength,
+        candidate.endpointOrder,
+        candidate.obstacleOrder
+      ],
+      [
+        best.headCollisionIds.length,
+        best.route.collisionIds.length,
+        best.route.bendCount,
+        best.route.pathLength,
+        best.endpointOrder,
+        best.obstacleOrder
+      ]
+    );
+    return comparison < 0 ? candidate : best;
+  });
+}
+
+function appendRouteEndpoint(
+  route: LeaderRoute,
+  endpoint: PixelPoint,
+  strokeWidth: number
+): LeaderRoute {
+  const last = route.points.at(-1);
+  const points = simplifyRoutePoints(
+    last !== undefined && last.x === endpoint.x && last.y === endpoint.y
+      ? route.points
+      : [...route.points, endpoint]
+  );
+  const segments = points.slice(1).map((end, index) => ({
+    start: points[index] as PixelPoint,
+    end
+  }));
+  const bounds =
+    segments.length === 0
+      ? route.bounds
+      : unionRects(
+          segments.map((segment) => segmentBounds(segment.start, segment.end, strokeWidth))
+        );
+  const start = points[0] ?? endpoint;
+  return {
+    ...route,
+    points,
+    segments,
+    directDistance: Math.hypot(endpoint.x - start.x, endpoint.y - start.y),
+    pathLength: segments.reduce(
+      (total, segment) =>
+        total + Math.hypot(segment.end.x - segment.start.x, segment.end.y - segment.start.y),
+      0
+    ),
+    bendCount: Math.max(0, segments.length - 1),
+    bounds
+  };
+}
+
+function simplifyRoutePoints(points: readonly PixelPoint[]): PixelPoint[] {
+  const simplified: PixelPoint[] = [];
+  for (const point of points) {
+    const previous = simplified.at(-1);
+    if (previous && previous.x === point.x && previous.y === point.y) continue;
+    while (simplified.length >= 2) {
+      const first = simplified.at(-2);
+      const second = simplified.at(-1);
+      if (first === undefined || second === undefined) break;
+      const cross =
+        (second.x - first.x) * (point.y - second.y) - (second.y - first.y) * (point.x - second.x);
+      if (Math.abs(cross) >= 1e-7) break;
+      simplified.pop();
+    }
+    simplified.push({ ...point });
+  }
+  return simplified;
+}
+
+function markerBoundaryCandidates(marker: PreparedMarker, preferred: PixelPoint): PixelPoint[] {
+  const candidates = [
+    preferred,
+    { x: marker.center.x, y: marker.center.y - marker.paintedRadius },
+    { x: marker.center.x + marker.paintedRadius, y: marker.center.y },
+    { x: marker.center.x, y: marker.center.y + marker.paintedRadius },
+    { x: marker.center.x - marker.paintedRadius, y: marker.center.y }
+  ];
+  const seen = new Set<string>();
+  return candidates.filter((candidate) => {
+    const key = `${Number(candidate.x.toFixed(3))},${Number(candidate.y.toFixed(3))}`;
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return true;
+  });
+}
+
+function routeFromStartCandidates(
+  canvas: { width: number; height: number },
+  starts: readonly PixelPoint[],
+  end: PixelPoint,
+  obstacles: readonly RouteObstacle[],
+  clearance: number,
+  strokeWidth: number
+): LeaderRoute {
+  const attempts = starts.map((start, order) => ({
+    route: routeLeader({ canvas, start, end, obstacles, clearance, strokeWidth }),
+    order
+  }));
+  return attempts.reduce((best, candidate) => {
+    const comparison = compareNumericTuple(
+      [
+        candidate.route.collisionIds.length,
+        candidate.route.bendCount,
+        candidate.route.pathLength,
+        candidate.order
+      ],
+      [best.route.collisionIds.length, best.route.bendCount, best.route.pathLength, best.order]
+    );
+    return comparison < 0 ? candidate : best;
+  }).route;
+}
+
+function routedArrowBody(points: readonly PixelPoint[], style: RenderStyle): string {
+  const head = arrowHeadGeometry(points, style);
+  const [first, second] = head.wings;
+  if (
+    first.x === head.tip.x &&
+    first.y === head.tip.y &&
+    second.x === head.tip.x &&
+    second.y === head.tip.y
+  ) {
+    return routedLeaderBody(points, style);
+  }
+  return `${routedLeaderBody(points, style)}<path d="M ${svgNumber(head.tip.x)} ${svgNumber(head.tip.y)} L ${svgNumber(first.x)} ${svgNumber(first.y)} L ${svgNumber(second.x)} ${svgNumber(second.y)} Z" fill="${style.strokeColor}" fill-opacity="${svgNumber(style.opacity)}"/>`;
+}
+
+function resolvedRoute(route: LeaderRoute, strokeWidth: number): Record<string, unknown> {
+  const start = route.points[0];
+  const end = route.points.at(-1) ?? start;
+  if (start === undefined) {
+    throw new Error("A resolved route must contain boundary endpoints.");
+  }
+  return {
+    kind: route.bendCount === 0 ? "straight" : "orthogonal",
+    start,
+    end,
+    length: route.directDistance,
+    pathLength: route.pathLength,
+    points: route.points,
+    segments: route.segments,
+    bendCount: route.bendCount,
+    ...(route.segments.length === 0 ? {} : { bounds: route.bounds }),
+    strokeWidth,
+    ...(route.collisionIds.length === 0 ? {} : { collisionIds: route.collisionIds })
+  };
+}
+
+function layoutIssue(
+  code: RendererLayoutIssueCode,
+  annotationId: string,
+  message: string,
+  relatedIds: string[] = [],
+  metrics?: Record<string, number>
+): RendererLayoutIssue {
+  return {
+    code,
+    annotationId,
+    relatedIds: [...new Set(relatedIds)].sort((left, right) => left.localeCompare(right, "en")),
+    message,
+    ...(metrics === undefined ? {} : { metrics })
+  };
+}
+
+function layoutResult(issues: readonly RendererLayoutIssue[]): Record<string, unknown> {
+  return { status: issues.length === 0 ? "ok" : "degraded", issues };
+}
+
 function spotlightBody(width: number, height: number, rect: PixelRect, style: RenderStyle): string {
   const pathData = `M 0 0 H ${width} V ${height} H 0 Z M ${svgNumber(rect.x)} ${svgNumber(rect.y)} H ${svgNumber(rect.x + rect.width)} V ${svgNumber(rect.y + rect.height)} H ${svgNumber(rect.x)} Z`;
   return `<path d="${pathData}" fill="${style.fillColor === TRANSPARENT ? "#000000A6" : style.fillColor}" fill-opacity="${svgNumber(style.opacity)}" fill-rule="evenodd" clip-rule="evenodd"/>`;
@@ -496,7 +930,8 @@ async function renderTextSprite(
   style: RenderStyle,
   fontPath: string,
   maximumWidth: number,
-  maximumHeight: number
+  maximumHeight: number,
+  options: { allowClipping?: boolean } = {}
 ): Promise<TextSprite> {
   const minimumFontSize = 6;
   const safeMaximumWidth = Math.max(1, Math.floor(maximumWidth));
@@ -536,10 +971,52 @@ async function renderTextSprite(
         width: rendered.info.width,
         height: rendered.info.height,
         fontSize,
-        wasShrunk: fontSize < requestedFontSize
+        wasShrunk: fontSize < requestedFontSize,
+        wasClipped: false,
+        unclippedDimensions: { width: rendered.info.width, height: rendered.info.height },
+        clippedAlphaPixelCount: 0
       };
     }
     if (fontSize <= minimumFontSize) {
+      if (options.allowClipping === true) {
+        const clippedWidth = Math.max(1, Math.min(rendered.info.width, safeMaximumWidth));
+        const clippedHeight = Math.max(1, Math.min(rendered.info.height, safeMaximumHeight));
+        const raw = await sharp(rendered.data)
+          .ensureAlpha()
+          .raw()
+          .toBuffer({ resolveWithObject: true });
+        let clippedAlphaPixelCount = 0;
+        for (let y = 0; y < raw.info.height; y += 1) {
+          for (let x = 0; x < raw.info.width; x += 1) {
+            if (x < clippedWidth && y < clippedHeight) continue;
+            if (raw.data[(y * raw.info.width + x) * raw.info.channels + 3] !== 0) {
+              clippedAlphaPixelCount += 1;
+            }
+          }
+        }
+        const clipped = await sharp(rendered.data)
+          .extract({ left: 0, top: 0, width: clippedWidth, height: clippedHeight })
+          .png(STABLE_PNG_OPTIONS)
+          .toBuffer();
+        const buffer =
+          style.opacity < 1
+            ? await sharp(clipped)
+                .ensureAlpha()
+                .linear([1, 1, 1, style.opacity], [0, 0, 0, 0])
+                .png(STABLE_PNG_OPTIONS)
+                .toBuffer()
+            : clipped;
+        return {
+          buffer,
+          width: clippedWidth,
+          height: clippedHeight,
+          fontSize,
+          wasShrunk: fontSize < requestedFontSize,
+          wasClipped: true,
+          unclippedDimensions: { width: rendered.info.width, height: rendered.info.height },
+          clippedAlphaPixelCount
+        };
+      }
       throw new Error(
         `Text cannot fit within ${safeMaximumWidth}x${safeMaximumHeight} pixels even at the minimum supported font size (${minimumFontSize}px); shorten it, crop the image, or use a larger canvas.`
       );
@@ -564,6 +1041,91 @@ function rectsOverlap(left: PixelRect, right: PixelRect): boolean {
     Math.min(left.x + left.width, right.x + right.width) > Math.max(left.x, right.x) &&
     Math.min(left.y + left.height, right.y + right.height) > Math.max(left.y, right.y)
   );
+}
+
+function samePixelRect(left: PixelRect, right: PixelRect): boolean {
+  return (
+    left.x === right.x &&
+    left.y === right.y &&
+    left.width === right.width &&
+    left.height === right.height
+  );
+}
+
+function targetBoundaryCandidates(
+  target: PixelPoint | PixelRect,
+  preferred: PixelPoint,
+  approachDistance: number,
+  canvas: { width: number; height: number },
+  targetId: string
+): ArrowRouteEndpointCandidate[] {
+  if (!isPixelRect(target)) return [{ end: preferred }];
+  const centerX = target.x + target.width / 2;
+  const centerY = target.y + target.height / 2;
+  const edgeDistances = [
+    { distance: Math.abs(preferred.y - target.y), normal: { x: 0, y: -1 } },
+    {
+      distance: Math.abs(preferred.x - (target.x + target.width)),
+      normal: { x: 1, y: 0 }
+    },
+    {
+      distance: Math.abs(preferred.y - (target.y + target.height)),
+      normal: { x: 0, y: 1 }
+    },
+    { distance: Math.abs(preferred.x - target.x), normal: { x: -1, y: 0 } }
+  ].sort((left, right) => left.distance - right.distance);
+  const preferredNormal = edgeDistances[0]?.normal ?? { x: 0, y: -1 };
+  const rawCandidates = [
+    { end: preferred, normal: preferredNormal, withApproach: false },
+    { end: preferred, normal: preferredNormal, withApproach: true },
+    {
+      end: { x: centerX, y: target.y },
+      normal: { x: 0, y: -1 },
+      withApproach: true
+    },
+    {
+      end: { x: target.x + target.width, y: centerY },
+      normal: { x: 1, y: 0 },
+      withApproach: true
+    },
+    {
+      end: { x: centerX, y: target.y + target.height },
+      normal: { x: 0, y: 1 },
+      withApproach: true
+    },
+    {
+      end: { x: target.x, y: centerY },
+      normal: { x: -1, y: 0 },
+      withApproach: true
+    }
+  ];
+  const seen = new Set<string>();
+  const candidates = rawCandidates.flatMap((candidate) => {
+    const key = `${candidate.end.x},${candidate.end.y}:${candidate.withApproach}`;
+    if (seen.has(key)) return [];
+    seen.add(key);
+    if (!candidate.withApproach) return [{ end: candidate.end }];
+    const approach = {
+      x: candidate.end.x + candidate.normal.x * approachDistance,
+      y: candidate.end.y + candidate.normal.y * approachDistance
+    };
+    if (
+      approach.x < 0 ||
+      approach.y < 0 ||
+      approach.x > canvas.width - 1 ||
+      approach.y > canvas.height - 1
+    ) {
+      return [];
+    }
+    return [
+      {
+        end: candidate.end,
+        approach,
+        ownTarget: { id: targetId, rect: target, clearance: 0 }
+      }
+    ];
+  });
+  return candidates.length > 0 ? candidates : [{ end: preferred }];
 }
 
 function unionRects(rects: readonly PixelRect[]): PixelRect {
@@ -1116,7 +1678,8 @@ async function renderVersion11NumberedCallout(
   height: number,
   fontPath: string,
   occupiedGroups: readonly OccupiedGeometry[],
-  warnings: string[]
+  warnings: string[],
+  prepared?: PreparedDenseAnnotation
 ): Promise<{
   buffer: Buffer;
   box: PixelRect;
@@ -1126,6 +1689,29 @@ async function renderVersion11NumberedCallout(
   occupiedGeometry: OccupiedGeometry;
   resolved: Record<string, unknown>;
 }> {
+  if (prepared !== undefined) {
+    const rendered = await renderPreparedDenseAnnotation(base, prepared, width, height, fontPath);
+    const marker = prepared.marker;
+    if (marker === undefined) {
+      throw new Error(`Prepared numbered callout ${annotation.id} is missing its marker.`);
+    }
+    return {
+      buffer: rendered.buffer,
+      box: prepared.placement.box,
+      paintedLabelBox: prepared.paintedLabelBox,
+      ...(prepared.route.segments.length === 0 ? {} : { leaderBox: prepared.route.bounds }),
+      markerBox: marker.bounds,
+      occupiedGeometry: {
+        annotationId: annotation.id,
+        rects: [prepared.paintedLabelBox, marker.bounds],
+        segments: prepared.route.segments.map((segment) => ({
+          ...segment,
+          strokeWidth: prepared.leaderStrokeWidth
+        }))
+      },
+      resolved: rendered.resolved
+    };
+  }
   const rawTarget = annotation.target ?? annotation.rect ?? annotation.position;
   if (!rawTarget) throw new Error(`Numbered callout ${annotation.id} is missing a target.`);
   const safeTarget = isPixelRect(rawTarget)
@@ -1563,6 +2149,1089 @@ export async function getRendererVersions(fontPath?: string): Promise<RendererVe
   };
 }
 
+const RENDERER_LAYOUT_ISSUE_ORDER: readonly RendererLayoutIssueCode[] = [
+  "TEXT_SIZE_REDUCED",
+  "TEXT_CLIPPED",
+  "TARGET_COVERED",
+  "CALLOUT_OVERLAP",
+  "LEADER_ROUTE_BLOCKED",
+  "LEADER_TOO_SHORT",
+  "GEOMETRY_CLIPPED",
+  "INSUFFICIENT_SPACE"
+];
+
+function sortedLayoutIssues(issues: readonly RendererLayoutIssue[]): RendererLayoutIssue[] {
+  const unique = new Map<string, RendererLayoutIssue>();
+  for (const issue of issues) {
+    const key = `${issue.code}\0${issue.annotationId}\0${issue.relatedIds.join("\0")}\0${issue.message}`;
+    unique.set(key, issue);
+  }
+  return [...unique.values()].sort((left, right) => {
+    const codeDifference =
+      RENDERER_LAYOUT_ISSUE_ORDER.indexOf(left.code) -
+      RENDERER_LAYOUT_ISSUE_ORDER.indexOf(right.code);
+    if (codeDifference !== 0) return codeDifference;
+    return left.message.localeCompare(right.message, "en");
+  });
+}
+
+function denseIssue(issue: DenseLayoutDiagnostic): RendererLayoutIssue {
+  return layoutIssue(issue.code, issue.annotationId, issue.message, issue.relatedIds);
+}
+
+function textSpriteIssues(
+  annotation: RenderableAnnotation,
+  kind: "Callout" | "Numbered callout" | "Text",
+  sprite: TextSprite
+): RendererLayoutIssue[] {
+  const issues: RendererLayoutIssue[] = [];
+  if (sprite.wasClipped) {
+    issues.push(
+      layoutIssue(
+        "TEXT_CLIPPED",
+        annotation.id,
+        `${kind} ${annotation.id} text was clipped at ${sprite.fontSize}px from ${sprite.unclippedDimensions.width}x${sprite.unclippedDimensions.height} to ${sprite.width}x${sprite.height}; ${sprite.clippedAlphaPixelCount} visible alpha pixels were omitted.`,
+        [],
+        {
+          requestedFontSize: annotation.style.fontSize,
+          resolvedFontSize: sprite.fontSize,
+          unclippedWidth: sprite.unclippedDimensions.width,
+          unclippedHeight: sprite.unclippedDimensions.height,
+          clippedWidth: sprite.width,
+          clippedHeight: sprite.height,
+          clippedAlphaPixelCount: sprite.clippedAlphaPixelCount
+        }
+      ),
+      layoutIssue(
+        "INSUFFICIENT_SPACE",
+        annotation.id,
+        `${kind} ${annotation.id} had insufficient text area even at the minimum supported font size.`
+      )
+    );
+  } else if (sprite.wasShrunk) {
+    issues.push(
+      layoutIssue(
+        "TEXT_SIZE_REDUCED",
+        annotation.id,
+        `${kind} ${annotation.id} font size was reduced from ${annotation.style.fontSize}px to ${sprite.fontSize}px to fit the available text area.`,
+        [],
+        { requestedFontSize: annotation.style.fontSize, resolvedFontSize: sprite.fontSize }
+      )
+    );
+  }
+  return issues;
+}
+
+function resolvedTargetGeometry(
+  annotation: RenderableAnnotation,
+  width: number,
+  height: number
+): { target: PixelPoint | PixelRect; layoutTarget: PixelRect } {
+  const rawTarget = annotation.target ?? annotation.rect ?? annotation.position;
+  if (!rawTarget) throw new Error(`${annotation.type} ${annotation.id} is missing a target.`);
+  const target = isPixelRect(rawTarget)
+    ? integerRect(rawTarget, width, height)
+    : pointInCanvas(rawTarget, width, height);
+  const layoutTarget = isPixelRect(target)
+    ? target
+    : integerRect({ x: target.x - 2, y: target.y - 2, width: 4, height: 4 }, width, height);
+  return { target, layoutTarget };
+}
+
+async function measureVersion11TextAnnotation(
+  annotation: RenderableAnnotation,
+  width: number,
+  height: number,
+  fontPath: string
+): Promise<PreparedTextAnnotation> {
+  if (!annotation.position) throw new Error(`Text ${annotation.id} is missing position.`);
+  const position = pointInCanvas(annotation.position, width, height);
+  const maximumWidth = Math.max(
+    1,
+    Math.min(annotation.style.maxWidth, width - position.x - annotation.style.padding * 2)
+  );
+  const maximumHeight = Math.max(1, height - position.y - annotation.style.padding * 2);
+  const sprite = await renderTextSprite(
+    annotation.text ?? "",
+    annotation.style,
+    fontPath,
+    maximumWidth,
+    maximumHeight
+  );
+  const box = clampLabelBox(
+    {
+      x: position.x,
+      y: position.y,
+      width: Math.min(width, sprite.width + annotation.style.padding * 2),
+      height: Math.min(height, sprite.height + annotation.style.padding * 2)
+    },
+    width,
+    height,
+    0
+  );
+  const issues = textSpriteIssues(annotation, "Text", sprite);
+  if (box.x !== position.x || box.y !== position.y) {
+    issues.push(
+      layoutIssue(
+        "GEOMETRY_CLIPPED",
+        annotation.id,
+        `Text ${annotation.id} was moved from (${position.x}, ${position.y}) to (${box.x}, ${box.y}) to stay inside the canvas.`
+      )
+    );
+  }
+  return { annotation, position, box, sprite, issues: sortedLayoutIssues(issues) };
+}
+
+async function measureVersion11DenseAnnotation(
+  annotation: RenderableAnnotation,
+  index: number,
+  width: number,
+  height: number,
+  fontPath: string
+): Promise<DenseAnnotationMeasurement> {
+  const { target, layoutTarget } = resolvedTargetGeometry(annotation, width, height);
+  const text = annotation.text ?? "";
+  const margin = Math.min(4, Math.max(1, Math.floor((Math.min(width, height) - 1) / 4)));
+  const issues: RendererLayoutIssue[] = [];
+  if (annotation.type === "numbered-callout") {
+    const maximumLabelWidth = Math.max(1, width - margin * 2);
+    const maximumLabelHeight = Math.max(1, height - margin * 2);
+    const minimumTextExtent = Math.min(12, maximumLabelWidth, maximumLabelHeight);
+    const maximumPadding = Math.max(
+      0,
+      Math.floor((Math.min(maximumLabelWidth, maximumLabelHeight) - minimumTextExtent) / 2)
+    );
+    const requestedPadding = Math.round(annotation.style.padding);
+    const padding = Math.min(requestedPadding, maximumPadding);
+    const maximumTextWidth = Math.max(
+      1,
+      Math.min(annotation.style.maxWidth, maximumLabelWidth - padding * 2)
+    );
+    const maximumTextHeight = Math.max(1, maximumLabelHeight - padding * 2);
+    const sprite = await renderTextSprite(
+      text,
+      annotation.style,
+      fontPath,
+      maximumTextWidth,
+      maximumTextHeight,
+      { allowClipping: true }
+    );
+    issues.push(...textSpriteIssues(annotation, "Numbered callout", sprite));
+    if (padding < requestedPadding) {
+      issues.push(
+        layoutIssue(
+          "GEOMETRY_CLIPPED",
+          annotation.id,
+          `Numbered callout ${annotation.id} padding was reduced from ${requestedPadding}px to ${padding}px to fit the canvas.`,
+          [],
+          { requestedPadding, resolvedPadding: padding }
+        )
+      );
+    }
+    const markerSize = numberedMarkerRadius(annotation, sprite.fontSize, width, height);
+    const requestedStrokeWidth = visibleStrokeWidth(annotation.style);
+    const labelStrokeWidth = Math.min(requestedStrokeWidth, margin * 2);
+    const maximumLeaderStrokeWidth = Math.max(1, Math.min(8, markerSize.radius));
+    const leaderStrokeWidth = Math.min(requestedStrokeWidth, maximumLeaderStrokeWidth);
+    if (markerSize.radiusReduced) {
+      issues.push(
+        layoutIssue(
+          "GEOMETRY_CLIPPED",
+          annotation.id,
+          `Numbered callout ${annotation.id} marker radius was reduced to fit the canvas.`
+        )
+      );
+    }
+    if (markerSize.strokeWidthReduced) {
+      issues.push(
+        layoutIssue(
+          "GEOMETRY_CLIPPED",
+          annotation.id,
+          `Numbered callout ${annotation.id} marker stroke width was reduced from ${annotation.style.strokeWidth}px to ${Number(markerSize.strokeWidth.toFixed(1))}px to fit the canvas.`,
+          [],
+          {
+            requestedStrokeWidth: annotation.style.strokeWidth,
+            resolvedStrokeWidth: markerSize.strokeWidth
+          }
+        )
+      );
+    }
+    if (labelStrokeWidth < requestedStrokeWidth) {
+      issues.push(
+        layoutIssue(
+          "GEOMETRY_CLIPPED",
+          annotation.id,
+          `Numbered callout ${annotation.id} label stroke width was reduced from ${requestedStrokeWidth}px to ${labelStrokeWidth}px to fit the canvas.`,
+          [],
+          { requestedStrokeWidth, resolvedStrokeWidth: labelStrokeWidth }
+        )
+      );
+    }
+    if (leaderStrokeWidth < requestedStrokeWidth) {
+      issues.push(
+        layoutIssue(
+          "GEOMETRY_CLIPPED",
+          annotation.id,
+          `Numbered callout ${annotation.id} leader stroke width was reduced from ${requestedStrokeWidth}px to ${leaderStrokeWidth}px to preserve target visibility.`,
+          [],
+          { requestedStrokeWidth, resolvedStrokeWidth: leaderStrokeWidth }
+        )
+      );
+    }
+    const paintedOutset = labelStrokeWidth / 2;
+    const desiredGap =
+      paintedOutset +
+      markerSize.paintedRadius * 2 +
+      MINIMUM_VISIBLE_NUMBERED_LEADER +
+      NUMBERED_LEADER_RENDERING_ALLOWANCE;
+    return {
+      annotation,
+      target,
+      layoutTarget,
+      text,
+      number: annotation.number ?? index + 1,
+      padding,
+      sprite,
+      labelStrokeWidth,
+      leaderStrokeWidth,
+      labelWidth: Math.min(maximumLabelWidth, sprite.width + padding * 2),
+      labelHeight: Math.min(maximumLabelHeight, sprite.height + padding * 2),
+      gap: desiredGap,
+      paintedOutset,
+      facingDecorationDepth: desiredGap,
+      facingDecorationSpan: (markerSize.paintedRadius + paintedOutset) * 2,
+      markerSize,
+      issues: sortedLayoutIssues(issues)
+    };
+  }
+
+  const padding = Math.round(annotation.style.padding);
+  const maximumTextWidth = Math.max(
+    1,
+    Math.min(annotation.style.maxWidth, width - padding * 2 - 8)
+  );
+  const maximumTextHeight = Math.max(1, height - padding * 2 - 8);
+  const sprite = await renderTextSprite(
+    text,
+    annotation.style,
+    fontPath,
+    maximumTextWidth,
+    maximumTextHeight,
+    { allowClipping: true }
+  );
+  issues.push(...textSpriteIssues(annotation, "Callout", sprite));
+  const requestedStrokeWidth = visibleStrokeWidth(annotation.style);
+  const labelStrokeWidth = Math.min(requestedStrokeWidth, margin * 2);
+  const leaderStrokeWidth = Math.min(requestedStrokeWidth, 8);
+  if (labelStrokeWidth < requestedStrokeWidth || leaderStrokeWidth < requestedStrokeWidth) {
+    issues.push(
+      layoutIssue(
+        "GEOMETRY_CLIPPED",
+        annotation.id,
+        `Callout ${annotation.id} stroke widths were reduced to preserve in-canvas label and leader geometry.`,
+        [],
+        { requestedStrokeWidth, labelStrokeWidth, leaderStrokeWidth }
+      )
+    );
+  }
+  return {
+    annotation,
+    target,
+    layoutTarget,
+    text,
+    padding,
+    sprite,
+    labelStrokeWidth,
+    leaderStrokeWidth,
+    labelWidth: Math.min(width - 8, sprite.width + padding * 2),
+    labelHeight: Math.min(height - 8, sprite.height + padding * 2),
+    gap: MINIMUM_VISIBLE_NUMBERED_LEADER + NUMBERED_LEADER_RENDERING_ALLOWANCE,
+    paintedOutset: labelStrokeWidth / 2,
+    facingDecorationDepth: 0,
+    facingDecorationSpan: 0,
+    issues: sortedLayoutIssues(issues)
+  };
+}
+
+function measureVersion11Arrow(
+  annotation: RenderableAnnotation,
+  width: number,
+  height: number
+): ArrowMeasurement {
+  const rawTarget = annotation.target ?? annotation.rect;
+  const center = targetPoint(rawTarget);
+  if (!center) throw new Error(`Arrow ${annotation.id} is missing target.`);
+  const start = pointInCanvas(
+    annotation.start ?? {
+      x: center.x - Math.min(120, width / 4),
+      y: center.y - Math.min(90, height / 4)
+    },
+    width,
+    height
+  );
+  const target =
+    rawTarget && isPixelRect(rawTarget)
+      ? integerRect(rawTarget, width, height)
+      : pointInCanvas(center, width, height);
+  const end = pointInCanvas(
+    isPixelRect(target) ? arrowEndpointOnRect(start, target) : target,
+    width,
+    height
+  );
+  return { annotation, start, target, end };
+}
+
+function compareNumericTuple(left: readonly number[], right: readonly number[]): number {
+  for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
+    const difference = (left[index] ?? 0) - (right[index] ?? 0);
+    if (Math.abs(difference) > 1e-7) return difference;
+  }
+  return 0;
+}
+
+function prepareNumberedMarker(
+  measurement: DenseAnnotationMeasurement,
+  placement: DenseCalloutPlacement,
+  allPlacements: readonly DenseCalloutPlacement[],
+  targets: readonly RouteObstacle[],
+  priorMarkers: readonly { id: string; marker: PreparedMarker }[],
+  width: number,
+  height: number
+): { marker: PreparedMarker; issues: RendererLayoutIssue[] } {
+  const markerSize = measurement.markerSize;
+  if (markerSize === undefined) {
+    throw new Error(`Numbered callout ${measurement.annotation.id} is missing marker geometry.`);
+  }
+  const paintedLabelBox = inflateRect(placement.box, measurement.paintedOutset);
+  const orderedFaces = orderedMarkerFaces(
+    placement.placement,
+    paintedLabelBox,
+    measurement.layoutTarget
+  );
+  const candidates = orderedFaces.candidates.map((face, faceOrder) => {
+    const positioned = markerCenterForLabel(
+      placement.placement,
+      paintedLabelBox,
+      measurement.layoutTarget,
+      markerSize.paintedRadius,
+      width,
+      height,
+      face.face
+    );
+    const marker: PreparedMarker = {
+      center: positioned.center,
+      radius: markerSize.radius,
+      paintedRadius: markerSize.paintedRadius,
+      strokeWidth: markerSize.strokeWidth,
+      labelSide: positioned.face,
+      bounds: {
+        x: positioned.center.x - markerSize.paintedRadius,
+        y: positioned.center.y - markerSize.paintedRadius,
+        width: markerSize.paintedRadius * 2,
+        height: markerSize.paintedRadius * 2
+      }
+    };
+    const targetIds = targets
+      .filter((target) => rectsOverlap(marker.bounds, target.rect))
+      .map((target) => target.id);
+    const labelIds = allPlacements
+      .filter(
+        (other) =>
+          other.id !== measurement.annotation.id && rectsOverlap(marker.bounds, other.paintedBox)
+      )
+      .map((other) => `label:${other.id}`);
+    const priorMarkerIds = priorMarkers
+      .filter((other) => rectsOverlap(marker.bounds, other.marker.bounds))
+      .map((other) => `marker:${other.id}`);
+    const ownLabelOverlap = rectsOverlap(marker.bounds, paintedLabelBox);
+    const clipped = !rectInsideCanvas(marker.bounds, width, height);
+    return {
+      marker,
+      positioned,
+      faceOrder,
+      targetIds,
+      labelIds,
+      priorMarkerIds,
+      ownLabelOverlap,
+      clipped,
+      score: [
+        targetIds.length,
+        labelIds.length + priorMarkerIds.length + Number(ownLabelOverlap),
+        Number(clipped),
+        faceOrder
+      ]
+    };
+  });
+  const selected = candidates.reduce((best, candidate) =>
+    compareNumericTuple(candidate.score, best.score) < 0 ? candidate : best
+  );
+  const issues: RendererLayoutIssue[] = [];
+  if (selected.targetIds.length > 0) {
+    issues.push(
+      layoutIssue(
+        "TARGET_COVERED",
+        measurement.annotation.id,
+        `Numbered callout ${measurement.annotation.id} marker covers ${selected.targetIds.length} protected target${selected.targetIds.length === 1 ? "" : "s"}.`,
+        selected.targetIds
+      )
+    );
+  }
+  const collisionIds = [
+    ...selected.labelIds,
+    ...selected.priorMarkerIds,
+    ...(selected.ownLabelOverlap ? [`label:${measurement.annotation.id}`] : [])
+  ];
+  if (collisionIds.length > 0) {
+    issues.push(
+      layoutIssue(
+        "CALLOUT_OVERLAP",
+        measurement.annotation.id,
+        `Numbered callout ${measurement.annotation.id} marker overlaps ${collisionIds.length} label or marker footprint${collisionIds.length === 1 ? "" : "s"}.`,
+        collisionIds
+      )
+    );
+  }
+  if (selected.clipped) {
+    issues.push(
+      layoutIssue(
+        "GEOMETRY_CLIPPED",
+        measurement.annotation.id,
+        `Numbered callout ${measurement.annotation.id} marker was shifted or clipped at the canvas edge.`
+      )
+    );
+  }
+  if (
+    measurement.annotation.placement !== undefined &&
+    measurement.annotation.placement !== "auto" &&
+    (selected.positioned.wasClamped ||
+      selected.marker.labelSide !== selected.positioned.preferredFace)
+  ) {
+    issues.push(
+      layoutIssue(
+        "GEOMETRY_CLIPPED",
+        measurement.annotation.id,
+        `Numbered callout ${measurement.annotation.id} marker moved to the ${selected.marker.labelSide} label edge to stay inside the canvas without overlapping its label.`
+      )
+    );
+  }
+  if (selected.targetIds.length > 0 || collisionIds.length > 0 || selected.clipped) {
+    issues.push(
+      layoutIssue(
+        "INSUFFICIENT_SPACE",
+        measurement.annotation.id,
+        `Numbered callout ${measurement.annotation.id} had no marker position satisfying every protected geometry constraint.`,
+        [...selected.targetIds, ...collisionIds]
+      )
+    );
+  }
+  return { marker: selected.marker, issues: sortedLayoutIssues(issues) };
+}
+
+function routeLayoutIssues(
+  annotation: RenderableAnnotation,
+  route: LeaderRoute,
+  strokeWidth: number,
+  width: number,
+  height: number
+): RendererLayoutIssue[] {
+  const issues: RendererLayoutIssue[] = [];
+  if (route.collisionIds.length > 0) {
+    issues.push(
+      layoutIssue(
+        "LEADER_ROUTE_BLOCKED",
+        annotation.id,
+        `${annotation.type === "arrow" ? "Arrow" : "Callout"} ${annotation.id} has no collision-free routed path and intersects ${route.collisionIds.length} protected obstacle${route.collisionIds.length === 1 ? "" : "s"}.`,
+        route.collisionIds
+      )
+    );
+  }
+  if (route.pathLength + 0.001 < MINIMUM_VISIBLE_NUMBERED_LEADER || strokeWidth <= 0) {
+    const subject = annotation.type === "arrow" ? "Arrow" : "Callout";
+    const message =
+      strokeWidth <= 0
+        ? `${subject} ${annotation.id} leader is invisible because its resolved stroke width, opacity, or color alpha is zero; 0px of visible leader is available.`
+        : `${subject} ${annotation.id} has ${Number(route.pathLength.toFixed(1))}px of visible routed path; ${MINIMUM_VISIBLE_NUMBERED_LEADER}px with visible stroke was not available.`;
+    issues.push(
+      layoutIssue("LEADER_TOO_SHORT", annotation.id, message, [], {
+        pathLength: route.pathLength,
+        minimumPathLength: MINIMUM_VISIBLE_NUMBERED_LEADER
+      })
+    );
+  }
+  if (!rectInsideCanvas(route.bounds, width, height)) {
+    const subject =
+      annotation.type === "numbered-callout"
+        ? `Numbered callout ${annotation.id} painted leader was clipped by the canvas.`
+        : `${annotation.type === "arrow" ? "Arrow" : "Callout"} ${annotation.id} routed path was clipped by the canvas.`;
+    issues.push(layoutIssue("GEOMETRY_CLIPPED", annotation.id, subject));
+  }
+  return sortedLayoutIssues(issues);
+}
+
+function invisibleLeaderRoute(point: PixelPoint, strokeWidth: number): LeaderRoute {
+  const radius = Math.max(0.5, strokeWidth / 2);
+  return {
+    points: [point],
+    segments: [],
+    directDistance: 0,
+    pathLength: 0,
+    bendCount: 0,
+    bounds: {
+      x: point.x - radius,
+      y: point.y - radius,
+      width: radius * 2,
+      height: radius * 2
+    },
+    collisionIds: [],
+    diagnostics: []
+  };
+}
+
+async function prepareVersion11Layout(
+  renderable: readonly RenderableAnnotation[],
+  width: number,
+  height: number,
+  fontPath: string
+): Promise<Version11LayoutPlan> {
+  const textEntries = await Promise.all(
+    renderable
+      .filter((annotation) => annotation.type === "text")
+      .map((annotation) => measureVersion11TextAnnotation(annotation, width, height, fontPath))
+  );
+  const denseMeasurements = await Promise.all(
+    renderable.flatMap((annotation, index) =>
+      annotation.type === "callout" || annotation.type === "numbered-callout"
+        ? [measureVersion11DenseAnnotation(annotation, index, width, height, fontPath)]
+        : []
+    )
+  );
+  const arrowMeasurements = renderable
+    .filter((annotation) => annotation.type === "arrow")
+    .map((annotation) => measureVersion11Arrow(annotation, width, height));
+  const arrowTargets = arrowMeasurements.map((arrow) => ({
+    id: arrow.annotation.id,
+    rect: isPixelRect(arrow.target)
+      ? arrow.target
+      : integerRect(
+          { x: arrow.target.x - 2, y: arrow.target.y - 2, width: 4, height: 4 },
+          width,
+          height
+        )
+  }));
+  const denseLayout = layoutDenseCallouts({
+    canvas: { width, height },
+    items: denseMeasurements.map((measurement) => ({
+      id: measurement.annotation.id,
+      target: measurement.layoutTarget,
+      box: { width: measurement.labelWidth, height: measurement.labelHeight },
+      placement: measurement.annotation.placement ?? "auto",
+      gap: measurement.gap,
+      paintedOutset: measurement.paintedOutset + 3,
+      facingDecorationDepth: measurement.facingDecorationDepth,
+      facingDecorationSpan: measurement.facingDecorationSpan
+    })),
+    protectedTargets: arrowTargets,
+    obstacles: textEntries.map((entry) => ({ id: `text:${entry.annotation.id}`, rect: entry.box })),
+    margin: 4,
+    gap: MINIMUM_VISIBLE_NUMBERED_LEADER + NUMBERED_LEADER_RENDERING_ALLOWANCE,
+    clearance: 6,
+    leaderStrokeWidth: 2,
+    minimumLeaderLength: MINIMUM_VISIBLE_NUMBERED_LEADER
+  });
+  const placements = new Map(denseLayout.placements.map((placement) => [placement.id, placement]));
+  const allTargets: RouteObstacle[] = [
+    ...denseMeasurements.map((measurement) => ({
+      id: `target:${measurement.annotation.id}`,
+      rect: measurement.layoutTarget,
+      clearance: 0
+    })),
+    ...arrowTargets.map((target) => ({
+      id: `target:${target.id}`,
+      rect: target.rect,
+      clearance: 0
+    }))
+  ];
+  const markerEntries: { id: string; marker: PreparedMarker; issues: RendererLayoutIssue[] }[] = [];
+  for (const measurement of denseMeasurements) {
+    if (measurement.annotation.type !== "numbered-callout") continue;
+    const placement = placements.get(measurement.annotation.id);
+    if (placement === undefined) throw new Error("Dense layout omitted a numbered callout.");
+    const prepared = prepareNumberedMarker(
+      measurement,
+      placement,
+      denseLayout.placements,
+      allTargets,
+      markerEntries,
+      width,
+      height
+    );
+    markerEntries.push({ id: measurement.annotation.id, ...prepared });
+  }
+  const markers = new Map(markerEntries.map((entry) => [entry.id, entry]));
+  const staticObstacles: RouteObstacle[] = [
+    ...textEntries.map((entry) => ({
+      id: `text:${entry.annotation.id}`,
+      rect: entry.box,
+      clearance: 0
+    })),
+    ...denseLayout.placements.map((placement) => ({
+      id: `label:${placement.id}`,
+      rect: inflateRect(
+        placement.box,
+        denseMeasurements.find((measurement) => measurement.annotation.id === placement.id)
+          ?.paintedOutset ?? 0
+      ),
+      clearance: 0
+    })),
+    ...markerEntries.map((entry) => ({
+      id: `marker:${entry.id}`,
+      rect: entry.marker.bounds,
+      clearance: 0
+    })),
+    ...allTargets
+  ];
+  const dense = new Map<string, PreparedDenseAnnotation>();
+  const arrows = new Map<string, PreparedArrowAnnotation>();
+
+  for (const annotation of renderable) {
+    if (annotation.type === "callout" || annotation.type === "numbered-callout") {
+      const measurement = denseMeasurements.find(
+        (candidate) => candidate.annotation.id === annotation.id
+      );
+      const placement = placements.get(annotation.id);
+      if (measurement === undefined || placement === undefined) {
+        throw new Error(`Dense layout omitted callout ${annotation.id}.`);
+      }
+      const markerEntry = markers.get(annotation.id);
+      const endpoints =
+        markerEntry === undefined
+          ? { start: placement.anchor, end: placement.targetAnchor }
+          : connectCircleToTarget(
+              { center: markerEntry.marker.center, radius: markerEntry.marker.paintedRadius },
+              measurement.target
+            );
+      const headObstacles = staticObstacles.filter(
+        (obstacle) =>
+          obstacle.id !== `marker:${annotation.id}` &&
+          obstacle.id !== `target:${annotation.id}` &&
+          !(
+            obstacle.id.startsWith("target:") &&
+            samePixelRect(obstacle.rect, measurement.layoutTarget)
+          )
+      );
+      const obstacles =
+        markerEntry === undefined
+          ? headObstacles.filter((obstacle) => obstacle.id !== `label:${annotation.id}`)
+          : headObstacles;
+      const arrowRoute =
+        markerEntry === undefined && measurement.leaderStrokeWidth > 0
+          ? routeWithArrowHeadAvoidance(
+              { width, height },
+              endpoints.start,
+              targetBoundaryCandidates(
+                measurement.target,
+                endpoints.end,
+                Math.max(annotation.style.arrowHeadSize, measurement.leaderStrokeWidth * 2) + 2,
+                { width, height },
+                `target:${annotation.id}`
+              ),
+              obstacles,
+              annotation.style,
+              measurement.leaderStrokeWidth,
+              headObstacles
+            )
+          : undefined;
+      const route =
+        measurement.leaderStrokeWidth <= 0
+          ? invisibleLeaderRoute(endpoints.end, measurement.leaderStrokeWidth)
+          : (arrowRoute?.route ??
+            (markerEntry === undefined
+              ? routeLeader({
+                  canvas: { width, height },
+                  start: endpoints.start,
+                  end: endpoints.end,
+                  obstacles,
+                  clearance: 4,
+                  strokeWidth: measurement.leaderStrokeWidth
+                })
+              : routeFromStartCandidates(
+                  { width, height },
+                  markerBoundaryCandidates(markerEntry.marker, endpoints.start),
+                  endpoints.end,
+                  obstacles,
+                  4,
+                  measurement.leaderStrokeWidth
+                )));
+      const headIssues: RendererLayoutIssue[] = [];
+      if (arrowRoute !== undefined && arrowRoute.headCollisionIds.length > 0) {
+        const targetIds = arrowRoute.headCollisionIds.filter((id) => id.startsWith("target:"));
+        const geometryIds = arrowRoute.headCollisionIds.filter((id) => !id.startsWith("target:"));
+        if (targetIds.length > 0) {
+          headIssues.push(
+            layoutIssue(
+              "TARGET_COVERED",
+              annotation.id,
+              `Callout ${annotation.id} arrowhead covers ${targetIds.length} protected target${targetIds.length === 1 ? "" : "s"}.`,
+              targetIds
+            )
+          );
+        }
+        if (geometryIds.length > 0) {
+          headIssues.push(
+            layoutIssue(
+              "CALLOUT_OVERLAP",
+              annotation.id,
+              `Callout ${annotation.id} arrowhead overlaps ${geometryIds.length} protected label or marker${geometryIds.length === 1 ? "" : "s"}.`,
+              geometryIds
+            )
+          );
+        }
+        headIssues.push(
+          layoutIssue(
+            "INSUFFICIENT_SPACE",
+            annotation.id,
+            `Callout ${annotation.id} had no route whose arrowhead cleared every protected geometry.`,
+            arrowRoute.headCollisionIds
+          )
+        );
+      }
+      const issues = sortedLayoutIssues([
+        ...measurement.issues,
+        ...placement.diagnostics
+          .filter(
+            (issue) => issue.code !== "LEADER_ROUTE_BLOCKED" && issue.code !== "LEADER_TOO_SHORT"
+          )
+          .map(denseIssue),
+        ...(markerEntry?.issues ?? []),
+        ...headIssues,
+        ...routeLayoutIssues(annotation, route, measurement.leaderStrokeWidth, width, height)
+      ]);
+      dense.set(annotation.id, {
+        annotation,
+        target: measurement.target,
+        layoutTarget: measurement.layoutTarget,
+        text: measurement.text,
+        ...(measurement.number === undefined ? {} : { number: measurement.number }),
+        padding: measurement.padding,
+        sprite: measurement.sprite,
+        labelStrokeWidth: measurement.labelStrokeWidth,
+        leaderStrokeWidth: measurement.leaderStrokeWidth,
+        placement,
+        paintedLabelBox: inflateRect(placement.box, measurement.paintedOutset),
+        ...(markerEntry === undefined ? {} : { marker: markerEntry.marker }),
+        route,
+        ...(arrowRoute === undefined ? {} : { arrowHead: arrowRoute.arrowHead }),
+        issues
+      });
+      continue;
+    }
+    if (annotation.type === "arrow") {
+      const measurement = arrowMeasurements.find(
+        (candidate) => candidate.annotation.id === annotation.id
+      );
+      if (measurement === undefined)
+        throw new Error(`Dense layout omitted arrow ${annotation.id}.`);
+      const excludedIds = new Set([`target:${annotation.id}`]);
+      const arrowStrokeWidth = visibleStrokeWidth(annotation.style);
+      const ownTarget = isPixelRect(measurement.target)
+        ? measurement.target
+        : integerRect(
+            {
+              x: measurement.target.x - 2,
+              y: measurement.target.y - 2,
+              width: 4,
+              height: 4
+            },
+            width,
+            height
+          );
+      const obstacles = staticObstacles.filter(
+        (obstacle) =>
+          !excludedIds.has(obstacle.id) &&
+          !(obstacle.id.startsWith("target:") && samePixelRect(obstacle.rect, ownTarget))
+      );
+      const planned =
+        arrowStrokeWidth <= 0
+          ? {
+              route: invisibleLeaderRoute(measurement.end, arrowStrokeWidth),
+              arrowHead: arrowHeadGeometry([measurement.end], annotation.style),
+              headCollisionIds: [] as string[]
+            }
+          : routeWithArrowHeadAvoidance(
+              { width, height },
+              measurement.start,
+              targetBoundaryCandidates(
+                measurement.target,
+                measurement.end,
+                Math.max(annotation.style.arrowHeadSize, arrowStrokeWidth * 2) + 2,
+                { width, height },
+                `target:${annotation.id}`
+              ),
+              obstacles,
+              annotation.style,
+              arrowStrokeWidth
+            );
+      const { route, arrowHead } = planned;
+      const issues = routeLayoutIssues(annotation, route, arrowStrokeWidth, width, height);
+      if (planned.headCollisionIds.length > 0) {
+        const targetIds = planned.headCollisionIds.filter((id) => id.startsWith("target:"));
+        const geometryIds = planned.headCollisionIds.filter((id) => !id.startsWith("target:"));
+        if (targetIds.length > 0) {
+          issues.push(
+            layoutIssue(
+              "TARGET_COVERED",
+              annotation.id,
+              `Arrow ${annotation.id} head covers ${targetIds.length} protected target${targetIds.length === 1 ? "" : "s"}.`,
+              targetIds
+            )
+          );
+        }
+        if (geometryIds.length > 0) {
+          issues.push(
+            layoutIssue(
+              "CALLOUT_OVERLAP",
+              annotation.id,
+              `Arrow ${annotation.id} head overlaps ${geometryIds.length} protected label or marker${geometryIds.length === 1 ? "" : "s"}.`,
+              geometryIds
+            )
+          );
+        }
+        issues.push(
+          layoutIssue(
+            "INSUFFICIENT_SPACE",
+            annotation.id,
+            `Arrow ${annotation.id} had no route whose head cleared every protected geometry.`,
+            planned.headCollisionIds
+          )
+        );
+      }
+      if (!rectInsideCanvas(arrowHead.bounds, width, height)) {
+        issues.push(
+          layoutIssue(
+            "GEOMETRY_CLIPPED",
+            annotation.id,
+            `Arrow ${annotation.id} head was clipped by the canvas.`
+          )
+        );
+      }
+      arrows.set(annotation.id, {
+        annotation,
+        start: measurement.start,
+        target: measurement.target,
+        end: route.points.at(-1) ?? measurement.end,
+        route,
+        arrowHead,
+        issues: sortedLayoutIssues(issues)
+      });
+    }
+  }
+
+  const text = new Map(textEntries.map((entry) => [entry.annotation.id, entry]));
+  const order = new Map(renderable.map((annotation, index) => [annotation.id, index]));
+  const allIssues = [
+    ...textEntries.flatMap((entry) => entry.issues),
+    ...[...dense.values()].flatMap((entry) => entry.issues),
+    ...[...arrows.values()].flatMap((entry) => entry.issues)
+  ].sort((left, right) => {
+    const indexDifference =
+      (order.get(left.annotationId) ?? 0) - (order.get(right.annotationId) ?? 0);
+    if (indexDifference !== 0) return indexDifference;
+    return (
+      RENDERER_LAYOUT_ISSUE_ORDER.indexOf(left.code) -
+      RENDERER_LAYOUT_ISSUE_ORDER.indexOf(right.code)
+    );
+  });
+  return {
+    text,
+    dense,
+    arrows,
+    warnings: allIssues.map((issue) => `[${issue.code}] ${issue.message}`)
+  };
+}
+
+async function renderPreparedTextAnnotation(
+  base: Buffer,
+  prepared: PreparedTextAnnotation,
+  width: number,
+  height: number
+): Promise<{ buffer: Buffer; resolved: Record<string, unknown> }> {
+  const { annotation, box, position, sprite } = prepared;
+  const backgroundStyle = {
+    ...annotation.style,
+    fillColor: annotation.style.backgroundColor,
+    opacity: annotation.style.backgroundColor === "transparent" ? 0 : annotation.style.opacity
+  };
+  const overlays: OverlayOptions[] = [];
+  if (backgroundStyle.opacity > 0) {
+    overlays.push({
+      input: controlledSvg(
+        width,
+        height,
+        rectangleBody(box, backgroundStyle, annotation.style.cornerRadius)
+      ),
+      left: 0,
+      top: 0
+    });
+  }
+  overlays.push({
+    input: sprite.buffer,
+    left: Math.round(box.x + annotation.style.padding),
+    top: Math.round(box.y + annotation.style.padding)
+  });
+  return {
+    buffer: await compositeStable(base, overlays),
+    resolved: {
+      id: annotation.id,
+      type: annotation.type,
+      position,
+      box,
+      text: annotation.text ?? "",
+      fontSize: sprite.fontSize,
+      layout: layoutResult(prepared.issues)
+    }
+  };
+}
+
+async function renderPreparedDenseAnnotation(
+  base: Buffer,
+  prepared: PreparedDenseAnnotation,
+  width: number,
+  height: number,
+  fontPath: string
+): Promise<{ buffer: Buffer; resolved: Record<string, unknown> }> {
+  const { annotation, placement, route, sprite } = prepared;
+  let rendered = base;
+  if (route.segments.length > 0 && prepared.leaderStrokeWidth > 0) {
+    const routeStyle = { ...annotation.style, strokeWidth: prepared.leaderStrokeWidth };
+    const body =
+      annotation.type === "numbered-callout"
+        ? routedLeaderBody(route.points, routeStyle)
+        : routedArrowBody(route.points, routeStyle);
+    rendered = await compositeStable(rendered, [
+      { input: controlledSvg(width, height, body), left: 0, top: 0 }
+    ]);
+  }
+  const backgroundStyle: RenderStyle = {
+    ...annotation.style,
+    fillColor: annotation.style.backgroundColor,
+    strokeWidth: prepared.labelStrokeWidth,
+    opacity: annotation.style.opacity
+  };
+  rendered = await compositeStable(rendered, [
+    {
+      input: controlledSvg(
+        width,
+        height,
+        rectangleBody(placement.box, backgroundStyle, annotation.style.cornerRadius)
+      ),
+      left: 0,
+      top: 0
+    },
+    {
+      input: sprite.buffer,
+      left: Math.max(0, Math.round(placement.box.x + prepared.padding)),
+      top: Math.max(0, Math.round(placement.box.y + prepared.padding))
+    }
+  ]);
+  if (prepared.marker !== undefined) {
+    rendered = await renderNumberMarkerAt(
+      rendered,
+      annotation,
+      prepared.number ?? 1,
+      prepared.marker.center,
+      prepared.marker.radius,
+      prepared.marker.strokeWidth,
+      width,
+      height,
+      fontPath
+    );
+  }
+  const routeRecord = resolvedRoute(route, prepared.leaderStrokeWidth);
+  const common = {
+    id: annotation.id,
+    type: annotation.type,
+    target: prepared.target,
+    box: placement.box,
+    anchor: routeRecord.start,
+    targetAnchor: routeRecord.end,
+    placement: placement.placement,
+    text: prepared.text,
+    fontSize: sprite.fontSize,
+    leader: routeRecord,
+    ...(prepared.arrowHead === undefined ? {} : { arrowHead: prepared.arrowHead }),
+    layout: layoutResult(prepared.issues),
+    style: annotation.style
+  };
+  return {
+    buffer: rendered,
+    resolved:
+      prepared.marker === undefined
+        ? {
+            ...common,
+            label: {
+              box: placement.box,
+              paintedBounds: prepared.paintedLabelBox,
+              placement: placement.placement,
+              text: prepared.text,
+              fontSize: sprite.fontSize,
+              padding: prepared.padding,
+              strokeWidth: prepared.labelStrokeWidth
+            }
+          }
+        : {
+            ...common,
+            number: prepared.number,
+            marker: prepared.marker,
+            label: {
+              box: placement.box,
+              paintedBounds: prepared.paintedLabelBox,
+              placement: placement.placement,
+              text: prepared.text,
+              fontSize: sprite.fontSize,
+              padding: prepared.padding,
+              strokeWidth: prepared.labelStrokeWidth
+            }
+          }
+  };
+}
+
+async function renderPreparedArrowAnnotation(
+  base: Buffer,
+  prepared: PreparedArrowAnnotation,
+  width: number,
+  height: number
+): Promise<{ buffer: Buffer; resolved: Record<string, unknown> }> {
+  const strokeWidth = visibleStrokeWidth(prepared.annotation.style);
+  const rendered =
+    prepared.route.segments.length === 0 || strokeWidth <= 0
+      ? base
+      : await compositeStable(base, [
+          {
+            input: controlledSvg(
+              width,
+              height,
+              routedArrowBody(prepared.route.points, prepared.annotation.style)
+            ),
+            left: 0,
+            top: 0
+          }
+        ]);
+  return {
+    buffer: rendered,
+    resolved: {
+      id: prepared.annotation.id,
+      type: prepared.annotation.type,
+      start: prepared.start,
+      target: prepared.target,
+      end: prepared.end,
+      path: resolvedRoute(prepared.route, strokeWidth),
+      arrowHead: prepared.arrowHead,
+      layout: layoutResult(prepared.issues),
+      style: prepared.annotation.style
+    }
+  };
+}
+
 export async function renderAnnotations(
   input: Buffer,
   annotations: readonly unknown[],
@@ -1589,6 +3258,11 @@ export async function renderAnnotations(
   let current: Buffer<ArrayBufferLike> = normalized.data;
   let usesBlur = false;
   let usesRedact = false;
+  const version11Layout =
+    specVersion === "1.1"
+      ? await prepareVersion11Layout(renderable, width, height, fontPath)
+      : undefined;
+  if (version11Layout !== undefined) warnings.push(...version11Layout.warnings);
 
   for (let index = 0; index < renderable.length; index += 1) {
     const annotation = renderable[index];
@@ -1641,6 +3315,14 @@ export async function renderAnnotations(
     }
 
     if (annotation.type === "arrow") {
+      if (version11Layout !== undefined) {
+        const prepared = version11Layout.arrows.get(annotation.id);
+        if (prepared === undefined) throw new Error(`Missing prepared arrow ${annotation.id}.`);
+        const rendered = await renderPreparedArrowAnnotation(current, prepared, width, height);
+        current = rendered.buffer;
+        resolvedAnnotations.push(rendered.resolved);
+        continue;
+      }
       const rawTarget = annotation.target ?? annotation.rect;
       const center = targetPoint(rawTarget);
       if (!center) throw new Error(`Arrow ${annotation.id} is missing target.`);
@@ -1680,6 +3362,16 @@ export async function renderAnnotations(
     }
 
     if (annotation.type === "text") {
+      if (version11Layout !== undefined) {
+        const prepared = version11Layout.text.get(annotation.id);
+        if (prepared === undefined) throw new Error(`Missing prepared text ${annotation.id}.`);
+        const rendered = await renderPreparedTextAnnotation(current, prepared, width, height);
+        current = rendered.buffer;
+        occupied.push(prepared.box);
+        occupiedGroups.push({ annotationId: annotation.id, rects: [prepared.box], segments: [] });
+        resolvedAnnotations.push(rendered.resolved);
+        continue;
+      }
       if (!annotation.position) throw new Error(`Text ${annotation.id} is missing position.`);
       const position = pointInCanvas(annotation.position, width, height);
       const maximumWidth = Math.max(
@@ -1754,6 +3446,10 @@ export async function renderAnnotations(
     if (annotation.type === "numbered-callout") {
       const number = annotation.number ?? index + 1;
       if (specVersion === "1.1") {
+        const prepared = version11Layout?.dense.get(annotation.id);
+        if (prepared === undefined) {
+          throw new Error(`Missing prepared numbered callout ${annotation.id}.`);
+        }
         const callout = await renderVersion11NumberedCallout(
           current,
           annotation,
@@ -1762,16 +3458,25 @@ export async function renderAnnotations(
           height,
           fontPath,
           occupiedGroups,
-          warnings
+          warnings,
+          prepared
         );
         current = callout.buffer;
+        const markerBounds = prepared.marker?.bounds;
         const occupiedRects = [
-          callout.paintedLabelBox,
-          callout.markerBox,
-          ...(callout.leaderBox ? [callout.leaderBox] : [])
+          prepared.paintedLabelBox,
+          ...(markerBounds === undefined ? [] : [markerBounds]),
+          ...(prepared.route.segments.length === 0 ? [] : [prepared.route.bounds])
         ];
         occupied.push(unionRects(occupiedRects));
-        occupiedGroups.push(callout.occupiedGeometry);
+        occupiedGroups.push({
+          annotationId: annotation.id,
+          rects: [prepared.paintedLabelBox, ...(markerBounds === undefined ? [] : [markerBounds])],
+          segments: prepared.route.segments.map((segment) => ({
+            ...segment,
+            strokeWidth: prepared.leaderStrokeWidth
+          }))
+        });
         resolvedAnnotations.push(callout.resolved);
         continue;
       }
@@ -1834,19 +3539,24 @@ export async function renderAnnotations(
       continue;
     }
 
-    const callout = await renderCallout(
-      current,
-      annotation,
-      width,
-      height,
-      fontPath,
-      occupied,
-      warnings
-    );
+    const prepared = version11Layout?.dense.get(annotation.id);
+    const callout =
+      prepared === undefined
+        ? await renderCallout(current, annotation, width, height, fontPath, occupied, warnings)
+        : await renderPreparedDenseAnnotation(current, prepared, width, height, fontPath);
     current = callout.buffer;
-    if (callout.box) {
-      occupied.push(callout.box);
-      occupiedGroups.push({ annotationId: annotation.id, rects: [callout.box], segments: [] });
+    const occupiedBox = prepared?.paintedLabelBox ?? (callout as { box?: PixelRect }).box;
+    if (occupiedBox) {
+      occupied.push(occupiedBox);
+      occupiedGroups.push({
+        annotationId: annotation.id,
+        rects: [occupiedBox],
+        segments:
+          prepared?.route.segments.map((segment) => ({
+            ...segment,
+            strokeWidth: prepared.leaderStrokeWidth
+          })) ?? []
+      });
     }
     resolvedAnnotations.push(callout.resolved);
   }

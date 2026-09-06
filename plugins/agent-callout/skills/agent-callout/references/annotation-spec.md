@@ -56,9 +56,13 @@ Points resolve to the nearest pixel; normalized points scale against `imageWidth
 
 For callouts, omit `placement` or use `auto` first. Other values are `top`, `right`, `bottom`, and `left`. Prefer a rectangular target when its bounds are known.
 
-For a 1.1 `numbered-callout`, keep `target` on the reviewed point or rectangle. The renderer separately resolves the label, attaches the marker immediately outside the label edge facing that target, and connects the painted marker boundary to the point or rectangular boundary. It reserves at least 24px of exposed leader when the canvas and occupied annotations permit. The sidecar records `target`, `marker`, `label`, and `leader`; these are audit output only and remain invalid as input fields. Version 1.0 deliberately retains its original target-centered marker and paint order.
+For a 1.1 `numbered-callout`, keep `target` on the reviewed point or rectangle. The renderer places the label and marker outside the target and prefers the target-facing label edge; dense obstacles may require another edge. A leader connects the painted marker boundary to the target boundary and reserves at least 24px of exposed path when space permits. The sidecar records `target`, `marker`, `label`, and `leader`; these are audit output only and remain invalid as input fields. Version 1.0 retains its original target-centered marker and paint order.
 
-The marker-aware 1.1 numbered geometry is versioned with renderer 0.1.3. Check sidecar renderer/font metadata and regenerate plus visually review under a changed renderer; do not claim cross-build pixel equivalence. Frozen 1.0 replay remains unchanged.
+Renderer 0.2.1 plans all 1.1 callouts together, reserves every target and fixed text obstacle, and can route ordinary arrows, callout arrows, and numbered leaders along orthogonal segments. Placement is a preference, not a fixed location. Submit related annotations in one spec so they participate in the same plan. Check renderer/font metadata and visually review when changing renderer versions; 1.0 retains its old rendering path.
+
+Resolved `leader` (callouts) or `path` (arrows) describes `kind`, `start`, `end`, direct endpoint `length`, full routed `pathLength`, `points`, `segments`, `bendCount`, and `strokeWidth`. Nonempty routes also have `bounds`. Arrow geometry includes `arrowHead`; layout records `status` and `issues`. Never copy these output-only fields back into the spec. A bent route's `length` is not its total visible path length.
+
+Stable warning codes include `CALLOUT_OVERLAP`, `TARGET_COVERED`, `LEADER_TOO_SHORT`, `LEADER_ROUTE_BLOCKED`, `TEXT_CLIPPED`, `INSUFFICIENT_SPACE`, and `GEOMETRY_CLIPPED`. Dense 1.1 callout text can be bounded and clipped when it cannot fit even at the minimum font size; that produces warnings and clipping measurements. Shorten or split the explanation and inspect the PNG. Standalone text and 1.0 retain fail-rather-than-clip behavior.
 
 ## Style without repetition
 
@@ -150,6 +154,8 @@ A successful revision result contains `review`:
 - `none`: existing blur/redact coverage was removed, moved, resized, or otherwise changed. No ImageContent is returned because the new output may reveal previously covered pixels.
 
 The MCP `preview` adds detail, dimensions, byte count, and the same mode/sourceRect. Each call returns at most one image, with longest side 512px and at most 64 KiB. Encoding failure returns the planned mode plus `fallbackReason: "encoding-failed"` and no image. Do not issue another crop when changed-region already shows the complete local interaction; open the saved full output only for global layout review.
+
+A successful image preview also includes `pixelMetrics`: `fullRasterPixelCount`, `sourceRegionPixelCount`, `previewRasterPixelCount`, `sourceRegionCoverageRatio`, `previewToSourceRegionRatio`, `previewToFullRasterRatio`, and `previewPixelReductionRatio`. These describe the actual preview raster, with ratios rounded to six decimals. TextContent and image metadata carry the same values. No image or failed final byte validation means no metrics. Pixel and byte reductions do not establish token or cost savings.
 
 `inspect_annotation_sidecar` is read-only and accepts only `sidecarPath`. It validates the strict manifest, paired output and entire parent chain, then returns a ≤4 KiB inventory with versions, dimensions, counts by type, revision depth, warning count, integrity states and blur/redact flags. It does not open the original input and reports it as `record-only`. It intentionally excludes every path/file name, hash, lineage/edits, annotation ID/text/style/raw warning/resolved geometry, renderer/font detail and ImageContent.
 

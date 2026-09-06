@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
@@ -6,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import sharp from "sharp";
 import { z } from "zod";
 
 import {
@@ -21,6 +23,7 @@ import {
   reviseAnnotation,
   validateSpecForImage
 } from "../index.js";
+import type { PreviewPixelMetrics } from "../index.js";
 import { annotationRevisionEditsSchema, annotationSpecSchema } from "../spec/index.js";
 
 const MAX_PATH_LENGTH = 32_767;
@@ -184,6 +187,7 @@ interface PreviewPayload {
   fallbackReason?: string | undefined;
   height: number;
   mode: "changed-region" | "compact-overview";
+  pixelMetrics: PreviewPixelMetrics;
   sizeBytes: number;
   sourceRect?: { x: number; y: number; width: number; height: number } | undefined;
   width: number;
@@ -193,6 +197,8 @@ export interface AgentCalloutMcpServerOptions {
   fixedAllowedRoots?: string[];
   /** Test-only hook used to exercise committed-output replacement before preview encoding. */
   beforePreview?: ((result: { outputPath: string }) => void | Promise<void>) | undefined;
+  /** Test-only hook used to exercise candidate replacement immediately before its final read. */
+  beforePreviewRead?: ((preview: { outputPath: string }) => void | Promise<void>) | undefined;
 }
 
 interface RootAuthority {
@@ -333,7 +339,8 @@ async function safeToolCall(operation: () => Promise<CallToolResult>): Promise<C
 
 async function createBoundedPreview(
   result: ImageToolResult,
-  requestedRoots: string[]
+  requestedRoots: string[],
+  beforePreviewRead?: (preview: { outputPath: string }) => void | Promise<void>
 ): Promise<PreviewPayload> {
   const temporaryRoot = await mkdtemp(join(tmpdir(), "agent-callout-mcp-preview-"));
   try {
@@ -361,8 +368,25 @@ async function createBoundedPreview(
       ) {
         throw new Error("Preview input no longer matches the committed output hash or dimensions.");
       }
+      await beforePreviewRead?.({ outputPath: preview.outputPath });
       const bytes = await readFile(preview.outputPath);
+      const candidateSha256 = createHash("sha256").update(bytes).digest("hex");
+      if (candidateSha256 !== preview.outputSha256) {
+        throw new Error("Preview candidate changed before its final read.");
+      }
       if (bytes.byteLength <= MAX_PREVIEW_BYTES) {
+        const metadata = await sharp(bytes, {
+          failOn: "error",
+          limitInputPixels: PREVIEW_SIZES[0] * PREVIEW_SIZES[0]
+        }).metadata();
+        if (
+          metadata.format !== "png" ||
+          (metadata.pages ?? 1) !== 1 ||
+          metadata.width !== preview.outputDimensions.width ||
+          metadata.height !== preview.outputDimensions.height
+        ) {
+          throw new Error("Preview candidate failed final PNG dimension verification.");
+        }
         return {
           data: bytes.toString("base64"),
           ...(review?.fallbackReason === undefined
@@ -370,6 +394,7 @@ async function createBoundedPreview(
             : { fallbackReason: review.fallbackReason }),
           width: preview.outputDimensions.width,
           height: preview.outputDimensions.height,
+          pixelMetrics: preview.pixelMetrics,
           sizeBytes: bytes.byteLength,
           mode,
           ...(sourceRect === undefined ? {} : { sourceRect })
@@ -385,7 +410,8 @@ async function createBoundedPreview(
 async function imageToolResult(
   result: ImageToolResult,
   allowedRoots: string[],
-  beforePreview?: (result: { outputPath: string }) => void | Promise<void>
+  beforePreview?: (result: { outputPath: string }) => void | Promise<void>,
+  beforePreviewRead?: (preview: { outputPath: string }) => void | Promise<void>
 ): Promise<CallToolResult> {
   if ("review" in result && result.review.mode === "none") {
     return {
@@ -406,7 +432,7 @@ async function imageToolResult(
   }
   try {
     await beforePreview?.(result);
-    const preview = await createBoundedPreview(result, allowedRoots);
+    const preview = await createBoundedPreview(result, allowedRoots, beforePreviewRead);
     return {
       content: [
         textContent({
@@ -418,6 +444,7 @@ async function imageToolResult(
             width: preview.width,
             height: preview.height,
             sizeBytes: preview.sizeBytes,
+            pixelMetrics: preview.pixelMetrics,
             ...(preview.sourceRect === undefined ? {} : { sourceRect: preview.sourceRect }),
             ...(preview.fallbackReason === undefined
               ? {}
@@ -438,6 +465,7 @@ async function imageToolResult(
             "agent-callout/previewWidth": preview.width,
             "agent-callout/previewHeight": preview.height,
             "agent-callout/previewBytes": preview.sizeBytes,
+            "agent-callout/pixelMetrics": preview.pixelMetrics,
             ...(preview.sourceRect === undefined
               ? {}
               : { "agent-callout/sourceRect": preview.sourceRect })
@@ -471,6 +499,7 @@ async function imageToolResult(
 
 export const SERVER_INSTRUCTIONS = [
   "Inspect the screenshot before annotating it. If a target is uncertain, crop the relevant area and inspect it again. Validate the AnnotationSpec, render the annotation, and examine the returned preview. A revision may return only its changed region with sourceRect metadata; use it for local overlap and text checks, and open the saved output only when global layout still needs review. Avoid an extra crop when the changed-region preview is already sufficient. Use inspect_annotation_sidecar for a path-free integrity/inventory summary when handing an existing sidecar to another AI; it does not verify the original input bytes. For a committed annotate sidecar, use revise_annotation with stable-ID edits instead of deleting files or rewriting the whole spec. Return the final absolute output path and Markdown reference only after visual review.",
+  "Use AnnotationSpec 1.1 for new work, docs-light and neutral/info for ordinary explanations, and danger for actual errors. Submit related callouts together so dense layout can protect all targets and avoid labels. Inspect complete routed leaders and arrowheads. Layout warnings such as TARGET_COVERED, CALLOUT_OVERLAP, TEXT_CLIPPED or LEADER_ROUTE_BLOCKED require revision or an explicit limitation. Preserve existing 1.0 specs when replay compatibility matters. Successful preview pixelMetrics describe raster pixels and ratios only, never image tokens or cost savings.",
   "Blur is visual weakening only. Use redact for secrets that require irreversible opaque pixel replacement. Never claim an image was visually checked when the client omitted ImageContent; use the absolute path as a fallback and say what remains unverified."
 ].join(" ");
 
@@ -570,7 +599,12 @@ export function createAgentCalloutMcpServer(options: AgentCalloutMcpServerOption
           ...(outputPath === undefined ? {} : { outputPath }),
           allowedRoots
         });
-        return imageToolResult(result, allowedRoots, options.beforePreview);
+        return imageToolResult(
+          result,
+          allowedRoots,
+          options.beforePreview,
+          options.beforePreviewRead
+        );
       })
   );
 
@@ -597,7 +631,12 @@ export function createAgentCalloutMcpServer(options: AgentCalloutMcpServerOption
           ...(inputPath === undefined ? {} : { inputPath }),
           allowedRoots
         });
-        return imageToolResult(result, allowedRoots, options.beforePreview);
+        return imageToolResult(
+          result,
+          allowedRoots,
+          options.beforePreview,
+          options.beforePreviewRead
+        );
       })
   );
 
@@ -624,7 +663,12 @@ export function createAgentCalloutMcpServer(options: AgentCalloutMcpServerOption
           ...(outputPath === undefined ? {} : { outputPath }),
           allowedRoots
         });
-        return imageToolResult(result, allowedRoots, options.beforePreview);
+        return imageToolResult(
+          result,
+          allowedRoots,
+          options.beforePreview,
+          options.beforePreviewRead
+        );
       })
   );
 
@@ -664,7 +708,12 @@ export function createAgentCalloutMcpServer(options: AgentCalloutMcpServerOption
           ...(background === undefined ? {} : { background }),
           allowedRoots
         });
-        return imageToolResult(result, allowedRoots, options.beforePreview);
+        return imageToolResult(
+          result,
+          allowedRoots,
+          options.beforePreview,
+          options.beforePreviewRead
+        );
       })
   );
 

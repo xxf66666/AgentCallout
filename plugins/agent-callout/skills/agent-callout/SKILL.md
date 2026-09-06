@@ -4,7 +4,7 @@ description: Annotate existing PNG, JPEG, or WebP screenshots with callouts, arr
 license: MIT
 metadata:
   author: AgentCallout contributors
-  version: "0.2.0"
+  version: "0.2.1"
 ---
 
 # AgentCallout
@@ -29,7 +29,7 @@ Turn an existing screenshot into a reproducible annotated PNG and JSON sidecar. 
 - Use `rectangle` or `ellipse` to bound a target.
 - Use `arrow` when the destination matters more than an area.
 - Use `callout` for explanatory text and `numbered-callout` for ordered review findings.
-- In 1.1, a numbered marker is attached to the target-facing outside edge of its label and a visible leader connects the marker boundary to the target boundary. Do not move the target merely to position the marker; `target` must continue to identify the reviewed content.
+- In 1.1, a numbered marker is outside its label, preferably on the target-facing edge. Dense layout may use another face to avoid obstacles; a visible leader connects the marker boundary to the target boundary. Keep `target` on the reviewed content; let the layout place the label and marker.
 - For 1.1, start with `docs-light`; use root `defaults` for repeated dimensions and `tone` for semantic color. Omit tone or use `neutral`/`info` for ordinary explanations. Reserve `danger` for actual errors or risks and `classic-red` for an explicitly requested legacy-red visual.
 - Use `highlight` to tint a region; use `spotlight` to dim everything outside the focus.
 - Use `blur` only for visual de-emphasis. It is not safe redaction.
@@ -39,10 +39,13 @@ Turn an existing screenshot into a reproducible annotated PNG and JSON sidecar. 
 
 - Keep callout text short and let AgentCallout wrap it. Prefer multiple focused callouts over one large paragraph.
 - Prefer preset/defaults/tone over repeating full style objects. Use annotation `style` only for a deliberate local override.
+- Submit related callouts together so the 1.1 layout can reserve every target and avoid other labels. Placement is a preference: the renderer may choose another side or an orthogonal route. Inspect the entire routed leader and arrowhead, especially near small targets and canvas edges.
+- Read structured layout issues and warnings such as `CALLOUT_OVERLAP`, `TARGET_COVERED`, `LEADER_TOO_SHORT`, `LEADER_ROUTE_BLOCKED`, `TEXT_CLIPPED`, and `INSUFFICIENT_SPACE`. Shorten text, adjust placement/style, or split a crowded explanation when the canvas cannot fit it. Never treat clipped text or a hidden target as a clean result.
 - Inspect long-text wrapping plus numbered-marker outline, fill, number contrast, target visibility, and the complete exposed leader in the final preview. On an unconstrained canvas the leader should expose at least 24px; any shorter/invisible leader, reduced or clipped stroke, marker-overlap, clamp, or occupied-callout warning requires revision or an explicit limitation in the final response.
 - Preserve warnings in the final response. A layout warning means the result needs visual review, not silent acceptance.
 - Report `recoveryWarnings` separately: the revision is committed, but lock/temp cleanup still needs recovery. Do not rewrite these into sidecar render warnings.
 - A changed-region preview is one local crop, not the whole output. Preserve `sourceRect`, `mode`, touched/affected counts, fallback reason, and preview byte/dimension metadata when reporting what was actually reviewed.
+- Successful previews include `pixelMetrics` for the full raster, source region, preview raster, and their ratios. Report these as pixels only. Do not infer image tokens, cost, or savings from pixel or byte counts; no image means no preview pixel metrics.
 - Never request an automatic high-detail preview after blur/redact coverage is removed, moved, shrunk, or weakened. `preview.mode=none` is a privacy boundary, not a tool failure.
 - Never hand-edit a sidecar hash or claim that blur removed the underlying pixels.
 - Do not overwrite the source image. Use a new output path for each materially different revision.

@@ -1,4 +1,4 @@
-import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -16,6 +16,25 @@ import {
   NUMBERED_CALLOUT_V11_SPEC
 } from "./fixtures/numbered-callout-v11.js";
 
+function deterministicNoise(width: number, height: number): Buffer {
+  const pixels = Buffer.alloc(width * height * 3);
+  let state = 0x12_34_56_78;
+  for (let index = 0; index < pixels.length; index += 1) {
+    state = (Math.imul(state, 1_664_525) + 1_013_904_223) >>> 0;
+    pixels[index] = state >>> 24;
+  }
+  return pixels;
+}
+
+function expectObjectivePixelMetricKeys(value: unknown): void {
+  const serialized = JSON.stringify(value);
+  expect(serialized).not.toMatch(/"[^"]*(?:token|cost|estimate|saving)[^"]*"\s*:/iu);
+}
+
+function roundedRatio(numerator: number, denominator: number): number {
+  return Math.round((numerator / denominator) * 1_000_000) / 1_000_000;
+}
+
 describe("AgentCallout MCP server", () => {
   let directory: string;
   let inputPath: string;
@@ -23,6 +42,7 @@ describe("AgentCallout MCP server", () => {
   let server: ReturnType<typeof createAgentCalloutMcpServer>;
   let rootListCalls: number;
   let beforePreview: ((result: { outputPath: string }) => void | Promise<void>) | undefined;
+  let beforePreviewRead: ((preview: { outputPath: string }) => void | Promise<void>) | undefined;
 
   beforeEach(async () => {
     directory = await mkdtemp(join(tmpdir(), "agent-callout-mcp-测试-"));
@@ -40,9 +60,11 @@ describe("AgentCallout MCP server", () => {
 
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     beforePreview = undefined;
+    beforePreviewRead = undefined;
     server = createAgentCalloutMcpServer({
       fixedAllowedRoots: [directory],
-      beforePreview: async (result) => beforePreview?.(result)
+      beforePreview: async (result) => beforePreview?.(result),
+      beforePreviewRead: async (preview) => beforePreviewRead?.(preview)
     });
     rootListCalls = 0;
     client = new Client(
@@ -181,7 +203,7 @@ describe("AgentCallout MCP server", () => {
 
     const doctor = (await client.callTool({ name: "doctor", arguments: {} })) as CallToolResult;
     expect(doctor.structuredContent).toMatchObject({
-      product: { name: "agent-callout", version: "0.2.0" },
+      product: { name: "agent-callout", version: "0.2.1" },
       ok: true,
       limits: { maxPixels: 40_000_000, maxAnnotations: 200 },
       mcp: { maxPreviewBytes: 64 * 1024, maxPreviewDimension: 512, previewDetail: "low" }
@@ -321,6 +343,7 @@ describe("AgentCallout MCP server", () => {
           preview?: {
             mode?: string;
             sourceRect?: { x: number; y: number; width: number; height: number };
+            pixelMetrics?: Record<string, number>;
           };
         }
       | undefined;
@@ -334,14 +357,28 @@ describe("AgentCallout MCP server", () => {
     });
     expect(revisedResult?.preview).toMatchObject({
       mode: "changed-region",
-      sourceRect: revisedResult?.review?.sourceRect
+      sourceRect: revisedResult?.review?.sourceRect,
+      pixelMetrics: {
+        fullRasterPixelCount: 9_600,
+        sourceRegionPixelCount: 4_260,
+        previewRasterPixelCount: 4_260,
+        sourceRegionCoverageRatio: 0.44375,
+        previewToSourceRegionRatio: 1,
+        previewToFullRasterRatio: 0.44375,
+        previewPixelReductionRatio: 0.55625
+      }
     });
     const revisedImage = revised.content.find((item) => item.type === "image");
     if (revisedImage?.type !== "image") throw new Error("Missing revision focus image");
     expect(revisedImage._meta).toMatchObject({
       "agent-callout/previewMode": "changed-region",
-      "agent-callout/sourceRect": { x: 0, y: 0, width: 71, height: 60 }
+      "agent-callout/sourceRect": { x: 0, y: 0, width: 71, height: 60 },
+      "agent-callout/pixelMetrics": revisedResult?.preview?.pixelMetrics
     });
+    expect(revisedImage._meta?.["agent-callout/pixelMetrics"]).toEqual(
+      revisedResult?.preview?.pixelMetrics
+    );
+    expectObjectivePixelMetricKeys(revisedResult?.preview?.pixelMetrics);
     const focusBytes = Buffer.from(revisedImage.data, "base64");
     const focusMetadata = await sharp(focusBytes).metadata();
     expect(focusMetadata).toMatchObject({
@@ -468,6 +505,8 @@ describe("AgentCallout MCP server", () => {
       mode: "none",
       fallbackReason: "sensitive-coverage-changed"
     });
+    expect(result?.preview).not.toHaveProperty("pixelMetrics");
+    expect(text?.type === "text" ? text.text : "").not.toContain("pixelMetrics");
     await expect(access(result?.outputPath as string)).resolves.toBeUndefined();
   });
 
@@ -614,7 +653,16 @@ describe("AgentCallout MCP server", () => {
     expect(manifest?.preview).toMatchObject({
       available: true,
       mode: "compact-overview",
-      detail: "low"
+      detail: "low",
+      pixelMetrics: {
+        fullRasterPixelCount: 2_000,
+        sourceRegionPixelCount: 2_000,
+        previewRasterPixelCount: 2_000,
+        sourceRegionCoverageRatio: 1,
+        previewToSourceRegionRatio: 1,
+        previewToFullRasterRatio: 1,
+        previewPixelReductionRatio: 0
+      }
     });
     expect(image?.type).toBe("image");
     if (image?.type !== "image") {
@@ -625,8 +673,16 @@ describe("AgentCallout MCP server", () => {
     expect(bytes.byteLength).toBeLessThanOrEqual(64 * 1024);
     expect(image._meta).toMatchObject({
       "codex/imageDetail": "low",
-      "agent-callout/previewMode": "compact-overview"
+      "agent-callout/previewMode": "compact-overview",
+      "agent-callout/pixelMetrics": (manifest?.preview as Record<string, unknown> | undefined)
+        ?.pixelMetrics
     });
+    expect(image._meta?.["agent-callout/pixelMetrics"]).toEqual(
+      (manifest?.preview as Record<string, unknown> | undefined)?.pixelMetrics
+    );
+    expectObjectivePixelMetricKeys(
+      (manifest?.preview as Record<string, unknown> | undefined)?.pixelMetrics
+    );
     expect(await sharp(bytes).metadata()).toMatchObject({ format: "png", width: 50, height: 40 });
   });
 
@@ -654,13 +710,73 @@ describe("AgentCallout MCP server", () => {
     expect(result.content.filter((item) => item.type === "image")).toHaveLength(1);
     const image = result.content.find((item) => item.type === "image");
     if (image?.type !== "image") throw new Error("Expected compact MCP preview");
+    const text = result.content.find((item) => item.type === "text");
+    const manifest = (text?.type === "text" ? JSON.parse(text.text) : undefined) as
+      { preview?: { pixelMetrics?: Record<string, number> } } | undefined;
     expect(image._meta).toMatchObject({ "codex/imageDetail": "low" });
     expect(await sharp(Buffer.from(image.data, "base64")).metadata()).toMatchObject({
       format: "png",
       width: 512,
       height: 288
     });
+    expect(manifest?.preview?.pixelMetrics).toEqual({
+      fullRasterPixelCount: 1_440_000,
+      sourceRegionPixelCount: 1_440_000,
+      previewRasterPixelCount: 147_456,
+      sourceRegionCoverageRatio: 1,
+      previewToSourceRegionRatio: 0.1024,
+      previewToFullRasterRatio: 0.1024,
+      previewPixelReductionRatio: 0.8976
+    });
+    expect(image._meta?.["agent-callout/pixelMetrics"]).toEqual(manifest?.preview?.pixelMetrics);
     expect(await sharp(outputPath).metadata()).toMatchObject({ width: 1600, height: 900 });
+  });
+
+  test("reports metrics for the final high-entropy candidate after byte-budget downgrade", async () => {
+    const width = 1024;
+    const height = 1024;
+    const noisyInputPath = join(directory, "high-entropy-input.png");
+    await sharp(deterministicNoise(width, height), { raw: { width, height, channels: 3 } })
+      .png()
+      .toFile(noisyInputPath);
+    const result = (await client.callTool({
+      name: "annotate_image",
+      arguments: {
+        inputPath: noisyInputPath,
+        outputPath: join(directory, "high-entropy-output.png"),
+        spec: { version: "1.1", annotations: [] }
+      }
+    })) as CallToolResult;
+    const text = result.content.find((item) => item.type === "text");
+    const image = result.content.find((item) => item.type === "image");
+    if (image?.type !== "image") throw new Error("Expected downgraded preview image");
+    const payload = (text?.type === "text" ? JSON.parse(text.text) : undefined) as
+      | {
+          preview?: {
+            width?: number;
+            height?: number;
+            sizeBytes?: number;
+            pixelMetrics?: Record<string, number>;
+          };
+        }
+      | undefined;
+    const metadata = await sharp(Buffer.from(image.data, "base64")).metadata();
+    const previewPixels = metadata.width * metadata.height;
+
+    expect(metadata.width).toBeLessThan(512);
+    expect(Buffer.from(image.data, "base64").byteLength).toBeLessThanOrEqual(64 * 1024);
+    expect(payload?.preview?.sizeBytes).toBe(Buffer.from(image.data, "base64").byteLength);
+    expect(payload?.preview?.pixelMetrics).toMatchObject({
+      fullRasterPixelCount: width * height,
+      sourceRegionPixelCount: width * height,
+      previewRasterPixelCount: previewPixels,
+      sourceRegionCoverageRatio: 1,
+      previewToSourceRegionRatio: roundedRatio(previewPixels, width * height),
+      previewToFullRasterRatio: roundedRatio(previewPixels, width * height),
+      previewPixelReductionRatio: roundedRatio(width * height - previewPixels, width * height)
+    });
+    expect(image._meta?.["agent-callout/pixelMetrics"]).toEqual(payload?.preview?.pixelMetrics);
+    expectObjectivePixelMetricKeys(payload?.preview?.pixelMetrics);
   });
 
   test("returns text-only success when committed output changes before preview encoding", async () => {
@@ -699,7 +815,70 @@ describe("AgentCallout MCP server", () => {
       message:
         "Output was written successfully, but its preview could not be encoded and verified safely."
     });
+    expect(payload?.preview).not.toHaveProperty("pixelMetrics");
     expect(text?.type === "text" ? text.text : "").not.toContain(directory);
+    expect(text?.type === "text" ? text.text : "").not.toContain("pixelMetrics");
+  });
+
+  test("rejects a preview candidate replaced in the final-read window", async () => {
+    const replacementBytes = await sharp({
+      create: { width: 7, height: 5, channels: 4, background: "magenta" }
+    })
+      .png()
+      .toBuffer();
+    const replacementBase64 = replacementBytes.toString("base64");
+    beforePreviewRead = async (preview) => {
+      await writeFile(preview.outputPath, replacementBytes);
+    };
+
+    const result = (await client.callTool({
+      name: "annotate_image",
+      arguments: {
+        inputPath,
+        outputPath: join(directory, "candidate-replaced-before-final-read.png"),
+        spec: { version: "1.1", annotations: [] }
+      }
+    })) as CallToolResult;
+
+    expect(result.isError).not.toBe(true);
+    expect(result.content.filter((item) => item.type === "image")).toHaveLength(0);
+    expect(JSON.stringify(result.content)).not.toContain(replacementBase64);
+    const text = result.content.find((item) => item.type === "text");
+    const payload = (text?.type === "text" ? JSON.parse(text.text) : undefined) as
+      { preview?: Record<string, unknown> } | undefined;
+    expect(payload?.preview).toMatchObject({
+      available: false,
+      mode: "compact-overview",
+      fallbackReason: "encoding-failed"
+    });
+    expect(payload?.preview).not.toHaveProperty("pixelMetrics");
+    expect(text?.type === "text" ? text.text : "").not.toContain("pixelMetrics");
+  });
+
+  test("omits metrics when preview encoding fails before committed-output verification", async () => {
+    beforePreview = async (result) => {
+      await unlink(result.outputPath);
+    };
+    const result = (await client.callTool({
+      name: "annotate_image",
+      arguments: {
+        inputPath,
+        outputPath: join(directory, "missing-before-preview.png"),
+        spec: { version: "1.1", annotations: [] }
+      }
+    })) as CallToolResult;
+    expect(result.isError).not.toBe(true);
+    expect(result.content.filter((item) => item.type === "image")).toHaveLength(0);
+    const text = result.content.find((item) => item.type === "text");
+    const payload = (text?.type === "text" ? JSON.parse(text.text) : undefined) as
+      { preview?: Record<string, unknown> } | undefined;
+    expect(payload?.preview).toMatchObject({
+      available: false,
+      mode: "compact-overview",
+      fallbackReason: "encoding-failed"
+    });
+    expect(payload?.preview).not.toHaveProperty("pixelMetrics");
+    expect(text?.type === "text" ? text.text : "").not.toContain("pixelMetrics");
   });
 
   test("returns tool-level errors with isError instead of a successful error object", async () => {

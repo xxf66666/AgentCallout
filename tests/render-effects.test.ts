@@ -312,7 +312,6 @@ describe("Sharp annotation renderer", () => {
     const verifiedWindowsRenderer =
       process.platform === "win32" &&
       result.renderer.name === "sharp-svg-pango" &&
-      result.renderer.version === "0.1.3" &&
       result.renderer.sharp === "0.35.4" &&
       result.renderer.libvips === "8.18.6" &&
       result.renderer.font.sha256 ===
@@ -606,14 +605,13 @@ describe("Sharp annotation renderer", () => {
     });
     expect(result.warnings.some((warning) => warning.includes("tight-first"))).toBe(true);
     expect(result.warnings.some((warning) => warning.includes("tight-second"))).toBe(true);
-    expect(result.warnings.some((warning) => warning.includes("visible leader"))).toBe(true);
-    const occupiedWarnings = result.warnings.filter((warning) =>
-      warning.includes("occupied annotation")
+    expect(result.warnings.every((warning) => /^\[[A-Z_]+\]\s/u.test(warning))).toBe(true);
+    expect(result.warnings.some((warning) => warning.startsWith("[GEOMETRY_CLIPPED]"))).toBe(true);
+    expect(result.warnings.some((warning) => warning.startsWith("[INSUFFICIENT_SPACE]"))).toBe(
+      true
     );
-    expect(occupiedWarnings).toHaveLength(1);
-    expect(occupiedWarnings[0]).toContain("1 occupied annotation");
-    expect(result.warnings.some((warning) => warning.includes("hides the leader"))).toBe(true);
     for (const resolved of sidecar.resolvedAnnotations) {
+      expect(resolved.leader.length).toBeGreaterThanOrEqual(24);
       expect(resolved.box.x).toBeGreaterThanOrEqual(0);
       expect(resolved.box.y).toBeGreaterThanOrEqual(0);
       expect(resolved.box.x + resolved.box.width).toBeLessThanOrEqual(128);
@@ -895,9 +893,20 @@ describe("Sharp annotation renderer", () => {
       resolvedAnnotations: ResolvedNumberedCallout[];
     };
 
-    expect(sidecar.resolvedAnnotations[0]?.label.placement).toBe("top");
-    expect(sidecar.resolvedAnnotations[1]?.label.placement).not.toBe("top");
-    expect(result.warnings.some((warning) => warning.includes("occupied annotation"))).toBe(false);
+    const [first, second] = sidecar.resolvedAnnotations;
+    if (!first || !second) throw new Error("Missing dense numbered-callout geometry.");
+    expect(first.label.placement).not.toBe(second.label.placement);
+    expect(
+      Math.min(
+        first.label.paintedBounds.x + first.label.paintedBounds.width,
+        second.label.paintedBounds.x + second.label.paintedBounds.width
+      ) > Math.max(first.label.paintedBounds.x, second.label.paintedBounds.x) &&
+        Math.min(
+          first.label.paintedBounds.y + first.label.paintedBounds.height,
+          second.label.paintedBounds.y + second.label.paintedBounds.height
+        ) > Math.max(first.label.paintedBounds.y, second.label.paintedBounds.y)
+    ).toBe(false);
+    expect(result.warnings).toEqual([]);
   });
 
   it("normalizes overlapping leader geometry and does not paint a round-cap point", async () => {
@@ -998,9 +1007,7 @@ describe("Sharp annotation renderer", () => {
     expect(result.warnings.some((warning) => warning.includes("painted leader was clipped"))).toBe(
       true
     );
-    expect(
-      result.warnings.some((warning) => warning.includes("facing decoration footprint overflowed"))
-    ).toBe(true);
+    expect(result.warnings.some((warning) => warning.startsWith("[GEOMETRY_CLIPPED]"))).toBe(true);
   });
 
   it("renders a minimal 1.1 numbered callout with a light label and blue border/marker", async () => {

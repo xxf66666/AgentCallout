@@ -34,6 +34,7 @@ import {
   type RevisionFaultPoint
 } from "../src/core/index.js";
 import { runCli, type CliIo, type CliWritable } from "../src/cli/index.js";
+import { DENSE_CANVAS, FORCED_ORTHOGONAL_ARROW_SPEC } from "./fixtures/dense-callouts.js";
 import { createAgentCalloutMcpServer } from "../src/mcp/index.js";
 import { canonicalizeSpec } from "../src/spec/index.js";
 
@@ -985,7 +986,7 @@ describe("safe versioned annotation revisions", () => {
         version: "1.1",
         annotations: [
           { id: "a", type: "callout", target: { x: 300, y: 200 }, text: "A" },
-          { id: "b", type: "callout", target: { x: 260, y: 200 }, text: "B" },
+          { id: "b", type: "callout", target: { x: 160, y: 120 }, text: "B" },
           { id: "c", type: "callout", target: { x: 305, y: 205 }, text: "C" }
         ]
       },
@@ -1001,7 +1002,7 @@ describe("safe versioned annotation revisions", () => {
             id: "a",
             type: "callout",
             target: { x: 300, y: 200 },
-            text: "A much longer explanation that changes occupied layout width and wrapping"
+            text: "A ".repeat(20)
           }
         }
       ],
@@ -1017,6 +1018,105 @@ describe("safe versioned annotation revisions", () => {
     expect(focus.y).toBeLessThanOrEqual(changed.y);
     expect(focus.x + focus.width).toBeGreaterThanOrEqual(changed.x + changed.width);
     expect(focus.y + focus.height).toBeGreaterThanOrEqual(changed.y + changed.height);
+  });
+
+  test("focus and pixel metrics contain a routed dogleg plus its arrowhead", async () => {
+    const inputPath = path.join(directory, "routed-focus.png");
+    await makeInput(inputPath, DENSE_CANVAS.width, DENSE_CANVAS.height);
+    const base = await annotateImage({
+      inputPath,
+      outputPath: path.join(directory, "routed-focus.annotated.png"),
+      spec: FORCED_ORTHOGONAL_ARROW_SPEC,
+      allowedRoots: [directory]
+    });
+    const baseSidecar = JSON.parse(await readFile(base.sidecarPath, "utf8")) as {
+      resolvedAnnotations: {
+        id: string;
+        path?: { bendCount?: number; bounds?: unknown; points?: { x: number; y: number }[] };
+        arrowHead?: {
+          tip?: { x: number; y: number };
+          wings?: { x: number; y: number }[];
+          bounds?: { x: number; y: number; width: number; height: number };
+        };
+      }[];
+    };
+    const baseRouted = baseSidecar.resolvedAnnotations.find(
+      (annotation) => annotation.id === "arrow-primary"
+    );
+    expect(baseRouted?.path?.bendCount).toBeGreaterThan(0);
+    expect(baseRouted?.arrowHead?.bounds).toEqual(expect.any(Object));
+
+    const revision = await reviseAnnotation({
+      parentSidecarPath: base.sidecarPath,
+      edits: [
+        {
+          op: "set",
+          id: "arrow-primary",
+          annotation: {
+            id: "arrow-primary",
+            type: "arrow",
+            start: { x: 500, y: 300 },
+            target: { x: 476, y: 500, width: 8, height: 8 },
+            style: { arrowHeadSize: 24 }
+          }
+        }
+      ],
+      allowedRoots: [directory]
+    });
+    expect(revision.review.mode).toBe("changed-region");
+    const focus = revision.review.sourceRect;
+    if (focus === undefined) throw new Error("Routed revision omitted sourceRect.");
+    const changed = await pixelDifferenceBounds(base.outputPath, revision.outputPath);
+    if (changed === null) throw new Error("Routed revision did not change pixels.");
+    expect(focus.x).toBeLessThanOrEqual(changed.x);
+    expect(focus.y).toBeLessThanOrEqual(changed.y);
+    expect(focus.x + focus.width).toBeGreaterThanOrEqual(changed.x + changed.width);
+    expect(focus.y + focus.height).toBeGreaterThanOrEqual(changed.y + changed.height);
+
+    const revisionSidecar = JSON.parse(await readFile(revision.sidecarPath, "utf8")) as {
+      resolvedAnnotations: {
+        id: string;
+        path?: {
+          bendCount?: number;
+          bounds?: { x: number; y: number; width: number; height: number };
+          points?: { x: number; y: number }[];
+        };
+        arrowHead?: {
+          tip?: { x: number; y: number };
+          wings?: { x: number; y: number }[];
+          bounds?: { x: number; y: number; width: number; height: number };
+        };
+      }[];
+    };
+    const routed = revisionSidecar.resolvedAnnotations.find(
+      (annotation) => annotation.id === "arrow-primary"
+    );
+    expect(routed?.path?.bendCount).toBeGreaterThan(0);
+    expect(routed?.path?.bounds).toEqual(expect.any(Object));
+    expect(routed?.arrowHead?.bounds).toEqual(expect.any(Object));
+    expect(routed?.path?.points).not.toEqual(baseRouted?.path?.points);
+    expect(routed?.arrowHead).not.toEqual(baseRouted?.arrowHead);
+    for (const headBounds of [baseRouted?.arrowHead?.bounds, routed?.arrowHead?.bounds]) {
+      if (headBounds === undefined) throw new Error("Routed revision omitted arrowhead bounds.");
+      expect(focus.x).toBeLessThanOrEqual(headBounds.x);
+      expect(focus.y).toBeLessThanOrEqual(headBounds.y);
+      expect(focus.x + focus.width).toBeGreaterThanOrEqual(headBounds.x + headBounds.width);
+      expect(focus.y + focus.height).toBeGreaterThanOrEqual(headBounds.y + headBounds.height);
+    }
+
+    const preview = await createImagePreview({
+      inputPath: revision.outputPath,
+      outputPath: path.join(directory, "routed-focus.preview.png"),
+      sourceRect: focus,
+      maxWidth: 512,
+      maxHeight: 512,
+      allowedRoots: [directory]
+    });
+    expect(preview.pixelMetrics.fullRasterPixelCount).toBe(
+      DENSE_CANVAS.width * DENSE_CANVAS.height
+    );
+    expect(preview.pixelMetrics.sourceRegionPixelCount).toBe(focus.width * focus.height);
+    expect(preview.pixelMetrics.previewPixelReductionRatio).toBeGreaterThan(0);
   });
 
   test("focus includes alpha-only changes and legacy extreme callout paint", async () => {

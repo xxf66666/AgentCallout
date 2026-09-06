@@ -1,4 +1,4 @@
-export const AGENT_CALLOUT_VERSION = "0.2.0";
+export const AGENT_CALLOUT_VERSION = "0.2.1";
 
 export * from "./core/index.js";
 export * from "./layout/index.js";

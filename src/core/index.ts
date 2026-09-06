@@ -102,6 +102,21 @@ export interface GeneratedImageResult {
   renderer: RendererVersions;
 }
 
+export interface PreviewPixelMetrics {
+  fullRasterPixelCount: number;
+  sourceRegionPixelCount: number;
+  previewRasterPixelCount: number;
+  sourceRegionCoverageRatio: number;
+  previewToSourceRegionRatio: number;
+  previewToFullRasterRatio: number;
+  previewPixelReductionRatio: number;
+}
+
+export interface ImagePreviewResult extends GeneratedImageResult {
+  operation: "preview";
+  pixelMetrics: PreviewPixelMetrics;
+}
+
 export const REVISION_ERROR_CODES = [
   "ANNOTATION_SIDECAR_INVALID",
   "PARENT_SIDECAR_INVALID",
@@ -1733,12 +1748,35 @@ function resolvedReviewRects(value: unknown): Rect[] {
 
   const leader = isRecord(value.leader) ? value.leader : undefined;
   addRect(leader?.bounds);
-  const leaderSegment = segmentReviewRect(
-    leader?.start,
-    leader?.end,
-    typeof leader?.strokeWidth === "number" ? leader.strokeWidth : 2
-  );
-  if (leaderSegment !== undefined) rects.push(leaderSegment);
+  const addResolvedSegments = (candidate: unknown, width: number): boolean => {
+    if (!Array.isArray(candidate)) return false;
+    let added = false;
+    for (const segment of candidate) {
+      if (!isRecord(segment)) continue;
+      const rect = segmentReviewRect(segment.start, segment.end, width);
+      if (rect !== undefined) {
+        rects.push(rect);
+        added = true;
+      }
+    }
+    return added;
+  };
+  const leaderStrokeWidth = typeof leader?.strokeWidth === "number" ? leader.strokeWidth : 2;
+  if (!addResolvedSegments(leader?.segments, leaderStrokeWidth)) {
+    const leaderSegment = segmentReviewRect(leader?.start, leader?.end, leaderStrokeWidth);
+    if (leaderSegment !== undefined) rects.push(leaderSegment);
+  }
+
+  const routePath = isRecord(value.path) ? value.path : undefined;
+  addRect(routePath?.bounds);
+  const arrowHead = isRecord(value.arrowHead) ? value.arrowHead : undefined;
+  addRect(arrowHead?.bounds);
+  const pathStrokeWidth =
+    typeof routePath?.strokeWidth === "number" ? routePath.strokeWidth : strokeWidth;
+  if (!addResolvedSegments(routePath?.segments, pathStrokeWidth)) {
+    const pathSegment = segmentReviewRect(routePath?.start, routePath?.end, pathStrokeWidth);
+    if (pathSegment !== undefined) rects.push(pathSegment);
+  }
   return rects;
 }
 
@@ -3763,7 +3801,7 @@ export async function createContactSheet(
 
 export async function createImagePreview(
   arguments_: CreateImagePreviewArguments
-): Promise<GeneratedImageResult> {
+): Promise<ImagePreviewResult> {
   const loaded = await loadImage(arguments_.inputPath, arguments_);
   const maxWidth = positiveInteger(arguments_.maxWidth, 1280, "maxWidth");
   const maxHeight = positiveInteger(arguments_.maxHeight, 1280, "maxHeight");
@@ -3792,7 +3830,7 @@ export async function createImagePreview(
     .png(STABLE_PNG_OPTIONS)
     .toBuffer({ resolveWithObject: true });
   const outputDimensions = { width: resized.info.width, height: resized.info.height };
-  return finalizeGenerated({
+  const generated = await finalizeGenerated({
     operation: "preview",
     outputPath: arguments_.outputPath ?? defaultOutputPath(loaded.inspection.path, "preview"),
     overwrite: arguments_.overwrite ?? false,
@@ -3813,6 +3851,28 @@ export async function createImagePreview(
     renderer: await getRendererVersions(),
     limits: loaded.limits
   });
+  const fullRasterPixelCount = normalized.dimensions.width * normalized.dimensions.height;
+  const sourceRegionPixelCount =
+    sourceRect === undefined ? fullRasterPixelCount : sourceRect.width * sourceRect.height;
+  const previewRasterPixelCount = outputDimensions.width * outputDimensions.height;
+  const ratio = (numerator: number, denominator: number): number =>
+    Math.min(1, Math.max(0, Math.round((numerator / denominator) * 1_000_000) / 1_000_000));
+  return {
+    ...generated,
+    operation: "preview",
+    pixelMetrics: {
+      fullRasterPixelCount,
+      sourceRegionPixelCount,
+      previewRasterPixelCount,
+      sourceRegionCoverageRatio: ratio(sourceRegionPixelCount, fullRasterPixelCount),
+      previewToSourceRegionRatio: ratio(previewRasterPixelCount, sourceRegionPixelCount),
+      previewToFullRasterRatio: ratio(previewRasterPixelCount, fullRasterPixelCount),
+      previewPixelReductionRatio: ratio(
+        fullRasterPixelCount - previewRasterPixelCount,
+        fullRasterPixelCount
+      )
+    }
+  };
 }
 
 export async function getCoreDoctorReport(): Promise<CoreDoctorReport> {

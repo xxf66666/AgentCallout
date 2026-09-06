@@ -10,6 +10,7 @@ export default defineConfig({
     },
     environment: "node",
     include: ["tests/**/*.test.ts", "tests/**/*.test.mjs"],
+    maxWorkers: 2,
     testTimeout: 30_000
   }
 });
