@@ -1,7 +1,7 @@
 # ADR-0008：1.1 密集布局、完整路径与客观预览像素指标
 
 - 日期：2026-09-06
-- 状态：已接受；v0.2.1 实现与回归进行中，尚未发布
+- 状态：已接受并随 v0.2.1 发布；Windows 完整门禁及双客户端 A/B 通过
 - 补充：[ADR-0002](0002-annotation-spec-and-layout.md)、[ADR-0007](0007-focused-review-and-safe-sidecar-summary.md)
 - 契约：[AnnotationSpec](../annotation-spec.md#dense-layout-and-resolved-geometry-v021)
 
@@ -55,7 +55,7 @@ MCP 先确认预览输入匹配已提交输出的 hash/尺寸，再对最终读�
 
 ## 验证要求与当前状态
 
-现有分支已经包含密集布局/渲染、像素指标及 MCP 绑定回归。该 ADR 不把测试文件存在等同于通过，也不记录尚未完成的发布结论。发布前必须关闭：
+本版已通过下面的发布门槛，具体环境、179 项测试、客户端发现与显示兼容修复见[发布记录](../releases/0.2.1.md)。证据不外推到非 Windows 或未提供保护框的源内容：
 
 1. plain、numbered、mixed 的 1/3/6/10 场景，未来目标、边角和小目标、固定 text、多行文字及不可行场景。
 2. 说明框与目标的几何检查、路由/箭头头部真实像素检查、确定性 hash/geometry/warnings，以及 AnnotationSpec 1.0 固定 PNG 基线。

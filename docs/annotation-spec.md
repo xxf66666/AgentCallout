@@ -4,7 +4,7 @@ AnnotationSpec is AgentCallout's strict, replayable description of annotations o
 
 Use version `"1.1"` for new specs. It provides readable document-oriented defaults, reusable presets, semantic tones, root style defaults, independent numbered-marker colors, and explicit text width. Version `"1.0"` remains supported exactly for replay: its parsing, canonical JSON, resolved style/geometry, and renderer defaults are unchanged.
 
-The dense layout and preview metrics below describe the **unreleased v0.2.1 implementation**. They do not change `AnnotationSpec.version`: the new layout applies only to 1.1. Release and real-client verification status is tracked in [compatibility](compatibility.md) and [PROGRESS](../PROGRESS.md).
+The dense layout and preview metrics below shipped in **v0.2.1**. They do not change `AnnotationSpec.version`: the new layout applies only to 1.1. Windows automation and real-client evidence is recorded in the [release notes](releases/0.2.1.md); platform boundaries remain in [compatibility](compatibility.md).
 
 ## Root object
 

@@ -35,7 +35,7 @@
 | D-004 | MCP 结果以同一 manifest 为事实源；纯结构化工具返回 `structuredContent + TextContent`；所有图片工具统一返回 `JSON TextContent + ImageContent` 并省略 `structuredContent`，规避 Codex 0.151 的结构化结果优先问题 | 保住 Agent 看图闭环且不依赖客户端识别；代价是图片工具不能依赖协议层 output schema              | stdio/SDK 与真实 Codex/Claude 两轮图片调用均已验证；客户端升级仍需回归                                                | [ADR-0004](adr/0004-mcp-result-compatibility.md)                                                             |
 | D-005 | annotate sidecar 通过稳定 ID edits 创建 append-only `.revN`；验证完整父链，从原图重渲染，以目录内排他 lock、no-replace PNG 和最后发布的已验证 JSON commit marker 阻止同工作副本并发分支                        | 保留审计历史和陈旧 parent 防护；复制到其他目录可形成 fork，强杀/断电仍可能留下需恢复的 residue | Windows 自动化、CLI UAT 与真实 Claude/Codex 两轮 revision 预览闭环已通过                                              | [ADR-0006](adr/0006-safe-versioned-annotation-revisions.md)                                                  |
 | D-006 | revision 默认只返回 touched/连带重排的单张聚焦预览；分散/全局/过大回退 compact-overview，敏感覆盖削弱则零图片。另提供 path/text/hash-free 的 sidecar 校验摘要                                                  | 减少重复 crop 和默认数据披露；代价是父 spec 需本地重渲染几何，聚焦视图不能代替全局复核         | 135 tests、clean clone、CLI UAT 与真实 Claude/Codex changed-region A/B 通过；两边 crop 均为 0，安全摘要无默认排除字段 | [ADR-0007](adr/0007-focused-review-and-safe-sidecar-summary.md)                                              |
-| D-007 | AnnotationSpec 1.1 先测量并批量放置说明框，再生成避开说明框/编号/目标的直线或折线路径；输出完整路径和稳定诊断。预览报告最终栅格像素比例，并校验最终读取字节                                                    | 有界启发式便于确定性重放；可行空间不足时降级并显式 warning，比例不代表 token 或费用            | v0.2.1 未发布、实现与回归进行中；完整门禁、干净安装及本版真实 Claude/Codex 视觉 A/B 尚待关闭                          | [ADR-0008](adr/0008-dense-layout-and-preview-pixel-metrics.md)                                               |
+| D-007 | AnnotationSpec 1.1 先测量并批量放置说明框，再生成避开说明框/编号/目标的直线或折线路径；输出完整路径和稳定诊断。预览报告最终栅格像素比例，并校验最终读取字节                                                    | 有界启发式便于确定性重放；可行空间不足时降级并显式 warning，比例不代表 token 或费用            | v0.2.1 已发布：Windows 179 tests、干净安装和真实 Claude/Codex 视觉 A/B 通过；已记录源文字保护边界                     | [ADR-0008](adr/0008-dense-layout-and-preview-pixel-metrics.md)                                               |
 
 ## 明确不进入本轮决策的事项
 
@@ -53,8 +53,8 @@
 5. [x] 在 Codex 0.151 证明 ImageContent 进入可视上下文并完成一次修改后重渲染。
 6. [x] 在 0.1.3 发布构建上通过真实 Claude/Codex 两轮 `revise_annotation` 并确认预览可驱动视觉修正。
 7. [x] 在 0.2.0 发布构建上验证 changed-region 能减少额外 crop，并验证 `inspect_annotation_sidecar` 不泄漏默认排除字段。
-8. [ ] 在 0.2.1 完成 1/3/6/10 密集说明框、边角小目标、折线路径、文字裁切、警告及像素指标的完整回归，并保持 1.0 固定 PNG 基线。
-9. [ ] 在 0.2.1 发布候选上完成干净安装、doctor、MCP 和真实 Claude/Codex 密集批注视觉 A/B；只报告可测量的像素与调用次数。
+8. [x] 在 0.2.1 完成 1/3/6/10 密集说明框、边角小目标、折线路径、文字裁切、警告及像素指标的 179 项回归，并保持 1.0 固定 PNG 基线。
+9. [x] 在 0.2.1 完成干净安装、doctor、MCP 和真实 Claude/Codex 密集批注视觉 A/B；修复 `low` 显示 hint 不兼容后直接看图复验通过，见[发布记录](releases/0.2.1.md)。
 
 ## 证据入口
 

@@ -4,10 +4,10 @@
 
 ## 当前状态
 
-- 阶段：MVP、0.1.3 与 0.2.0 已发布；0.2.1 密集批注正在集成验收，未发布
+- 阶段：MVP、0.1.3、0.2.0 与 0.2.1 已发布；下一阶段为可选本地 OCR
 - GitHub：`https://github.com/xxf66666/AgentCallout`（公开仓库，`main` 已推送）
-- 本地分支：`codex/dense-callout-layout`，发布基线 `173485e`
-- 当前发布门槛：本地完整 gate 已通过；干净安装和双客户端 A/B 尚待完成
+- 发布分支：`main`；0.2.1 核心 `9384df7`，显示兼容修复 `a3812a5`
+- 当前发布门槛：0.2.1 完整 gate、干净安装和双客户端 A/B 已通过，见 [发布记录](docs/releases/0.2.1.md)
 - 已知外部限制：Codex 可选 Skills-only Marketplace 曾受客户端固定 30 秒 clone 超时影响；CLI+MCP 主路径已验证
 
 ## 已完成
@@ -67,7 +67,7 @@
 - [x] Claude/Codex 0.2.0 均以两张 384×162 changed-region 完成“发现遮挡→left 修正”，预览 5,512/6,600 B，crop 均为 0；最终 sidecar 安全摘要通过
 - [x] 最终证据 commit `c28974f` 再经 GitHub clean clone、135 tests/全 gate、examples clean、doctor/self-test 与八工具 smoke；发布 `v0.2.0` 和 `agent-callout--v0.2.0` annotated tags
 
-## 进行中
+## 0.2.1 已完成
 
 - [x] 1.1 密集布局核心：提前保护全部目标、多候选避让、折线引线及结构化布局问题；1.0 保留旧渲染路径
 - [x] 实现预览 `pixelMetrics`，仅报告像素数量/比例；图片发送前重新校验最终字节，失败不返回图片或指标
@@ -77,9 +77,14 @@
 - [x] 精简 README，同步路由/warning/像素指标文档与 Skill；Plugin/Skill/Claude manifest 校验通过
 - [x] 构建后 doctor/self-test、root/Plugin 八工具 smoke、npm pack 9 文件与生产 audit 0 漏洞
 - [x] 准备 1280×800 / 10 项混合真实控件 A/B 素材；旧版 baseline 与新版候选均已通过 CLI 生成并查看，新版无布局 warning
-- [ ] 干净 clone、GitHub 安装、doctor、CLI/MCP/Plugin 验证
-- [ ] Claude/Codex 真实 10 项密集批注与修订视觉 A/B
-- [ ] 提交、推送并发布 0.2.1；全部通过前不更新已发布兼容性结论
+- [x] 干净 clone、GitHub 安装、doctor、CLI/MCP/Plugin 验证；Claude 官方更新后 cache dist 与本地一致，保留用户禁用设置
+- [x] Claude/Codex 真实 10 项密集批注与修订视觉 A/B；两边同一初图/统一修订像素一致
+- [x] Codex 0.153.4 实测发现旧 `low` hint 不支持，改 `auto` 后两客户端直接展示成功；已更新 Claude 安装缓存也完成真实 annotate→revise
+- [x] 合并 main、提交并推送 0.2.1；发布标签 `v0.2.1` 和 `agent-callout--v0.2.1`
+
+## 进行中
+
+- 下一轮保持完整路线图，先把可选本地 OCR 从原型接入可安装、可调用、带证据和歧义处理的 locator。
 
 ## 待完成
 
