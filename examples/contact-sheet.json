@@ -1,8 +1,8 @@
 {
   "annotationCount": 0,
   "hashes": {
-    "inputSha256": "6e5317fe86e7fc4ff65511de729ae75769e0cde4a3dc33aa30c67c6a95170601",
-    "outputSha256": "82f6f37cb6f2d63e059e0edcab4ee997bd417aba85ce52f7a6f9f318a2250b54",
+    "inputSha256": "35fa63a52fa95b197c50d2da78193c2880e786733c048c2297b69852adc9064d",
+    "outputSha256": "d0bb798b1bd91413381fa08cbd6b242cbfc2180fcdd764992f5692782a86ad9f",
     "specSha256": "f3a45165247b799e48ccfe6b821d8c6f88070d3c1678eef6023329b306f5badf"
   },
   "inputs": [
@@ -15,8 +15,8 @@
       "orientation": null,
       "path": "ui-bug/output.png",
       "pathSemantics": "relative-to-sidecar",
-      "sha256": "bb3d3b9faf8c249b3fefafb44b74c8a579c13868a2a191d544cf0511c5a46bf6",
-      "sizeBytes": 39292,
+      "sha256": "56ee41309f7e059ed97aff07de02d43255a8b328c5fff86327b68fcea172d427",
+      "sizeBytes": 39301,
       "storedDimensions": {
         "height": 640,
         "width": 1000
@@ -47,8 +47,8 @@
       "orientation": null,
       "path": "privacy/output.png",
       "pathSemantics": "relative-to-sidecar",
-      "sha256": "c3e52a99d622a3c5cad5eda7c7a0e86bcca0d5e5a543e29f3961476032c727b6",
-      "sizeBytes": 42724,
+      "sha256": "350312fb980fe792e49bb1b36c649b1848c870386dd58a324428117171a1aa62",
+      "sizeBytes": 42942,
       "storedDimensions": {
         "height": 600,
         "width": 1000
@@ -104,7 +104,7 @@
     "libvips": "8.18.6",
     "name": "sharp-svg-pango",
     "sharp": "0.35.4",
-    "version": "0.1.3"
+    "version": "0.2.1"
   },
   "security": {
     "blurIsSecureRedaction": false,

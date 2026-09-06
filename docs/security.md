@@ -2,6 +2,8 @@
 
 > 状态：MVP 安全基线。本文中的“必须”是实现与发布约束，不代表相关检查已经通过；当前验证状态以 [`compatibility.md`](compatibility.md) 为准。
 
+> v0.2.1 的密集排版、像素指标及预览最终读取校验仍处于未发布迭代；下文描述当前实现约束，不代表该版本已完成全量门禁或 Claude/Codex 实测。
+
 ## 1. 安全边界
 
 AgentCallout 处理的截图、AnnotationSpec、路径和批注文字都视为不可信输入。安全目标是：在用户明确允许的本地目录内读取已有图片、生成新文件，并避免数据外传、目录越界、静默覆盖和不安全的“假脱敏”。
@@ -82,6 +84,10 @@ MCP 不暴露 overwrite；已有普通图片输出冲突时应要求新 `outputP
 - 只要直接父版本或修订后 spec 含 blur/redact，默认不自动放大局部。父版本敏感覆盖被删除或任一字段变化时返回 `review.mode=none`，不发送任何图片。`none` 是隐私抑制，不是渲染失败。
 - changed-region 必须返回原画布 `sourceRect`，Agent 不得把局部判断表述为完整画布已复核。
 
+v0.2.1 的局部范围需要覆盖折线路由的每段描边、箭头头部、说明框及编号的实际绘制范围；直线端点距离不足以描述这些范围。预览发送前还必须通过两次绑定检查：生成预览所读的输入 hash/尺寸与已提交输出一致；最终 `readFile` 得到的预览字节 hash 与生成结果一致。对最终发送的同一份字节检查 PNG 格式、单页 metadata、尺寸及字节/像素预算，再编码为 base64。临时文件在生成后被替换、原输出被改写或任一检查失败时，返回 text-only `encoding-failed`，不发送替换内容，也不撤销已提交的 revision。这是对已验证生成字节的绑定，不是对同用户恶意进程的完整隔离。
+
+成功发送图片时才返回七项 `pixelMetrics`，并在 JSON TextContent 的 `preview.pixelMetrics` 与 ImageContent 的 `_meta["agent-callout/pixelMetrics"]` 中保持一致。指标以 EXIF 方向处理后的完整画布、裁剪区域和最终预览像素数计算；比例四舍五入到六位小数并限定在 `[0, 1]`。它们只说明栅格面积变化，不包含路径、文字、hash，也不估算模型 token 或费用。`none`、编码失败及绑定校验失败均不返回指标，避免给未发送的图片附加“节省量”。指标为即时结果，不写入 AnnotationSpec 或预览 sidecar；字段定义见 [AnnotationSpec 文档](annotation-spec.md#preview-pixel-metrics-v021)。
+
 `inspect-sidecar` / `inspect_annotation_sidecar` 是只读过滤器。它复用完整 sidecar/output/父链门禁，不打开原图、不修复/重写文件、不返回 ImageContent，且结果序列化不超过 4 KiB。默认公开字段只含 manifest/spec 版本、输出尺寸、批注 type 计数与 resolved inventory 身份对齐状态、revision 深度与目录协调边界、warning 数量、验证状态、blur/redact 布尔值和压平 PNG 的可移植性事实；明确排除所有路径/文件名/Markdown、hash/lineage/parent/edits、annotation ID/文字/style/raw warning/resolved geometry、renderer/font 指纹。任何验证失败只返回错误，不得返回部分成功摘要。
 
 ## 3. 资源限制
@@ -100,6 +106,12 @@ MCP 不暴露 overwrite；已有普通图片输出冲突时应要求新 `outputP
 | sidecar 公共摘要                 | 完整校验后构造独立过滤 DTO                       | **4 KiB；零 ImageContent**                 |
 
 数值必须集中定义、由 doctor 输出，并在 README 与错误信息中保持一致。发布门槛是：每一种限制都有恰好位于边界、超过边界、畸形 metadata 和资源释放测试；在这些数值确定以前，不得把大图防护标记为 VERIFIED。
+
+### 3.1 v0.2.1 密集布局预算
+
+密集布局低层 API 同样限制最多 200 个说明框，默认 beam width 为 96、硬上限为 128，每个说明框最多保留 128 个候选；超过 10/32/96 个说明框后进一步收缩候选和 beam 预算。路由限制每轴最多 32 个通道，成对通道最多 8 个，并在障碍较多时收缩。低层 API 的间距、描边、外扩和装饰尺寸等数值除有限值检查外，还受画布最大边长四倍的上限约束；调用方不能用 `Number.MAX_VALUE` 或超大 beam 请求绕过有界搜索。
+
+这些限制约束搜索成本，不是实时响应保证，也不承诺密集输入一定能无冲突排版。渲染器保留结果并通过稳定 warning 报告遮挡、短引线、路径受阻及空间不足。它不会因为避让失败而静默删掉批注。只有 AnnotationSpec 1.1 的说明框允许文字缩至 6px 后做有限区域裁切，并返回 `TEXT_CLIPPED`、`INSUFFICIENT_SPACE` 和实际丢失的非透明文字像素数；独立 `text` 与 1.0 保留无法容纳时失败的行为。完整文字仍在 sidecar 中，因此截图文字被裁切不构成脱敏。
 
 ## 4. 渲染输入安全
 
@@ -183,6 +195,7 @@ Tool 的显式结果可以按接口返回输出绝对路径、Markdown 引用和
 - XML/Pango 注入与畸形数值测试；
 - redact 原像素消失、alpha 不透明及 blur 安全说明测试；
 - MCP stdout 零污染和日志敏感字段测试；
+- v0.2.1 密集排版预算、稳定 warning、文字裁切指标、预览最终字节替换和零图片时无像素指标的回归测试；
 - 安装 dry-run、备份、幂等、并发 bootstrap、升级和卸载不破坏既有配置测试；
 - 干净 clone 使用 lockfile 完成安装、build、test 和 doctor。
 

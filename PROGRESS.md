@@ -1,13 +1,14 @@
 # AgentCallout 进度
 
-最后更新：2026-08-31（Asia/Singapore）
+最后更新：2026-09-06（Asia/Singapore）
 
 ## 当前状态
 
-- 阶段：MVP、0.1.3 与 0.2.0 已发布
+- 阶段：MVP、0.1.3 与 0.2.0 已发布；0.2.1 密集批注正在集成验收，未发布
 - GitHub：`https://github.com/xxf66666/AgentCallout`（公开仓库，`main` 已推送）
-- 本地分支：`main`
-- 阻塞：主路径无；Codex 可选 Skills-only Marketplace 0.1.3 更新受客户端固定 30 秒 clone 超时影响
+- 本地分支：`codex/dense-callout-layout`，发布基线 `173485e`
+- 当前发布门槛：本地完整 gate 已通过；干净安装和双客户端 A/B 尚待完成
+- 已知外部限制：Codex 可选 Skills-only Marketplace 曾受客户端固定 30 秒 clone 超时影响；CLI+MCP 主路径已验证
 
 ## 已完成
 
@@ -42,7 +43,7 @@
 - [x] 增加 append-only `.revN` 修订：严格 add/set/remove、父链/hash、移动或 basename-only 原图、CLI/MCP 入口
 - [x] 修订事务增加完整 lock 发布、no-replace PNG/sidecar、最终可信读回、强杀残留恢复、15 个故障点与 16 进程竞态
 - [x] 增加 255 revision/256 sidecar 与 512 MiB 累计链预算；拒绝生成下一次无法读取的版本
-- [x] MCP 默认改为 512 px/64 KiB/low-detail 紧凑总览，并引导用局部 crop 检查小字以降低图片 token
+- [x] MCP 默认改为 512 px/64 KiB/low-detail 紧凑总览，并引导用局部 crop 检查小字，限制传输像素和重复图片轮次
 - [x] README/Skill 说明跨 AI 交付必须附 PNG + 普通 JSON sidecar；只读 JSON 不要求安装 AgentCallout
 - [x] 0.1.3 当前工作树完整 gate：117 tests、build、三份 dist 复现；三组示例重生且 PNG 基线稳定
 - [x] 构建后 CLI base→rev1→rev2→rev3 真实运行，旧 input/base PNG/base JSON hash 与 mtime 不变，无 lock/temp residue
@@ -68,10 +69,24 @@
 
 ## 进行中
 
-- 无；0.2.0 发布门禁已关闭，下一轮从“待完成”中重新排序。
+- [x] 1.1 密集布局核心：提前保护全部目标、多候选避让、折线引线及结构化布局问题；1.0 保留旧渲染路径
+- [x] 实现预览 `pixelMetrics`，仅报告像素数量/比例；图片发送前重新校验最终字节，失败不返回图片或指标
+- [x] 建立普通/编号/混合 1、3、6、10 项测试，增加长文字、固定文字障碍、边角小目标及折线路径像素检查
+- [x] 修复编号引线、marker 边界与超大箭头头部碰撞回归；补强箭头头部离开引线的真实像素断言
+- [x] 完整 format/lint/typecheck、179 tests、build、3 份 dist 复现；三组示例确定性/视觉检查通过
+- [x] 精简 README，同步路由/warning/像素指标文档与 Skill；Plugin/Skill/Claude manifest 校验通过
+- [x] 构建后 doctor/self-test、root/Plugin 八工具 smoke、npm pack 9 文件与生产 audit 0 漏洞
+- [x] 准备 1280×800 / 10 项混合真实控件 A/B 素材；旧版 baseline 与新版候选均已通过 CLI 生成并查看，新版无布局 warning
+- [ ] 干净 clone、GitHub 安装、doctor、CLI/MCP/Plugin 验证
+- [ ] Claude/Codex 真实 10 项密集批注与修订视觉 A/B
+- [ ] 提交、推送并发布 0.2.1；全部通过前不更新已发布兼容性结论
 
 ## 待完成
 
+- [ ] 0.3.0：可选本地 OCR，中英文精确/包含匹配、多候选与置信度证据
+- [ ] 0.3.1：`create-handoff` 一键 PNG/sidecar/安全摘要/Markdown 交接包
+- [ ] 0.4.0：DOM selector/文本/可访问性名称定位，处理 DPR/缩放/滚动/iframe 与截图关联证据
+- [ ] 0.4.x：显式 working copy/fork/revision diff、分支合并评估及系统截图/轻量 GUI 评估
 - [ ] 非 Windows 平台回归（不阻塞 Windows-first MVP）
 - [ ] 跨目录复制 lineage 的 fork 只记录不自动合并；后续评估显式 branch/merge 模型
 - [ ] 解决或规避 Codex Git Marketplace 内部 30 秒 clone 超时（不阻塞 CLI+MCP 主路径）

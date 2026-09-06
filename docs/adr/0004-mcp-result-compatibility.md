@@ -30,7 +30,7 @@ MCP 2026-07-28 允许一个 Tool 结果同时包含 `structuredContent`、TextCo
 
 ## 后果
 
-所有图片客户端优先获得轻量图片闭环，同时仍能从 JSON 文本读取 hash、warning、路径、预览元数据和 Markdown；纯结构化工具保留正式 `structuredContent`。core 无客户端分支，差异仅存在于 MCP 结果编码层。紧凑总览降低常见整图 token，但不能保证每个模型的 `low` 都比 `high` 便宜；服务端先物理缩到 512 px，避免把成本控制完全交给宿主。
+所有图片客户端优先获得轻量图片闭环，同时仍能从 JSON 文本读取 hash、warning、路径、预览元数据和 Markdown；纯结构化工具保留正式 `structuredContent`。core 无客户端分支，差异仅存在于 MCP 结果编码层。服务端先物理缩到 512 px，限制传输像素与字节；实际 token 和费用由宿主及模型决定，不能从图片尺寸、文件体积或总 usage 单独归因。
 
 代价是图片工具失去协议层 output schema 强制，必须在服务器内部和测试中校验 manifest；消费端需要解析 JSON TextContent。客户端行为变化后仍须维护 compatibility matrix。
 

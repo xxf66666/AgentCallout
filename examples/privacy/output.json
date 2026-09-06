@@ -61,7 +61,7 @@
   },
   "hashes": {
     "inputSha256": "5e8f4d735df796430072b297600cff9fdf5608c2c136808ed8dcc5bbb5c0ed1e",
-    "outputSha256": "c3e52a99d622a3c5cad5eda7c7a0e86bcca0d5e5a543e29f3961476032c727b6",
+    "outputSha256": "350312fb980fe792e49bb1b36c649b1848c870386dd58a324428117171a1aa62",
     "specSha256": "1b5f1ce28ea85c06965f571b7377b2b1077c0ebebe8131bdcc0f23af28fa2a62"
   },
   "inputs": [
@@ -170,22 +170,110 @@
     "libvips": "8.18.6",
     "name": "sharp-svg-pango",
     "sharp": "0.35.4",
-    "version": "0.1.3"
+    "version": "0.2.1"
   },
   "resolvedAnnotations": [
     {
       "anchor": {
-        "x": 769,
+        "x": 781,
         "y": 272
+      },
+      "arrowHead": {
+        "bounds": {
+          "height": 10.413209738821365,
+          "width": 10.811626414828993,
+          "x": 755,
+          "y": 266.7933951305893
+        },
+        "tip": {
+          "x": 755,
+          "y": 272
+        },
+        "wings": [
+          {
+            "x": 765.811626414829,
+            "y": 266.7933951305893
+          },
+          {
+            "x": 765.811626414829,
+            "y": 277.2066048694107
+          }
+        ]
       },
       "box": {
         "height": 44,
         "width": 203,
-        "x": 769,
+        "x": 781,
         "y": 250
       },
       "fontSize": 20,
       "id": "email-note",
+      "label": {
+        "box": {
+          "height": 44,
+          "width": 203,
+          "x": 781,
+          "y": 250
+        },
+        "fontSize": 20,
+        "padding": 12,
+        "paintedBounds": {
+          "height": 46,
+          "width": 205,
+          "x": 780,
+          "y": 249
+        },
+        "placement": "right",
+        "strokeWidth": 2,
+        "text": "普通隐私：视觉弱化"
+      },
+      "layout": {
+        "issues": [],
+        "status": "ok"
+      },
+      "leader": {
+        "bendCount": 0,
+        "bounds": {
+          "height": 2,
+          "width": 28,
+          "x": 754,
+          "y": 271
+        },
+        "end": {
+          "x": 755,
+          "y": 272
+        },
+        "kind": "straight",
+        "length": 26,
+        "pathLength": 26,
+        "points": [
+          {
+            "x": 781,
+            "y": 272
+          },
+          {
+            "x": 755,
+            "y": 272
+          }
+        ],
+        "segments": [
+          {
+            "end": {
+              "x": 755,
+              "y": 272
+            },
+            "start": {
+              "x": 781,
+              "y": 272
+            }
+          }
+        ],
+        "start": {
+          "x": 781,
+          "y": 272
+        },
+        "strokeWidth": 2
+      },
       "placement": "right",
       "style": {
         "arrowHeadSize": 12,
@@ -220,17 +308,105 @@
     },
     {
       "anchor": {
-        "x": 513,
-        "y": 358
+        "x": 512.8450704225352,
+        "y": 346
+      },
+      "arrowHead": {
+        "bounds": {
+          "height": 10.848023654805047,
+          "width": 10.412951535527554,
+          "x": 507.5316323895073,
+          "y": 361.15197634519495
+        },
+        "tip": {
+          "x": 512.6619718309859,
+          "y": 372
+        },
+        "wings": [
+          {
+            "x": 507.5316323895073,
+            "y": 361.15197634519495
+          },
+          {
+            "x": 517.9445839250349,
+            "y": 361.2253069898114
+          }
+        ]
       },
       "box": {
         "height": 44,
         "width": 220,
         "x": 403,
-        "y": 314
+        "y": 302
       },
       "fontSize": 20,
       "id": "token-note",
+      "label": {
+        "box": {
+          "height": 44,
+          "width": 220,
+          "x": 403,
+          "y": 302
+        },
+        "fontSize": 20,
+        "padding": 12,
+        "paintedBounds": {
+          "height": 46,
+          "width": 222,
+          "x": 402,
+          "y": 301
+        },
+        "placement": "top",
+        "strokeWidth": 2,
+        "text": "Token：不可恢复遮挡"
+      },
+      "layout": {
+        "issues": [],
+        "status": "ok"
+      },
+      "leader": {
+        "bendCount": 0,
+        "bounds": {
+          "height": 28,
+          "width": 2.18309859154931,
+          "x": 511.66197183098586,
+          "y": 345
+        },
+        "end": {
+          "x": 512.6619718309859,
+          "y": 372
+        },
+        "kind": "straight",
+        "length": 26.000644705357356,
+        "pathLength": 26.000644705357356,
+        "points": [
+          {
+            "x": 512.8450704225352,
+            "y": 346
+          },
+          {
+            "x": 512.6619718309859,
+            "y": 372
+          }
+        ],
+        "segments": [
+          {
+            "end": {
+              "x": 512.6619718309859,
+              "y": 372
+            },
+            "start": {
+              "x": 512.8450704225352,
+              "y": 346
+            }
+          }
+        ],
+        "start": {
+          "x": 512.8450704225352,
+          "y": 346
+        },
+        "strokeWidth": 2
+      },
       "placement": "top",
       "style": {
         "arrowHeadSize": 12,
@@ -257,7 +433,7 @@
         "y": 372
       },
       "targetAnchor": {
-        "x": 513,
+        "x": 512.6619718309859,
         "y": 372
       },
       "text": "Token：不可恢复遮挡",

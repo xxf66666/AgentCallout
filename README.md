@@ -82,27 +82,18 @@ Agent 会检查图片、必要时放大局部、生成批注、查看结果，�
 
 原图默认不会被覆盖。
 
-如果 Agent 需要调整一份已经提交的批注，它会从可信 sidecar 创建不可覆盖的新版本：
+继续修改时，Agent 会生成 `.rev1`、`.rev2` 等新版本，保留原图和历史结果。
 
-- `screenshot.annotated.rev1.png/.json`、`rev2`、`rev3`……按父链递增；
-- `add`、`set`、`remove` 按稳定 ID 有序执行，`set` 是完整替换，不是字段合并；
-- 每次都从原图重渲染，旧 PNG、JSON 和原图不会被改写；
-- 只有存在且完整校验通过的 JSON sidecar 才是提交标志。PNG 已发布但 sidecar 未成功时不算已提交，也不能把双文件发布描述为断电级原子事务。
-- 若版本已提交、但 lock/temp 清理不完整，结果会单独返回 `recoveryWarnings`；这类告警不能当成普通排版 warning 忽略。
-
-MCP 每次最多返回一张、最长边 512 px、最多 64 KiB 的图片。新建批注使用 low-detail 总览；修订优先把实际变化像素、touched 批注和连带重排区域合成 `changed-region`。分散、过大、全局效果、几何不足、renderer 不匹配或当前结果仍有 blur/redact 时回退 `compact-overview`；父版本 blur/redact 被删除或任一字段变化时返回 `none`，完全不发送图片，避免自动放大新暴露像素。聚焦图会带原画布 `sourceRect`，不能冒充完整画布；局部足够时不要再 crop。实际 token 成本仍取决于宿主和模型，sidecar、hash 和成功返回也不能代替视觉复核。
+工具每次最多返回一张 512 px / 64 KiB 的预览，完整图片会保存在本机。修改后优先查看变化区域；小字看不清时再放大局部。变更涉及移除或修改隐私遮挡时，不会自动发送图片。预览尺寸和像素缩减比例可用于比较传输量，不能直接换算为 token 或费用。修订、预览和异常处理的完整规则见[接口文档](docs/annotation-spec.md#revising-a-committed-annotation)。
 
 ## 把结果交给另一个 AI
 
-不要只交一张已经“压平”的 PNG。单看像素，任何 AI 都无法可靠判断哪些内容来自原图、哪些是后加批注。应同时交付：
+把下面两份文件一起交付，另一个 AI 才能明确区分原图内容和后加批注：
 
 - `*.annotated.png`：给人和视觉模型看的结果；
-- 同名 `*.annotated.json`：机器可读的批注层，包含原图/输出 hash、AnnotationSpec、稳定 ID、解析后位置、warning 和修订父链；
-- 需要复核来源时，再附原图。原图含秘密时先按安全策略处理，不要为了做 diff 而泄露它。
+- 同名 `*.annotated.json`：记录每条批注的文字、类型、位置和修订关系。
 
-另一个 AI **不必安装 AgentCallout 才能读 JSON**；sidecar 是普通、版本化的 JSON。只有在需要校验、重渲染、继续修订或生成预览时，才需要 CLI/MCP。`inspect-sidecar` / `inspect_annotation_sidecar` 会验证 sidecar、配对输出和完整父链，然后返回不含路径、文件名、hash、annotation ID/文字/style 的 4 KiB 内摘要；原图不会被打开，只标记 `record-only`。任一校验失败统一返回 `ANNOTATION_SIDECAR_INVALID`，不返回部分摘要或原始错误内容。完整 sidecar 仍可能包含批注文字和文件关联信息，且不是签名或加密证明，分享前应按敏感文档检查。
-
-修订 lock 只协调 sidecar 所在目录。复制完整 PNG/JSON lineage 到另一个目录会创建可独立继续、也可能分叉的工作副本；它不是跨目录或跨机器的全局 head。
+另一个 AI **不必安装 AgentCallout 才能读 JSON**。安装后还能校验文件、生成安全摘要、重新渲染和继续修订。分享前请检查 JSON 中的批注文字与文件信息；需要提供原图时，也先检查其中的敏感内容。仅凭一张压平 PNG，无法可靠还原批注层。
 
 Markdown 交付可同时链接两份文件：
 
@@ -177,23 +168,7 @@ agent-callout revise .\screenshot.annotated.json --edits .\edits.json
 agent-callout --help
 ```
 
-`edits.json` 是严格数组。例如：
-
-```json
-[
-  {
-    "op": "set",
-    "id": "save-button",
-    "annotation": {
-      "id": "save-button",
-      "type": "rectangle",
-      "rect": { "x": 120, "y": 80, "width": 160, "height": 48 }
-    }
-  }
-]
-```
-
-`add` 必须带新 ID，可用 `afterId` 指定插入位置；`remove` 只接收现有 ID。若原图移动，追加 `--input <新路径>`，工具会核对父 sidecar 记录的 SHA-256。命令没有 `--output`、`--overwrite` 或修订号参数。
+`edits.json` 使用 `add`、`set`、`remove` 修改批注；`set` 表示完整替换同一 ID 的批注。[字段、示例与修订规则](docs/annotation-spec.md#revising-a-committed-annotation)。
 
 </details>
 
@@ -244,9 +219,11 @@ codex plugin marketplace remove agent-callout
 | Codex CLI 0.151.0           | MCP 0.2.0 聚焦修订闭环    |
 | macOS、Linux                | 尚未完成项目级验证        |
 
-中文和英文文字、PNG/JPEG/WebP、版本化修订及自动化安全矩阵已在 GitHub `a09735e` 的 Windows clean clone 验证；0.2.0 全局 GitHub 安装、Claude Plugin 刷新及两边真实“局部预览发现遮挡 → 再修订”闭环也已完成。两边每轮只返回一张 384×162 changed-region（5.5–6.6 KiB），均未额外调用 crop；完整图片仍落盘。Codex 的可选 Skills-only Git Marketplace 更新仍可能触发客户端固定 30 秒 clone 超时，不影响已验证的全局 CLI+MCP 主路径，详见[兼容性记录](docs/compatibility.md)。当前 MVP 不包含 OCR 自动找字、浏览器 DOM 定位、系统截图快捷键、GUI、录屏或视频编辑。
+上表记录已发布 v0.2.0 的实测结果。v0.2.1 的密集说明框避让、目标保护、折线引线、排版告警和预览像素指标已通过本地 179 项测试与构建，正在进行干净安装和双客户端视觉 A/B，尚未发布。完整证据见[兼容性记录](docs/compatibility.md)。
 
-下一阶段继续改进密集说明框的全局排版/引线绕行，并评估可选 OCR/DOM 定位适配器；聚焦预览与 sidecar 安全摘要已进入 0.2，详见[路线图](docs/roadmap.md)。
+浅色说明框、独立编号配色和语义 tone 已可用：普通说明使用默认 `docs-light` 或 `info`，错误使用 `danger`。旧版 1.0 批注仍保留原有样式。
+
+后续依次开发 OCR 自动找字、一键交接包、浏览器 DOM 定位和协作能力，详见[路线图](docs/roadmap.md)。系统截图、GUI 和视频尚未实现。
 
 ## 详细文档
 

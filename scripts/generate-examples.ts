@@ -52,18 +52,23 @@ interface ResolvedNumberedExample {
     start: { x: number; y: number };
     end: { x: number; y: number };
     length: number;
+    pathLength: number;
     bounds: { x: number; y: number; width: number; height: number };
   };
 }
 
-const UNAFFECTED_BASELINE_HASHES = {
+const REVIEWED_BASELINE_HASHES = {
   "ui-bug": {
-    output: "bb3d3b9faf8c249b3fefafb44b74c8a579c13868a2a191d544cf0511c5a46bf6",
-    sidecar: "c5ac3712fbf7a2d635279313f553a9848b6aa37cb8295425d12bc57504216d0a"
+    output: "56ee41309f7e059ed97aff07de02d43255a8b328c5fff86327b68fcea172d427",
+    sidecar: "6900772c2088d4657bd9ab7096b6ef4ab8e41ebf90c639b52cc7b1c781380203"
+  },
+  "numbered-review": {
+    output: "ab32f6458acd099f454301f02fee31f7a1bea2230e5531c7249f5d681f1561bc",
+    sidecar: "2341efffe417af5178aad0b2d3b5e8e1e45efc7929d5ab3bbc8da184642605c3"
   },
   privacy: {
-    output: "c3e52a99d622a3c5cad5eda7c7a0e86bcca0d5e5a543e29f3961476032c727b6",
-    sidecar: "a9f8a532734fd01ac6ad827c5cf5207076381dda6ec543fd1846bb936cdfe3f2"
+    output: "350312fb980fe792e49bb1b36c649b1848c870386dd58a324428117171a1aa62",
+    sidecar: "a35eaeb8490c1d2219fbf16befb0e7a41090ba0b4af6264a203e24ab3f38257c"
   }
 } as const;
 
@@ -413,18 +418,15 @@ for (const definition of definitions) {
   const isVerifiedWindowsBaseline =
     process.platform === "win32" &&
     second.renderer.name === "sharp-svg-pango" &&
-    second.renderer.version === "0.1.3" &&
+    second.renderer.version === "0.2.1" &&
     second.renderer.sharp === "0.35.4" &&
     second.renderer.libvips === "8.18.6" &&
     second.renderer.font.sha256 === BUNDLED_FONT_SHA256;
-  if (
-    isVerifiedWindowsBaseline &&
-    (definition.slug === "ui-bug" || definition.slug === "privacy")
-  ) {
-    const baseline = UNAFFECTED_BASELINE_HASHES[definition.slug];
+  if (isVerifiedWindowsBaseline) {
+    const baseline = REVIEWED_BASELINE_HASHES[definition.slug];
     if (second.outputSha256 !== baseline.output || sidecarSha256 !== baseline.sidecar) {
       throw new Error(
-        `${definition.slug} changed outside the numbered-callout scope: PNG ${second.outputSha256}, sidecar ${sidecarSha256}.`
+        `${definition.slug} differs from the visually reviewed 0.2.1 baseline: PNG ${second.outputSha256}, sidecar ${sidecarSha256}.`
       );
     }
   }
@@ -436,9 +438,9 @@ for (const definition of definitions) {
     };
     for (const annotation of sidecar.resolvedAnnotations) {
       if (annotation.type !== "numbered-callout") continue;
-      if (annotation.leader.length < 24) {
+      if (!Number.isFinite(annotation.leader.pathLength) || annotation.leader.pathLength < 24) {
         throw new Error(
-          `${annotation.id} has only ${annotation.leader.length}px of visible numbered leader.`
+          `${annotation.id} has only ${annotation.leader.pathLength}px of visible numbered leader path.`
         );
       }
       if (

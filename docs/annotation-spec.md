@@ -4,6 +4,8 @@ AnnotationSpec is AgentCallout's strict, replayable description of annotations o
 
 Use version `"1.1"` for new specs. It provides readable document-oriented defaults, reusable presets, semantic tones, root style defaults, independent numbered-marker colors, and explicit text width. Version `"1.0"` remains supported exactly for replay: its parsing, canonical JSON, resolved style/geometry, and renderer defaults are unchanged.
 
+The dense layout and preview metrics below describe the **unreleased v0.2.1 implementation**. They do not change `AnnotationSpec.version`: the new layout applies only to 1.1. Release and real-client verification status is tracked in [compatibility](compatibility.md) and [PROGRESS](../PROGRESS.md).
+
 ## Root object
 
 ```json
@@ -144,12 +146,12 @@ This has the same target, text, and placement behavior as `callout`, plus an int
 Numbered geometry is versioned without adding public input fields:
 
 - Version 1.0 preserves the legacy replay path byte-for-byte: the marker remains centered on the target and the existing fixed-gap label/leader composition is unchanged.
-- Version 1.1 treats `target`, `marker`, `label`, and `leader` as separate resolved geometry. The marker sits immediately outside the label edge that faces the target. The leader runs from the painted outer marker boundary to the exact point target or the boundary of a rectangular target, so neither the marker nor its number covers the reviewed content.
+- Version 1.1 treats `target`, `marker`, `label`, and `leader` as separate resolved geometry. The marker prefers the outside label edge facing the target; another label edge can be selected when needed for clearance. The leader runs from the painted outer marker boundary to the exact point target or the boundary of a rectangular target. The marker and its number participate in target and label avoidance.
 - On a feasible canvas, the exposed 1.1 leader is at least 24 pixels. Placement scoring reserves the painted label/marker bounds and leader corridor. Edge clamping, very small canvases, dense occupied layouts, invisible leader styles, and strokes too wide for the canvas remain deterministic; when visibility or separation cannot be met, the renderer keeps the output decodable and emits a warning containing the annotation ID.
 
-The 1.1 sidecar records `target`, `marker` (including painted bounds), `label`, and `leader` (start, end, and exposed length). These are resolved output fields, not AnnotationSpec input fields; supplying `marker`, `label`, or `leader` in an input annotation is still rejected as an unknown field.
+The 1.1 sidecar records `target`, `marker` (including painted bounds), `label`, and `leader`. Renderer 0.2.1 adds the complete routed leader geometry described below. These are resolved output fields, not AnnotationSpec input fields; supplying `marker`, `label`, or `leader` in an input annotation is still rejected as an unknown field.
 
-The marker-aware 1.1 numbered geometry is versioned with renderer 0.1.3. A sidecar is not a promise of pixel-equivalent replay under a different renderer build: retain and check its renderer/font metadata, then regenerate and visually review it. This caveat does not apply to the frozen 1.0 replay path.
+Marker-aware 1.1 numbered geometry first shipped with renderer 0.1.3; dense planning and routed geometry use renderer 0.2.1. A 1.1 sidecar is not a promise of pixel-equivalent replay under a different renderer build: retain and check its renderer/font metadata, then regenerate and visually review it. Version 1.0 keeps its legacy rendering branch and fixed PNG regression baseline on the recorded platform/font/Sharp environment; this does not promise cross-platform byte equality.
 
 ### `highlight`
 
@@ -190,6 +192,54 @@ Uses `rect` as the focus region while dimming the surrounding image.
 ```
 
 `color` must be opaque `#RRGGBB` and defaults to black. A redact annotation rejects any style opacity other than `1`. During resolution its fill color is forced to `color` and its opacity is forced to `1`.
+
+## Dense layout and resolved geometry (v0.2.1)
+
+Version 1.1 measures all `text`, `callout`, and `numbered-callout` labels before painting. A deterministic bounded beam search places the callout labels together, considering their painted borders and numbered-marker footprint. All callout and standalone-arrow targets are known at planning time, including targets that occur later in paint order. Explicit `text` boxes remain fixed obstacles. Point targets reserve a small local region for avoidance; rectangle targets retain their actual bounds.
+
+After label and marker placement, leaders and standalone arrows use straight or orthogonal paths around labels, markers, fixed text, and other targets. The renderer checks painted shaft width and arrowhead geometry, and may choose another boundary point on a rectangle target. A connection can touch its own target; annotations sharing identical target bounds can connect to that shared target. The original annotation array still determines paint order.
+
+`placement` remains a side preference. Avoiding covered targets, overlapping labels, and canvas overflow can require another side. Space can be insufficient even for a valid spec. In that case the renderer preserves a deterministic result with explicit diagnostics rather than promising a globally optimal or collision-free layout. Intentional effects such as `redact`, `blur`, and `highlight` keep their specified regions; the planner does not discover screenshot content or move these effects.
+
+The search is bounded independently of image size: at most 200 callouts, at most 128 label candidates per item, and a beam width capped at 128 (default 96). Candidate/beam budgets decrease above 10, 32, and 96 items. Routing also caps its candidate channels. These are library implementation limits, not additional AnnotationSpec fields; the low-level layout API rejects non-finite or excessive geometry options and an out-of-range `beamWidth`.
+
+### Routed output contract
+
+In `resolvedAnnotations`, both callout types expose `label.box`, `label.paintedBounds`, and `leader`; numbered callouts additionally expose `marker`. Standalone `arrow` uses `path`. `leader` and `path` share this shape:
+
+| Field          | Meaning                                                                           |
+| -------------- | --------------------------------------------------------------------------------- |
+| `kind`         | `straight` for zero bends; otherwise `orthogonal`.                                |
+| `start`, `end` | Resolved connection endpoints in full-image pixel coordinates.                    |
+| `length`       | Compatibility field: direct endpoint distance, **not** the length of a bent path. |
+| `pathLength`   | Sum of the rendered route segment lengths.                                        |
+| `points`       | Ordered endpoints and bends.                                                      |
+| `segments`     | Ordered `{ start, end }` pairs between distinct route points.                     |
+| `bendCount`    | Number of route bends.                                                            |
+| `bounds`       | Bounds of the shaft including stroke width; omitted when there are no segments.   |
+| `strokeWidth`  | Effective rendered shaft width.                                                   |
+| `collisionIds` | Present only when the selected route still intersects obstacles.                  |
+
+Plain callouts with an arrowhead and standalone arrows also expose `arrowHead: { tip, wings, bounds }`; `wings` contains the two triangle corners. Shaft `bounds` does not include the arrowhead. Consumers computing a review crop must include both, plus label and marker painted bounds. A zero-segment route is not proof of a visible leader: check `layout` and its warnings.
+
+Resolved `layout` is `{ "status": "ok" | "degraded", "issues": [...] }`. Each issue contains `code`, `annotationId`, `relatedIds`, `message`, and optional numeric `metrics`. Empty issues mean `ok`; any issue means `degraded`. IDs in relationships can identify an obstacle role such as `label:save-note` or `target:save-note`. These output records support inspection and review; they are not editable spec fields.
+
+### Layout warnings and text fitting
+
+Version 1.1 layout warnings use the string prefix `[CODE]` and are also stored as structured issues on the affected resolved annotation. Match the code, not the human message wording. Existing schema/coordinate warnings and 1.0 legacy warnings keep their existing forms.
+
+| Code                   | Meaning                                                                                   |
+| ---------------------- | ----------------------------------------------------------------------------------------- |
+| `LEADER_TOO_SHORT`     | The exposed leader misses the 24px target, including a style that makes it invisible.     |
+| `TEXT_CLIPPED`         | Callout text still exceeded its available sprite area at the 6px minimum and was cropped. |
+| `TARGET_COVERED`       | A label, marker, or arrowhead still overlaps a protected target.                          |
+| `CALLOUT_OVERLAP`      | Protected label/marker geometry or fixed text still overlaps.                             |
+| `INSUFFICIENT_SPACE`   | The available canvas/candidate space cannot satisfy required separation or text fit.      |
+| `LEADER_ROUTE_BLOCKED` | The chosen route still intersects an obstacle; inspect the related IDs.                   |
+| `TEXT_SIZE_REDUCED`    | Text was reduced from the requested font size to fit without clipping.                    |
+| `GEOMETRY_CLIPPED`     | Geometry was reduced or clipped to fit the canvas.                                        |
+
+Only 1.1 `callout` and `numbered-callout` may fall back to bounded text cropping. Their `TEXT_CLIPPED` issue includes requested/resolved font sizes, unclipped/clipped width and height, and `clippedAlphaPixelCount`, the count of nontransparent text pixels omitted. It is accompanied by `INSUFFICIENT_SPACE`; the sidecar retains the full text. Standalone `text` and the 1.0 renderer keep their fail-rather-than-clip behavior. Reduce text, split notes, change width, or use a larger source canvas before treating a degraded result as reviewed.
 
 ## Styles
 
@@ -403,7 +453,7 @@ Do not rewrite a stored 1.0 sidecar merely to adopt new colors; replay it as 1.0
 
 Version 1.0 has no `marker*` fields: a `numbered-callout` marker takes its outline from the resolved `strokeColor`, its fill from the resolved `backgroundColor`, and its number from the resolved `textColor`. Version 1.1 resolves those marker colors independently. When converting a custom 1.0 numbered callout and preserving its marker appearance matters, copy those former resolved values explicitly to `markerStrokeColor`, `markerFillColor`, and `markerTextColor`, respectively, in the standalone migrated 1.1 spec. Omit them when intentionally adopting the selected 1.1 preset/tone marker palette, and never add them to a 1.0 spec because 1.0 rejects those fields.
 
-Plain `callout` layout keeps the existing candidate order and fixed leader gap in both versions. A 1.1 `numbered-callout` uses the same deterministic candidate scoring with a larger marker-aware footprint and boundary-to-boundary leader clearance; 1.0 retains the old numbered gap and paint order. `maxWidth` can still change wrapping and therefore the selected label position.
+Version 1.0 retains the existing one-at-a-time candidate order, fixed gaps, and legacy paint composition. Renderer 0.2.1 uses the dense preplanning pass above for both 1.1 callout types and routes their leaders together with standalone arrows. `maxWidth` can change wrapping and therefore other labels' selected positions. A migration to 1.1 can change pixels even with `classic-red`; that preset selects style defaults, not the 1.0 renderer.
 
 Validate a spec before rendering, resolve it against the inspected image dimensions, retain its warnings, and save the canonical or sidecar representation needed for replay.
 
@@ -432,6 +482,26 @@ The transient `review` result does not change the sidecar or renderer:
 - `none` returns no ImageContent when an existing blur/redact annotation is removed or any of its fields change. This avoids automatically transmitting pixels that may have become newly readable.
 
 Each MCP result contains at most one preview image. Focus and compact-overview encoding failures do not undo an already committed revision; they return `preview.available=false`, `fallbackReason: "encoding-failed"`, and the full local output path.
+
+### Preview pixel metrics (v0.2.1)
+
+Successful MCP ImageContent results include `preview.pixelMetrics` in JSON TextContent and the identical object in image `_meta["agent-callout/pixelMetrics"]`. Core `createImagePreview` returns it as `pixelMetrics`. It describes the final encoded preview after EXIF orientation, optional crop, and resize. It is transient result data; it is not added to AnnotationSpec or persisted in the preview sidecar.
+
+Let `F` be the full oriented input raster's pixel count, `S` the selected source region's pixel count (`F` for an overview), and `P` the final preview width times height:
+
+| Field                        | Value         |
+| ---------------------------- | ------------- |
+| `fullRasterPixelCount`       | `F`           |
+| `sourceRegionPixelCount`     | `S`           |
+| `previewRasterPixelCount`    | `P`           |
+| `sourceRegionCoverageRatio`  | `S / F`       |
+| `previewToSourceRegionRatio` | `P / S`       |
+| `previewToFullRasterRatio`   | `P / F`       |
+| `previewPixelReductionRatio` | `(F - P) / F` |
+
+Ratios are rounded to six decimals and clamped to `[0, 1]`. The reduction combines crop and resize; it does not measure retained detail or compression bytes. It is **not a model token count, token reduction, or price estimate**. Metrics are omitted when no image is sent, including `review.mode=none`, encoding failure, or failed integrity validation.
+
+Before transmission, MCP binds the preview's input hash and dimensions to the committed output, then re-reads the final preview bytes and verifies their hash against the generated preview. It checks PNG format, single-page metadata, dimensions, and byte/pixel limits on those same bytes before base64 encoding. Failure returns text-only `encoding-failed`; the committed annotation remains available locally.
 
 ### Safe sidecar summary
 

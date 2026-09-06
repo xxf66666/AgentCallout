@@ -1,5 +1,13 @@
 # AgentCallout 兼容性与验证记录
 
+## 0.2.1 开发验证（2026-09-06，尚未发布）
+
+当前分支 `codex/dense-callout-layout` 基于已发布 `173485e`。1.1 密集排版、折线路由、稳定 warning、预览像素指标及编号/箭头头部回归已通过本地完整 gate。新版干净 clone、GitHub 安装和 Claude/Codex 密集批注视觉 A/B 尚未完成，整体状态为 **PARTIALLY VERIFIED**。下方矩阵保留已发布 0.2.0 的证据，不外推到 0.2.1。
+
+本轮已重新读取本机命令帮助：Codex CLI `0.152.1`、Claude Code `2.1.260`，均较旧版验收升级；版本/命令存在不代表新版 MCP 视觉验收通过。Core image + MCP 定向测试当前为 27/27。客户端运行参考 [Codex non-interactive](https://learn.chatgpt.com/docs/non-interactive-mode)、[Codex MCP](https://learn.chatgpt.com/docs/extend/mcp?surface=cli) 和 [Claude headless](https://code.claude.com/docs/en/headless)，正式记录以实际运行命令和输出为准。
+
+本地证据：`npm run verify` 通过格式、lint、typecheck、179 tests、build 和 3 份 dist 逐字节复现；doctor/self-test、root/Plugin 八工具 stdio smoke 成功且 stderr 为空；npm pack 为 9 个预期文件；官方 npm registry production audit 为 0 漏洞。三组示例重复生成哈希一致且人工视觉复核通过。`prepare-dense-acceptance.ts` 生成 1280×800 模拟 UI 和 10 项混合批注，旧 CLI 0.2.0 baseline PNG 为 `44d4e685e7180110735cd7b82dda82ffa692c372c1f797d858611576d41fc95f`，新构建候选为 `86f6436b3051651c1be70dc440e8e3baa332db7da5a01b88c4b214263b39b846`、warnings 为空；这仍是 CLI/主线程视觉证据，尚未替代客户端 A/B。
+
 ## 兼容性矩阵
 
 状态只使用三种：**VERIFIED** 表示对应范围已在所列环境真实执行并留有结果；**PARTIALLY VERIFIED** 表示只验证了版本、子能力、技术实验或命令面；**NOT VERIFIED** 表示尚无项目级运行证据。一个组件的版本存在不代表 AgentCallout 已安装或可调用。
