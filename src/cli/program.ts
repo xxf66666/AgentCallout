@@ -12,6 +12,7 @@ import {
   createContactSheet,
   createHandoffPackage,
   cropImage,
+  DomRuntimeError,
   getCoreDoctorReport,
   installBrowserRuntime,
   inspectBrowserRuntime,
@@ -91,7 +92,7 @@ interface HandoffOptions extends CommonOptions {
   overwrite?: boolean;
 }
 
-interface BrowserOptions extends OcrOptions {}
+type BrowserOptions = OcrOptions;
 
 interface LocateDomOptions extends BrowserOptions {
   selector?: string;
@@ -211,6 +212,7 @@ function parseRect(value: string): Rect {
 function errorMessage(error: unknown): string {
   if (
     error instanceof AgentCalloutRevisionError ||
+    error instanceof DomRuntimeError ||
     error instanceof OcrImageError ||
     error instanceof OcrRuntimeError
   ) {

@@ -131,7 +131,7 @@ async function frameOffsets(page) {
         if (element === null) continue;
         const ownerOffset = await element.evaluate((iframe) => {
           const rect = iframe.getBoundingClientRect();
-          return { x: rect.left + window.scrollX, y: rect.top + window.scrollY };
+          return { x: rect.left + globalThis.scrollX, y: rect.top + globalThis.scrollY };
         });
         offsets.set(child, {
           x: parentOffset.x + ownerOffset.x,
@@ -220,7 +220,7 @@ async function run() {
 
     const totalCandidates = candidates.length;
     const limited = candidates.slice(0, maxCandidates);
-    const scroll = await page.evaluate(() => ({ x: window.scrollX, y: window.scrollY }));
+    const scroll = await page.evaluate(() => ({ x: globalThis.scrollX, y: globalThis.scrollY }));
     const screenshotBuffer = await page.screenshot({ fullPage: true, type: "png" });
     await writeFile(request.screenshotPath, screenshotBuffer);
     const screenshotSha256 = createHash("sha256").update(screenshotBuffer).digest("hex");

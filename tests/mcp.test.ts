@@ -1068,19 +1068,18 @@ describe("AgentCallout MCP server", () => {
   });
 
   test("locate_dom fails cleanly when the browser runtime is not installed", async () => {
-    const result = await client.callTool({
+    const result = (await client.callTool({
       name: "locate_dom",
       arguments: {
         url: "file:///dev/null",
         text: "保存",
         screenshotPath: join(directory, "dom-shot.png")
       }
-    }) as CallToolResult;
+    })) as CallToolResult;
     expect(result.isError).toBe(true);
     const text = result.content.find((item) => item.type === "text");
     const payload = (text?.type === "text" ? JSON.parse(text.text) : undefined) as
-      | { ok?: boolean; error?: { code?: string; message?: string } }
-      | undefined;
+      { ok?: boolean; error?: { code?: string; message?: string } } | undefined;
     expect(payload?.error?.code).toBe("DOM_RUNTIME_NOT_READY");
     expect(payload?.error?.message).toContain("browser install");
     expect(result.content.some((item) => item.type === "image")).toBe(false);
