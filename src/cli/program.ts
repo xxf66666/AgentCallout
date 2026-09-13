@@ -12,8 +12,13 @@ import {
   createContactSheet,
   cropImage,
   getCoreDoctorReport,
+  installOcrRuntime,
+  inspectOcrRuntime,
   inspectAnnotationSidecar,
   inspectImage,
+  locateText,
+  OcrImageError,
+  OcrRuntimeError,
   reviseAnnotation,
   validateSpecForImage
 } from "../index.js";
@@ -68,6 +73,35 @@ interface ContactSheetOptions extends OutputOptions {
 interface DoctorOptions {
   json?: boolean;
   selfTest?: boolean;
+}
+
+interface OcrOptions extends CommonOptions {
+  runtimeDirectory?: string;
+  languages?: ("eng" | "chi_sim")[];
+}
+
+interface LocateOptions extends OcrOptions {
+  query: string;
+  mode: "exact" | "contains";
+  caseSensitive?: boolean;
+  minConfidence: number;
+  maxCandidates: number;
+  region?: string;
+  scale: number;
+  invert?: boolean;
+  expectedInputSha256?: string;
+}
+
+function parseOcrLanguages(value: string): ("eng" | "chi_sim")[] {
+  const languages = value.split(",").map((language) => language.trim());
+  if (
+    languages.length === 0 ||
+    new Set(languages).size !== languages.length ||
+    languages.some((language) => language !== "eng" && language !== "chi_sim")
+  ) {
+    throw new InvalidArgumentError("OCR languages must be eng, chi_sim, or eng,chi_sim.");
+  }
+  return languages as ("eng" | "chi_sim")[];
 }
 
 interface Rect {
@@ -149,7 +183,11 @@ function parseRect(value: string): Rect {
 }
 
 function errorMessage(error: unknown): string {
-  if (error instanceof AgentCalloutRevisionError) {
+  if (
+    error instanceof AgentCalloutRevisionError ||
+    error instanceof OcrImageError ||
+    error instanceof OcrRuntimeError
+  ) {
     return `[${error.code}] ${error.message}`;
   }
   if (error instanceof Error && error.message.trim() !== "") {
@@ -421,6 +459,117 @@ export function createCliProgram(io: CliIo = defaultIo): Command {
     const allowedRoots = resolvedRoots(options);
     const result = await inspectImage(input, allowedRoots === undefined ? {} : { allowedRoots });
     writeResult(io, result, options, () => formatInspection(result));
+  });
+
+  const ocr = program
+    .command("ocr")
+    .description("Manage the optional local OCR engine and models.");
+  ocr
+    .command("install")
+    .description("Explicitly download and verify the pinned OCR engine and language models.")
+    .option("--runtime-directory <path>", "Trusted runtime cache directory")
+    .option("--languages <list>", "Comma-separated eng/chi_sim models", parseOcrLanguages)
+    .option("--json", "Write one JSON value to stdout")
+    .action(async (options: OcrOptions) => {
+      const result = await installOcrRuntime({
+        ...(options.runtimeDirectory === undefined
+          ? {}
+          : { runtimeDirectory: options.runtimeDirectory }),
+        ...(options.languages === undefined ? {} : { languages: options.languages })
+      });
+      writeResult(
+        io,
+        result,
+        options,
+        () => `OCR runtime ${result.status}; models: ${result.installedLanguages.join(", ")}.`
+      );
+    });
+  ocr
+    .command("status")
+    .description("Inspect local OCR installation without downloading or starting recognition.")
+    .option("--runtime-directory <path>", "Trusted runtime cache directory")
+    .option("--json", "Write one JSON value to stdout")
+    .action(async (options: OcrOptions) => {
+      const result = await inspectOcrRuntime(
+        options.runtimeDirectory === undefined ? {} : { runtimeDirectory: options.runtimeDirectory }
+      );
+      writeResult(
+        io,
+        result,
+        options,
+        () =>
+          `OCR runtime ${result.status}; models: ${result.installedLanguages.join(", ") || "none"}.`
+      );
+    });
+
+  addCommonOptions(
+    program
+      .command("locate-text <input>")
+      .description(
+        "Locate local image text and return candidates; does not annotate or download models."
+      )
+      .requiredOption("--query <text>", "Text to find")
+      .option(
+        "--mode <mode>",
+        "exact or contains",
+        (value: string) => {
+          if (value !== "exact" && value !== "contains")
+            throw new InvalidArgumentError("Mode must be exact or contains.");
+          return value;
+        },
+        "exact"
+      )
+      .option("--case-sensitive", "Require matching letter case")
+      .option(
+        "--min-confidence <score>",
+        "Confirmation threshold from 0 to 100 (not a probability)",
+        (value: string) => {
+          const score = Number(value);
+          if (!Number.isFinite(score) || score < 0 || score > 100)
+            throw new InvalidArgumentError("Confidence must be 0 to 100.");
+          return score;
+        },
+        80
+      )
+      .option(
+        "--max-candidates <count>",
+        "Maximum candidates returned (1-100)",
+        parsePositiveInteger,
+        100
+      )
+      .option("--languages <list>", "Comma-separated eng/chi_sim languages", parseOcrLanguages)
+      .option("--runtime-directory <path>", "Trusted runtime cache directory")
+      .option("--region <x,y,width,height|json>", "Optional region in oriented source pixels")
+      .option("--scale <factor>", "Explicit OCR scale, integer 1-4", parsePositiveInteger, 1)
+      .option("--invert", "Explicitly invert the prepared OCR raster")
+      .option("--expected-input-sha256 <hash>", "Reject a screenshot changed since inspection")
+  ).action(async (input: string, options: LocateOptions) => {
+    const result = await locateText({
+      inputPath: input,
+      query: options.query,
+      mode: options.mode,
+      caseSensitive: options.caseSensitive ?? false,
+      minimumConfidence: options.minConfidence,
+      maxCandidates: options.maxCandidates,
+      scale: options.scale,
+      preprocess: options.invert === true ? "invert" : "none",
+      ...(options.region === undefined ? {} : { region: parseRect(options.region) }),
+      ...(options.languages === undefined ? {} : { languages: options.languages }),
+      ...(options.runtimeDirectory === undefined
+        ? {}
+        : { runtimeDirectory: options.runtimeDirectory }),
+      ...(options.expectedInputSha256 === undefined
+        ? {}
+        : { expectedInputSha256: options.expectedInputSha256 }),
+      ...(resolvedRoots(options) === undefined ? {} : { allowedRoots: resolvedRoots(options) })
+    });
+    writeResult(
+      io,
+      result,
+      options,
+      () =>
+        `${result.status}: ${result.candidates.length} of ${result.totalCandidates} candidates; confirmation required: ${result.requiresConfirmation}.\n${jsonText(result.candidates, true)}`
+    );
   });
 
   addCommonOptions(

@@ -14,6 +14,7 @@ AgentCallout 在本机处理 PNG、JPEG、WebP，不上传截图，也不需要 
 - 突出区域：高亮、聚光灯。
 - 保护隐私：普通内容可模糊；Token、密码等用不可恢复的纯色遮挡。
 - 方便交付：生成批注 PNG、可再次修改的 JSON 和 Markdown 图片引用。
+- 可选 OCR：安装本地中英文模型后，可按截图文字查找候选位置。
 
 它只负责**批注已有截图**，不负责系统截图、录屏、视频编辑或完整桌面 GUI。
 
@@ -85,6 +86,18 @@ Agent 会检查图片、必要时放大局部、生成批注、查看结果，�
 继续修改时，Agent 会生成 `.rev1`、`.rev2` 等新版本，保留原图和历史结果。
 
 工具每次最多返回一张 512 px / 64 KiB 的预览，完整图片会保存在本机。修改后优先查看变化区域；小字看不清时再放大局部。变更涉及移除或修改隐私遮挡时，不会自动发送图片。预览尺寸和像素缩减比例可用于比较传输量，不能直接换算为 token 或费用。修订、预览和异常处理的完整规则见[接口文档](docs/annotation-spec.md#revising-a-committed-annotation)。
+
+## 可选：按文字自动定位
+
+v0.3.0 开发分支增加本地中英文 OCR。默认安装不下载 OCR 引擎或模型；确实需要按文字定位时再显式安装：
+
+```powershell
+agent-callout ocr install --json
+agent-callout ocr status --json
+agent-callout locate-text .\screenshot.png --query "校验失败" --mode contains --json
+```
+
+OCR 只返回文字候选框，不会自动把文字框扩成整个按钮。多候选或低置信度结果必须先查看确认；`not-found` 也不表示文字一定不存在。完整参数、ROI 放大和反白文字处理见[本地 OCR 文档](docs/ocr.md)。
 
 ## 把结果交给另一个 AI
 
@@ -175,7 +188,7 @@ agent-callout --help
 <details>
 <summary><strong>给开发者：MCP、Skill 和 AnnotationSpec</strong></summary>
 
-MCP 提供 8 个工具：
+MCP 提供 9 个工具：
 
 - `doctor`：检查运行环境。
 - `inspect_image`：读取图片尺寸、格式和哈希。
@@ -185,6 +198,7 @@ MCP 提供 8 个工具：
 - `revise_annotation`：从已验证 annotate sidecar 按稳定 ID 创建下一版本，并在安全时返回变更区域聚焦预览。
 - `crop_image`：裁剪局部，便于 Agent 放大检查。
 - `create_contact_sheet`：把多张图片合成联系表。
+- `locate_text`：使用可选本地 OCR 返回与原图 hash 绑定的文字候选、坐标和置信度。
 
 新建批注请使用 AnnotationSpec 1.1，它提供可读的默认样式、preset 和语义 tone；已有的 AnnotationSpec 1.0 sidecar 仍受支持。需要保持 canonical JSON 或像素兼容时，请保持其 1.0 版本原样重放。两个版本都以左上角为原点，支持像素坐标和 `0..1` 标准化坐标。完整字段见 [AnnotationSpec 1.0 和 1.1](docs/annotation-spec.md)。
 
@@ -226,7 +240,7 @@ v0.2.1 已发布：密集说明框避让、目标保护、折线引线、排版�
 
 浅色说明框、独立编号配色和语义 tone 已可用：普通说明使用默认 `docs-light` 或 `info`，错误使用 `danger`。旧版 1.0 批注仍保留原有样式。
 
-后续依次开发 OCR 自动找字、一键交接包、浏览器 DOM 定位和协作能力，详见[路线图](docs/roadmap.md)。系统截图、GUI 和视频尚未实现。
+v0.3.0 开发分支已接入可选 OCR，尚待干净安装和双客户端发布验收。之后依次开发一键交接包、浏览器 DOM 定位和协作能力，详见[路线图](docs/roadmap.md)。系统截图、GUI 和视频尚未实现。
 
 ## 详细文档
 

@@ -1,6 +1,6 @@
 # AgentCallout 进度
 
-最后更新：2026-09-06（Asia/Singapore）
+最后更新：2026-09-13（Asia/Singapore）
 
 ## 当前状态
 
@@ -84,7 +84,14 @@
 
 ## 进行中
 
-- 下一轮保持完整路线图，先把可选本地 OCR 从原型接入可安装、可调用、带证据和歧义处理的 locator。
+- 当前分支 `codex/ocr-locator`，v0.3.0 开发中；稳定发布仍为 v0.2.1。
+- [x] 固定 Tesseract.js 本地中英文原型，记录全文失败、局部反白文字识别和离线行为
+- [x] 原图 hash/EXIF/ROI/缩放/透明背景准备与映射，7 项定向测试通过
+- [x] exact/contains、CJK 空白、重复候选、低置信度、原始证据与资源预算，15 项匹配测试通过
+- [x] `locateText`、CLI `ocr install/status` 与 `locate-text`、MCP `locate_text` 已接入；上层/CLI/MCP 定向 33 项通过
+- [x] 完成可选运行时边界修复；Windows 固定中英文运行时 status 与双语言真实识别通过
+- [x] 当前源代码 format/lint/typecheck/build/dist 复现通过；Windows 子进程测试改为串行，222/222 通过
+- [ ] 完成打包/干净安装、真实客户端定位后批注及 v0.3.0 发布
 
 ## 待完成
 

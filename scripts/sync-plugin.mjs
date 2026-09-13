@@ -68,6 +68,13 @@ const copies = [
   ["dist/mcp.js", "dist/mcp.js"],
   ["assets/fonts/NotoSansCJKsc-Regular.otf", "assets/fonts/NotoSansCJKsc-Regular.otf"],
   ["assets/fonts/OFL.txt", "assets/fonts/OFL.txt"],
+  ...[
+    "package.json",
+    "package-lock.json",
+    "network-guard.cjs",
+    "offline-worker.cjs",
+    "recognize-worker.mjs"
+  ].map((file) => [`assets/ocr-runtime/${file}`, `assets/ocr-runtime/${file}`]),
   ["LICENSE", "LICENSE"],
   ["NOTICE", "NOTICE"]
 ];

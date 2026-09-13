@@ -1,6 +1,6 @@
 # AgentCallout 架构决策索引
 
-> 决策日期：2026-08-30；密集布局补充：2026-09-06
+> 决策日期：2026-08-30；密集布局补充：2026-09-06；可选 OCR 补充：2026-09-13
 >
 > 基线：`docs/research.md` 及 Windows 最小渲染实验  
 > 说明：“已接受”表示实现应遵循该决策，不表示客户端安装或端到端验收已经通过。
@@ -36,11 +36,12 @@
 | D-005 | annotate sidecar 通过稳定 ID edits 创建 append-only `.revN`；验证完整父链，从原图重渲染，以目录内排他 lock、no-replace PNG 和最后发布的已验证 JSON commit marker 阻止同工作副本并发分支                        | 保留审计历史和陈旧 parent 防护；复制到其他目录可形成 fork，强杀/断电仍可能留下需恢复的 residue | Windows 自动化、CLI UAT 与真实 Claude/Codex 两轮 revision 预览闭环已通过                                              | [ADR-0006](adr/0006-safe-versioned-annotation-revisions.md)                                                  |
 | D-006 | revision 默认只返回 touched/连带重排的单张聚焦预览；分散/全局/过大回退 compact-overview，敏感覆盖削弱则零图片。另提供 path/text/hash-free 的 sidecar 校验摘要                                                  | 减少重复 crop 和默认数据披露；代价是父 spec 需本地重渲染几何，聚焦视图不能代替全局复核         | 135 tests、clean clone、CLI UAT 与真实 Claude/Codex changed-region A/B 通过；两边 crop 均为 0，安全摘要无默认排除字段 | [ADR-0007](adr/0007-focused-review-and-safe-sidecar-summary.md)                                              |
 | D-007 | AnnotationSpec 1.1 先测量并批量放置说明框，再生成避开说明框/编号/目标的直线或折线路径；输出完整路径和稳定诊断。预览报告最终栅格像素比例，并校验最终读取字节                                                    | 有界启发式便于确定性重放；可行空间不足时降级并显式 warning，比例不代表 token 或费用            | v0.2.1 已发布：Windows 179 tests、干净安装和真实 Claude/Codex 视觉 A/B 通过；已记录源文字保护边界                     | [ADR-0008](adr/0008-dense-layout-and-preview-pixel-metrics.md)                                               |
+| D-008 | OCR 作为显式安装的本地 locator：固定 Tesseract.js 与中英文模型、隔离子进程执行、识别时不联网；只返回与原图 hash 绑定的文字候选，不直接修改 AnnotationSpec 或猜控件边界                                         | 默认安装保持轻量；多候选、低置信度和漏识别由调用方查看确认，换取可审计且不静默猜坐标的行为     | Windows 双语言真实运行时与 222 项本地测试已通过；干净安装和 Claude/Codex 真实定位后批注仍待完成                       | [ADR-0009](adr/0009-optional-local-ocr-locator.md)                                                           |
 
 ## 明确不进入本轮决策的事项
 
 - npm registry 发布、单文件可执行程序和系统级截图入口不是 GitHub 直装 MVP 的前置条件。
-- OCR、Playwright/DOM selector、录屏和完整 GUI 作为以后 locator/integration，不进入默认内核。
+- Playwright/DOM selector、录屏和完整 GUI 作为以后 locator/integration，不进入默认内核；OCR 已作为独立可选 locator 接入，仍不进入默认渲染内核。
 - MCP `ResourceLink` 在实现受限 `resources/read` 之前不启用；MVP 使用 ImageContent、JSON 文本、sidecar 和本地绝对路径。
 - 跨平台逐字节 hash 相同不是承诺；确定性边界是相同输入、规范化 spec、renderer/font 版本和同一平台。
 

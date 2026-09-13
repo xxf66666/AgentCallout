@@ -63,6 +63,7 @@ describe("AgentCallout MCP server", () => {
     beforePreviewRead = undefined;
     server = createAgentCalloutMcpServer({
       fixedAllowedRoots: [directory],
+      ocrRuntimeDirectory: join(directory, "optional-ocr-not-installed"),
       beforePreview: async (result) => beforePreview?.(result),
       beforePreviewRead: async (preview) => beforePreviewRead?.(preview)
     });
@@ -85,7 +86,27 @@ describe("AgentCallout MCP server", () => {
     await rm(directory, { recursive: true, force: true });
   });
 
-  test("initializes with workflow instructions and exactly eight strict tools", async () => {
+  test("OCR remains optional and missing models never trigger installation", async () => {
+    const result = await client.callTool({
+      name: "locate_text",
+      arguments: { inputPath, query: "Save" }
+    });
+    expect(result.isError).toBe(true);
+    const content = result.content as { type: string; text?: string }[];
+    expect(content.some((block) => block.type === "image")).toBe(false);
+    expect(JSON.parse(content.find((block) => block.type === "text")?.text ?? "{}")).toMatchObject({
+      ok: false,
+      error: { code: "OCR_RUNTIME_NOT_INSTALLED" }
+    });
+    await expect(access(join(directory, "optional-ocr-not-installed"))).rejects.toThrow();
+    const injected = await client.callTool({
+      name: "locate_text",
+      arguments: { inputPath, query: "Save", runtimeDirectory: directory }
+    });
+    expect(injected.isError).toBe(true);
+  });
+
+  test("initializes with workflow instructions and exactly nine strict tools", async () => {
     expect(client.getInstructions()).toContain("Inspect the screenshot before annotating");
     const listed = await client.listTools();
     expect(listed.tools.map((tool) => tool.name).sort()).toEqual([
@@ -95,6 +116,7 @@ describe("AgentCallout MCP server", () => {
       "doctor",
       "inspect_annotation_sidecar",
       "inspect_image",
+      "locate_text",
       "revise_annotation",
       "validate_annotation_spec"
     ]);
@@ -102,6 +124,7 @@ describe("AgentCallout MCP server", () => {
     for (const tool of listed.tools) {
       expect(tool.inputSchema.additionalProperties).toBe(false);
       expect(tool.inputSchema.properties).not.toHaveProperty("allowedRoots");
+      expect(tool.inputSchema.properties).not.toHaveProperty("runtimeDirectory");
       if (
         ["annotate_image", "create_contact_sheet", "crop_image", "revise_annotation"].includes(
           tool.name
@@ -203,7 +226,7 @@ describe("AgentCallout MCP server", () => {
 
     const doctor = (await client.callTool({ name: "doctor", arguments: {} })) as CallToolResult;
     expect(doctor.structuredContent).toMatchObject({
-      product: { name: "agent-callout", version: "0.2.1" },
+      product: { name: "agent-callout", version: "0.3.0" },
       ok: true,
       limits: { maxPixels: 40_000_000, maxAnnotations: 200 },
       mcp: { maxPreviewBytes: 64 * 1024, maxPreviewDimension: 512, previewDetail: "auto" }

@@ -1,0 +1,11 @@
+{
+  "name": "agent-callout-ocr-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@tesseract.js-data/chi_sim": "1.0.0",
+    "@tesseract.js-data/eng": "1.0.0",
+    "tesseract.js": "7.0.0",
+    "tesseract.js-core": "7.0.0"
+  }
+}

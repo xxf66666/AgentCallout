@@ -37,7 +37,12 @@ export default tseslint.config(
     }
   },
   {
-    files: ["**/*.mjs"],
+    files: ["**/*.mjs", "**/*.cjs"],
     extends: [tseslint.configs.disableTypeChecked]
+  },
+  {
+    files: ["**/*.cjs"],
+    languageOptions: { sourceType: "commonjs" },
+    rules: { "@typescript-eslint/no-require-imports": "off" }
   }
 );

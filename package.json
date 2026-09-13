@@ -1,6 +1,6 @@
 {
   "name": "agent-callout",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Give AI agents a pen for screenshots.",
   "private": true,
   "type": "module",
@@ -33,6 +33,7 @@
   "files": [
     "dist/",
     "assets/fonts/",
+    "assets/ocr-runtime/",
     "LICENSE",
     "NOTICE",
     "README.md"

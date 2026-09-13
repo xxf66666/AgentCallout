@@ -1,5 +1,11 @@
 # AgentCallout 兼容性与验证记录
 
+## 0.3.0 本地开发里程碑（2026-09-13）
+
+`codex/ocr-locator` 已接入显式安装的 Tesseract.js 7 中英文 OCR locator、CLI `ocr install/status` 与 `locate-text`、MCP `locate_text`、原图 hash/ROI/缩放/反色映射、多候选和置信度证据。Windows Node 24 下 222 项测试通过；固定 `eng` 与 `chi_sim` 本地运行时的 14 项真实测试通过，根/Plugin dist 可复现。
+
+该状态仍是 **PARTIALLY VERIFIED**：尚未完成精确 commit 的干净 clone/打包安装，也尚未用 Claude Code 和 Codex 完成“定位文字 → 查看候选 → 批注 → 查看结果”的发布级闭环，因此稳定发布仍为 v0.2.1。
+
 ## 0.2.1 发布验证（2026-09-06）
 
 `main` 已合入 0.2.1，功能与显示兼容修复精确 commit 为 `a3812a550408e0ece52f436d2587b6617197ece0`。Windows 下密集排版、折线路由、warning、像素指标、干净安装和真实双客户端 A/B 为 **VERIFIED**，完整证据及未标注源文字的保护边界见[发布记录](releases/0.2.1.md)。下方大矩阵保留 0.2.0 历史证据，不据此扩大 0.2.1 的平台覆盖。

@@ -10,7 +10,9 @@ export default defineConfig({
     },
     environment: "node",
     include: ["tests/**/*.test.ts", "tests/**/*.test.mjs"],
-    maxWorkers: 2,
+    // Windows timeout/recovery tests terminate real child-process trees. Running test files in
+    // parallel can make those lifecycle tests interfere with another Vitest worker.
+    maxWorkers: process.platform === "win32" ? 1 : 2,
     testTimeout: 30_000
   }
 });

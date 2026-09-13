@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -52,6 +52,44 @@ describe("AgentCallout CLI", () => {
 
   afterEach(async () => {
     await rm(directory, { recursive: true, force: true });
+  });
+
+  test("optional OCR status and locating fail cleanly without implicit installation", async () => {
+    const runtime = join(directory, "not-installed-ocr");
+    const status = captureIo();
+    expect(
+      await runCli(
+        ["node", "agent-callout", "ocr", "status", "--runtime-directory", runtime, "--json"],
+        status.io
+      )
+    ).toBe(0);
+    expect(JSON.parse(status.stdout.value)).toMatchObject({
+      ready: false,
+      status: "not-installed"
+    });
+    expect(status.stderr.value).toBe("");
+    const locate = captureIo();
+    expect(
+      await runCli(
+        [
+          "node",
+          "agent-callout",
+          "locate-text",
+          inputPath,
+          "--query",
+          "保存",
+          "--runtime-directory",
+          runtime,
+          "--allow-root",
+          directory,
+          "--json"
+        ],
+        locate.io
+      )
+    ).not.toBe(0);
+    expect(locate.stdout.value).toBe("");
+    expect(locate.stderr.value).toContain("OCR_RUNTIME_NOT_INSTALLED");
+    await expect(access(runtime)).rejects.toThrow();
   });
 
   test("inspect emits exactly one JSON document", async () => {
