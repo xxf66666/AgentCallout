@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -275,7 +275,7 @@ export async function inspectBrowserRuntime(
 }
 
 function tmpdirRoot(): string {
-  return process.env.TMPDIR ?? "/tmp";
+  return tmpdir();
 }
 
 async function locateWithRuntime(

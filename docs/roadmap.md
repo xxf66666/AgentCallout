@@ -11,6 +11,7 @@
 - **0.4.0**：可选浏览器 DOM 定位（`locate-dom`/`locate_dom`，selector/文字/可访问性名称，截图 SHA-256 + 页面状态绑定，iframe 偏移）。
 - **0.4.1**：`fork-lineage`/`diff-revisions`（working copy/fork 显式化与稳定 ID 级差异对比；自动 merge 评估后推迟）。
 - **0.5.0**：真实绿灯——DOM 测试 fixture 化、DPR 防御校验、lineage/OCR 测试债补齐、ADR-0004 宿主回归；Node 支持线上移至 >=22。
+- **0.5.1**：Windows 补丁——DOM 定位临时目录改用 `tmpdir()`（修复 CI 暴露的 `mkdtemp ENOENT`）；OCR 真实安装测试自包含并获专用 CI job；CI 失败匿名 issue 报告通道。
 - 平台与工程：CI 三平台 × Node 20/22/24 矩阵 9/9；CLI 与 stdio MCP 14 工具；Claude Plugin 与 Codex CLI+MCP 双分发路径。
 
 ---

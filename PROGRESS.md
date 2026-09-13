@@ -192,3 +192,9 @@
 | 2026-09-13 | macOS 24.21 完整 gate 与干净 clone   | `17cb5c7`：220 passed + 2 skipped（222）、format/lint/typecheck/build、3 份 dist 复现；pack 14 文件、生产 audit 0 漏洞、精确 commit 全局安装 doctor/self-test 通过 |
 | 2026-09-13 | macOS OCR 安装与真实定位             | eng+chi_sim 固定模型安装并 ready；中文 unique/93、英文 ROI+反色 unique/95、反白按钮 low-confidence 38–48 坐标精确，确认门禁生效                                    |
 | 2026-09-13 | 双客户端 OCR 真实验收                | Claude Code 与 Codex 0.154.0 各自完成"定位→确认→批注→查看"；Codex 另验证 not-found 不猜坐标与 ENOENT 结构化错误；产物经人工查看                                    |
+
+## v0.5.1（2026-09-14，Windows 补丁）
+
+- [x] CI 矩阵 Windows 格暴露 `mkdtemp '\tmp\...' ENOENT`（匿名 issue 通道 #6/#7）；修复为 `tmpdir()`
+- [x] CI 修复：workflow 结构（push-log 步骤归位）、失败匿名 issue 报告通道、OCR 真实安装 job 自包含化（ubuntu 容器复现并验证 15/15）
+- [x] 版本 0.5.1，发布记录见 docs/releases/0.5.1.md
