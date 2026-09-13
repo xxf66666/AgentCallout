@@ -4,9 +4,9 @@
 
 ## 当前状态
 
-- 阶段：0.1.3–0.5.1 已发布；进行中 v0.6.0（批量批注）。规划见 [roadmap](docs/roadmap.md)
+- 阶段：0.1.3–0.6.0 已发布（最新：批量批注 annotate --batch / annotate_batch）；下一阶段 v0.6.1（候选可视化核对 + Edge 多引擎）。规划见 [roadmap](docs/roadmap.md)
 - GitHub：`https://github.com/xxf66666/AgentCallout`（公开仓库，`main` 已推送）
-- 当前发布门槛：0.4.1 完整 gate、干净安装与跨 AI fork/diff 闭环已通过，见 [发布记录](docs/releases/0.4.1.md)
+- 当前发布门槛：0.6.0 完整 gate、干净安装与双客户端批量验收已通过，见 [发布记录](docs/releases/0.6.0.md)
 - CI：三平台（ubuntu/macos/windows）× Node 20/22/24 矩阵 9/9，见 `.github/workflows/ci.yml`
 - 已知外部限制：Codex 可选 Skills-only Marketplace 固定 30 秒 clone 超时（NOT VERIFIED，不阻塞 CLI+MCP 主路径）；gh CLI 未登录（GitHub Release 补建被阻，见 BLOCKERS.md）
 
