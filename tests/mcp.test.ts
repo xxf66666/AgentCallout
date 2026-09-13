@@ -108,7 +108,7 @@ describe("AgentCallout MCP server", () => {
     expect(injected.isError).toBe(true);
   });
 
-  test("initializes with workflow instructions and exactly eleven strict tools", async () => {
+  test("initializes with workflow instructions and exactly twelve strict tools", async () => {
     expect(client.getInstructions()).toContain("Inspect the screenshot before annotating");
     const listed = await client.listTools();
     expect(listed.tools.map((tool) => tool.name).sort()).toEqual([
@@ -119,6 +119,7 @@ describe("AgentCallout MCP server", () => {
       "doctor",
       "inspect_annotation_sidecar",
       "inspect_image",
+      "locate_dom",
       "locate_text",
       "revise_annotation",
       "validate_annotation_spec",
@@ -1064,5 +1065,24 @@ describe("AgentCallout MCP server", () => {
     ) as { valid?: boolean; filesChecked?: number; issues?: unknown[] } | undefined;
     expect(verifiedPayload?.valid).toBe(true);
     expect(verifiedPayload?.filesChecked).toBe(5);
+  });
+
+  test("locate_dom fails cleanly when the browser runtime is not installed", async () => {
+    const result = await client.callTool({
+      name: "locate_dom",
+      arguments: {
+        url: "file:///dev/null",
+        text: "保存",
+        screenshotPath: join(directory, "dom-shot.png")
+      }
+    }) as CallToolResult;
+    expect(result.isError).toBe(true);
+    const text = result.content.find((item) => item.type === "text");
+    const payload = (text?.type === "text" ? JSON.parse(text.text) : undefined) as
+      | { ok?: boolean; error?: { code?: string; message?: string } }
+      | undefined;
+    expect(payload?.error?.code).toBe("DOM_RUNTIME_NOT_READY");
+    expect(payload?.error?.message).toContain("browser install");
+    expect(result.content.some((item) => item.type === "image")).toBe(false);
   });
 });

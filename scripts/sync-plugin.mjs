@@ -75,7 +75,12 @@ const copies = [
     "offline-worker.cjs",
     "recognize-worker.mjs"
   ].map((file) => [`assets/ocr-runtime/${file}`, `assets/ocr-runtime/${file}`]),
-  ["LICENSE", "LICENSE"],
+    ...[
+    "package.json",
+    "package-lock.json",
+    "locate-worker.mjs"
+  ].map((file) => [`assets/dom-runtime/${file}`, `assets/dom-runtime/${file}`]),
+["LICENSE", "LICENSE"],
   ["NOTICE", "NOTICE"]
 ];
 

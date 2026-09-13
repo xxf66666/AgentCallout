@@ -13,10 +13,13 @@ import {
   createHandoffPackage,
   cropImage,
   getCoreDoctorReport,
+  installBrowserRuntime,
+  inspectBrowserRuntime,
   installOcrRuntime,
   inspectOcrRuntime,
   inspectAnnotationSidecar,
   inspectImage,
+  locateDom,
   locateText,
   OcrImageError,
   OcrRuntimeError,
@@ -86,6 +89,21 @@ interface HandoffOptions extends CommonOptions {
   outputDir?: string;
   original?: boolean;
   overwrite?: boolean;
+}
+
+interface BrowserOptions extends OcrOptions {}
+
+interface LocateDomOptions extends BrowserOptions {
+  selector?: string;
+  text?: string;
+  accessible?: string;
+  exact?: boolean;
+  role?: string;
+  screenshot: string;
+  viewport?: { width: number; height: number };
+  timeout?: number;
+  maxCandidates: number;
+  browserExecutable?: string;
 }
 
 interface LocateOptions extends OcrOptions {
@@ -509,6 +527,112 @@ export function createCliProgram(io: CliIo = defaultIo): Command {
           `OCR runtime ${result.status}; models: ${result.installedLanguages.join(", ") || "none"}.`
       );
     });
+
+  const browser = program
+    .command("browser")
+    .description("Manage the optional browser runtime for DOM locating.");
+  browser
+    .command("install")
+    .description("Explicitly install the pinned browser runtime (playwright-core).")
+    .option("--runtime-directory <path>", "Trusted runtime cache directory")
+    .option("--json", "Write one JSON value to stdout")
+    .action(async (options: OcrOptions) => {
+      const result = await installBrowserRuntime(
+        options.runtimeDirectory === undefined ? {} : { runtimeDirectory: options.runtimeDirectory }
+      );
+      writeResult(io, result, options, () => `Browser runtime ${result.status}.`);
+    });
+  browser
+    .command("status")
+    .description("Inspect the browser runtime without installing or launching anything.")
+    .option("--runtime-directory <path>", "Trusted runtime cache directory")
+    .option("--json", "Write one JSON value to stdout")
+    .action(async (options: OcrOptions) => {
+      const result = await inspectBrowserRuntime(
+        options.runtimeDirectory === undefined ? {} : { runtimeDirectory: options.runtimeDirectory }
+      );
+      writeResult(io, result, options, () => `Browser runtime ${result.status}.`);
+    });
+
+  const parseViewport = (value: string): { width: number; height: number } => {
+    const match = /^(\d+)x(\d+)$/u.exec(value);
+    if (match === null) {
+      throw new InvalidArgumentError("Viewport must look like 1280x800.");
+    }
+    const width = Number(match[1]);
+    const height = Number(match[2]);
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width < 320 || height < 240) {
+      throw new InvalidArgumentError("Viewport must be at least 320x240.");
+    }
+    return { width, height };
+  };
+
+  addCommonOptions(
+    program
+      .command("locate-dom <url>")
+      .description(
+        "Locate a web element by selector, text or accessible name and bind it to a screenshot."
+      )
+      .requiredOption("--screenshot <path>", "Full-page screenshot output path (PNG)")
+      .option("--selector <css>", "CSS selector to locate")
+      .option("--text <text>", "Text content to locate")
+      .option("--accessible <name>", "Accessible name to locate")
+      .option("--exact", "Require exact text/name matching")
+      .option("--role <role>", "Filter accessible matches by role")
+      .option("--viewport <WxH>", "Browser viewport (default 1280x800)", parseViewport)
+      .option(
+        "--max-candidates <count>",
+        "Maximum candidates returned (1-100)",
+        parsePositiveInteger,
+        100
+      )
+      .option("--timeout <ms>", "Navigation and locate timeout", parsePositiveInteger, 15000)
+      .option("--runtime-directory <path>", "Trusted runtime cache directory")
+      .option("--browser-executable <path>", "Explicit Chrome executable path")
+  ).action(async (url: string, options: LocateDomOptions) => {
+    const locatorCount = [options.selector, options.text, options.accessible].filter(
+      (value) => value !== undefined
+    ).length;
+    if (locatorCount !== 1) {
+      throw new InvalidArgumentError("Pass exactly one of --selector, --text or --accessible.");
+    }
+    const result = await locateDom({
+      url,
+      locator:
+        options.selector !== undefined
+          ? { kind: "selector", value: options.selector }
+          : options.text !== undefined
+            ? { kind: "text", value: options.text, exact: options.exact ?? false }
+            : {
+                kind: "accessible",
+                value: options.accessible ?? "",
+                exact: options.exact ?? false,
+                role: options.role
+              },
+      screenshotPath: options.screenshot,
+      ...(options.viewport === undefined ? {} : { viewport: options.viewport }),
+      ...(options.timeout === undefined ? {} : { timeoutMs: options.timeout }),
+      ...(options.maxCandidates === undefined ? {} : { maxCandidates: options.maxCandidates }),
+      ...(options.runtimeDirectory === undefined
+        ? {}
+        : { runtimeDirectory: options.runtimeDirectory }),
+      ...(options.browserExecutable === undefined
+        ? {}
+        : { browserExecutablePath: options.browserExecutable })
+    });
+    writeResult(io, result, options, () =>
+      [
+        `Located ${result.candidates.length} candidate(s) (${result.totalCandidates} total) on ${result.page.url}.`,
+        ...result.candidates
+          .slice(0, 5)
+          .map(
+            (candidate, index) =>
+              `  ${index + 1}. ${candidate.tag}${candidate.role ? ` [${candidate.role}]` : ""} @ ${candidate.rect.x},${candidate.rect.y} ${candidate.rect.width}x${candidate.rect.height}`
+          ),
+        `screenshot: ${result.screenshot.path} (sha256 ${result.screenshot.sha256.slice(0, 12)}…)`
+      ].join("\n")
+    );
+  });
 
   addCommonOptions(
     program

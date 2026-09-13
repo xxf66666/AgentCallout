@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { delimiter, join, resolve } from "node:path";
+import { delimiter, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -19,9 +19,11 @@ import {
   createHandoffPackage,
   createImagePreview,
   cropImage,
+  DomRuntimeError,
   getCoreDoctorReport,
   inspectAnnotationSidecar,
   inspectImage,
+  locateDom,
   locateText,
   OcrImageError,
   OcrRuntimeError,
@@ -187,6 +189,35 @@ const verifyHandoffInputSchema = z
   })
   .strict();
 
+const locateDomInputSchema = z
+  .object({
+    url: pathSchema.describe("Page URL to open (http/https/file)."),
+    selector: z.string().max(2_000).optional(),
+    text: z.string().min(1).max(500).optional(),
+    accessible: z.string().min(1).max(500).optional(),
+    exact: z.boolean().optional().default(false),
+    role: z.string().max(100).optional(),
+    screenshotPath: pathSchema.describe(
+      "Full-page screenshot output path; candidate rects bind to its SHA-256."
+    ),
+    viewport: z
+      .object({
+        width: z.number().int().min(320).max(4096),
+        height: z.number().int().min(240).max(4096)
+      })
+      .strict()
+      .optional(),
+    maxCandidates: z.number().int().min(1).max(100).optional(),
+    timeoutMs: z.number().int().min(1_000).max(120_000).optional()
+  })
+  .strict()
+  .refine(
+    (value) =>
+      [value.selector, value.text, value.accessible].filter((entry) => entry !== undefined)
+        .length === 1,
+    { message: "Pass exactly one of selector, text or accessible." }
+  );
+
 const validateInputSchema = z
   .object({
     inputPath: pathSchema,
@@ -256,6 +287,10 @@ export interface AgentCalloutMcpServerOptions {
   fixedAllowedRoots?: string[];
   /** Trusted startup setting; never supplied by a locate_text request. */
   ocrRuntimeDirectory?: string;
+  /** Trusted startup setting; never supplied by a locate_dom request. */
+  domRuntimeDirectory?: string;
+  /** Trusted startup setting; never supplied by a locate_dom request. */
+  browserExecutablePath?: string;
   /** Test-only hook used to exercise committed-output replacement before preview encoding. */
   beforePreview?: ((result: { outputPath: string }) => void | Promise<void>) | undefined;
   /** Test-only hook used to exercise candidate replacement immediately before its final read. */
@@ -323,6 +358,7 @@ function toolError(error: unknown): CallToolResult {
       code:
         error instanceof AgentCalloutRevisionError ||
         error instanceof AgentCalloutHandoffError ||
+        error instanceof DomRuntimeError ||
         error instanceof OcrImageError ||
         error instanceof OcrRuntimeError
           ? error.code
@@ -578,6 +614,22 @@ export function createAgentCalloutMcpServer(options: AgentCalloutMcpServerOption
   );
   const rootAuthority = createRootAuthority(server, options);
   const ocrRuntimeDirectory = options.ocrRuntimeDirectory ?? process.env.AGENT_CALLOUT_OCR_RUNTIME;
+  const domRuntimeDirectory = options.domRuntimeDirectory ?? process.env.AGENT_CALLOUT_DOM_RUNTIME;
+  const browserExecutablePath =
+    options.browserExecutablePath ?? process.env.AGENT_CALLOUT_BROWSER_EXECUTABLE;
+
+  function assertInsideAllowedRoots(roots: readonly string[], targetPath: string): void {
+    const resolvedTarget = resolve(targetPath);
+    const inside = roots.some((root) => {
+      const resolvedRoot = resolve(root);
+      return resolvedTarget === resolvedRoot || resolvedTarget.startsWith(resolvedRoot + sep);
+    });
+    if (!inside) {
+      throw new Error(
+        `Screenshot path is outside the allowed roots; add its directory to the MCP client's file roots, pass --allow-root when starting AgentCallout MCP, or set ${STARTUP_ROOTS_ENV}.`
+      );
+    }
+  }
 
   server.registerTool(
     "locate_text",
@@ -707,6 +759,56 @@ export function createAgentCalloutMcpServer(options: AgentCalloutMcpServerOption
       safeToolCall(async () => {
         const allowedRoots = await rootAuthority.roots();
         return structuredToolResult(await verifyHandoffPackage({ handoffDirectory, allowedRoots }));
+      })
+  );
+
+  server.registerTool(
+    "locate_dom",
+    {
+      title: "Locate DOM element",
+      description:
+        "Open a page in the optional local browser runtime, locate elements by CSS selector, text or accessible name, and return full-page-screenshot-bound candidate rects with page-state evidence. Page changes invalidate old coordinates; annotate the captured screenshot, not a live page.",
+      inputSchema: locateDomInputSchema,
+      outputSchema: structuredOutputSchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true
+      }
+    },
+    async ({
+      url,
+      selector,
+      text,
+      accessible,
+      exact,
+      role,
+      screenshotPath,
+      viewport,
+      maxCandidates,
+      timeoutMs
+    }) =>
+      safeToolCall(async () => {
+        const allowedRoots = await rootAuthority.roots();
+        assertInsideAllowedRoots(allowedRoots, screenshotPath);
+        return structuredToolResult(
+          await locateDom({
+            url,
+            locator:
+              selector !== undefined
+                ? { kind: "selector", value: selector }
+                : text !== undefined
+                  ? { kind: "text", value: text, exact }
+                  : { kind: "accessible", value: accessible ?? "", exact, role },
+            screenshotPath,
+            ...(viewport === undefined ? {} : { viewport }),
+            ...(maxCandidates === undefined ? {} : { maxCandidates }),
+            ...(timeoutMs === undefined ? {} : { timeoutMs }),
+            ...(domRuntimeDirectory === undefined ? {} : { runtimeDirectory: domRuntimeDirectory }),
+            ...(browserExecutablePath === undefined ? {} : { browserExecutablePath })
+          })
+        );
       })
   );
 

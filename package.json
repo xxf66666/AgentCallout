@@ -34,6 +34,7 @@
     "dist/",
     "assets/fonts/",
     "assets/ocr-runtime/",
+    "assets/dom-runtime/",
     "LICENSE",
     "NOTICE",
     "README.md"
