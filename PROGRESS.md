@@ -149,7 +149,9 @@
 - 分支 `codex/batch-annotate`：批量批注（roadmap 批量项，版本号因 0.5.1 补丁顺延为 0.6.0）。
 - [x] `annotateBatch` core + CLI `annotate --batch`（manifest/数组、specPath、continuous/per-image 编号、fail-fast/continue）+ MCP `annotate_batch`（15 工具，聚合 contact-sheet 预览）
 - [x] 测试 6 项（限额、连续编号、fail-fast/continue、specPath、CLI manifest、MCP 双图+编号断言）通过；全套 247+2 通过
-- [ ] 文档、干净 clone、真实双客户端批量验收；发布 v0.6.0
+- [x] 文档（README 批量节）、干净 clone（CLEAN60-GATE-OK）、生产 audit 0 漏洞、全局安装 0.6.0
+- [x] 真实双客户端批量验收：Codex 单次 annotate_batch 三图 okCount 3/3、跨图编号 1/2/3（sidecar 断言+人工复核）；Claude CLI 端到端测试覆盖
+- [x] 发布标签 `v0.6.0` 与 `agent-callout--v0.6.0`（指向最终发布提交）
 
 ## 待完成（按 [roadmap](docs/roadmap.md) 迭代计划推进）
 
