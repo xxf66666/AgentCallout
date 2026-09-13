@@ -228,7 +228,9 @@ async function run() {
     const devicePixelRatio = await page.evaluate(() => globalThis.devicePixelRatio);
     if (devicePixelRatio !== 1) {
       throw Object.assign(
-        new Error(`devicePixelRatio ${devicePixelRatio} is not supported; locate requires a ratio of exactly 1.`),
+        new Error(
+          `devicePixelRatio ${devicePixelRatio} is not supported; locate requires a ratio of exactly 1.`
+        ),
         { code: "DOM_DPR_MISMATCH" }
       );
     }
