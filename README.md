@@ -99,6 +99,17 @@ agent-callout locate-text .\screenshot.png --query "校验失败" --mode contain
 
 OCR 只返回文字候选框，不会自动把文字框扩成整个按钮。多候选或低置信度结果必须先查看确认；`not-found` 也不表示文字一定不存在。完整参数、ROI 放大和反白文字处理见[本地 OCR 文档](docs/ocr.md)。
 
+## 可选：网页元素定位
+
+v0.4.0 增加可选浏览器 DOM 定位。默认安装不含浏览器运行库；需要时显式安装（复用本机 Chrome，不下载浏览器）：
+
+```powershell
+agent-callout browser install --json
+agent-callout locate-dom "https://example.test/form" --text "保存" --screenshot page.png --json
+```
+
+按 CSS selector、文字或可访问性名称返回候选框，坐标绑定全页截图 SHA-256 与页面状态；页面变化后旧坐标失效，批注使用当次截图。完整参数与证据语义见[网页元素定位文档](docs/dom.md)。
+
 ## 把结果交给另一个 AI
 
 推荐用一条命令生成完整交接包：
@@ -106,6 +117,7 @@ OCR 只返回文字候选框，不会自动把文字框扩成整个按钮。多�
 ```powershell
 agent-callout create-handoff .\screenshot.annotated.json --json
 agent-callout verify-handoff .\screenshot.annotated.handoff --json
+agent-callout locate-dom "https://example.test" --text "保存" --screenshot page.png --json
 ```
 
 它在 sidecar 旁生成 `screenshot.annotated.handoff/` 普通目录：批注 PNG、完整 JSON、`manifest.json`（文件 SHA-256 清单）、`summary.json` 安全摘要和 `HANDOFF.md` 入口，默认附原图（`--no-original` 可省略，此时不可修订）。接收方不安装 AgentCallout 也能阅读；安装后可校验、重渲染并继续修订。细节见[交接包文档](docs/handoff.md)。
@@ -192,7 +204,7 @@ agent-callout --help
 <details>
 <summary><strong>给开发者：MCP、Skill 和 AnnotationSpec</strong></summary>
 
-MCP 提供 11 个工具：
+MCP 提供 12 个工具：
 
 - `doctor`：检查运行环境。
 - `inspect_image`：读取图片尺寸、格式和哈希。
@@ -205,6 +217,7 @@ MCP 提供 11 个工具：
 - `locate_text`：使用可选本地 OCR 返回与原图 hash 绑定的文字候选、坐标和置信度。
 - `create_handoff`：把已验证 sidecar 打包为跨 AI 交接目录（PNG/JSON/manifest/摘要/入口）。
 - `verify_handoff`：校验交接包 manifest、逐文件 hash 与打包 sidecar。
+- `locate_dom`：用可选本地浏览器运行时按 selector/文字/可访问性名称定位网页元素，返回与截图 hash 绑定的候选框。
 
 新建批注请使用 AnnotationSpec 1.1，它提供可读的默认样式、preset 和语义 tone；已有的 AnnotationSpec 1.0 sidecar 仍受支持。需要保持 canonical JSON 或像素兼容时，请保持其 1.0 版本原样重放。两个版本都以左上角为原点，支持像素坐标和 `0..1` 标准化坐标。完整字段见 [AnnotationSpec 1.0 和 1.1](docs/annotation-spec.md)。
 

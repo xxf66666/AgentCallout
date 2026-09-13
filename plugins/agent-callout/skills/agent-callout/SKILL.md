@@ -4,7 +4,7 @@ description: Annotate existing PNG, JPEG, or WebP screenshots with callouts, arr
 license: MIT
 metadata:
   author: AgentCallout contributors
-  version: "0.3.1"
+  version: "0.4.0"
 ---
 
 # AgentCallout
@@ -22,7 +22,8 @@ Turn an existing screenshot into a reproducible annotated PNG and JSON sidecar. 
 7. When a committed annotate sidecar needs adjustment, call `revise_annotation` with ordered stable-ID `add`, `set`, or `remove` edits. A full same-ID replacement is `{"op":"set","id":"...","annotation":{...}}`; never invent `op:"replace"`. Do not delete prior PNG/JSON files, rewrite the full root spec, or guess a revision number. Supply `inputPath` when the original moved or when the parent uses basename-only input semantics; the bytes must match the parent hash.
 8. Inspect every returned revision preview. `changed-region` contains touched annotations plus any collateral auto-layout movement and carries an original-canvas `sourceRect`; use it for local QA without another crop, but do not claim it proves global layout. `compact-overview` means focus was dispersed, too large, global, unavailable, or intentionally kept low-detail around blur/redact. `none` means sensitive coverage changed: no image was sent, so review the saved output only under the applicable privacy policy. If the host omits ImageContent unexpectedly, say visual verification remains incomplete.
 9. When handing an existing sidecar to another AI, prefer `create_handoff`: it packages the annotated PNG, the full JSON sidecar, a SHA-256 manifest, a safety summary, and a HANDOFF.md entry into one plain directory, keeping original file names so the receiver can continue revisions. Verify with `verify_handoff` or `agent-callout verify-handoff`. The package omits the original only when explicitly requested (`includeOriginal: false` / `--no-original`); say re-render and revise are unavailable in that case. For a lightweight integrity/inventory summary without packaging, call `inspect_annotation_sidecar`; it deliberately omits paths, hashes, IDs, annotation text, style, and raw geometry. The ordinary JSON sidecar remains directly readable without installing AgentCallout.
-10. Return the final absolute path and the tool-provided Markdown image reference.
+10. For a web-page target, prefer optional `locate_dom` when the browser runtime is installed: it returns screenshot-hash-bound candidate rects with page-state evidence. Annotate the captured screenshot in the same run - after the page changes, old coordinates are invalid and must be re-located. Multiple candidates require confirmation; a DOM bbox does not claim control semantics by itself.
+11. Return the final absolute path and the tool-provided Markdown image reference.
 
 ## Annotation choices
 

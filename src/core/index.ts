@@ -40,7 +40,7 @@ import {
   type RendererVersions
 } from "../renderer/index.js";
 
-export const AGENT_CALLOUT_VERSION = "0.3.1";
+export const AGENT_CALLOUT_VERSION = "0.4.0";
 
 export const DEFAULT_IMAGE_LIMITS = Object.freeze({
   maxFileBytes: 50 * 1024 * 1024,

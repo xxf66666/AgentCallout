@@ -108,6 +108,15 @@
 - [x] 跨 AI 交接验收：Codex 0.154.0 创建（OCR 确认→批注→打包→自校验）；Claude 2.1.270 接收（独立校验→查看→包内 revise rev1→复核无遮挡）
 - [x] 发布标签 `v0.3.1` 与 `agent-callout--v0.3.1`（指向最终发布提交）
 
+## 0.4.0 进行中（2026-09-13）
+
+- 分支 `codex/dom-locator`（自 v0.3.1）：浏览器 DOM 定位，设计见 [ADR-0011](docs/adr/0011-browser-dom-locator.md)。
+- [x] 可选运行时：固定 playwright-core 1.63.0 + 用户已装 Chrome（不下载 Chromium），`browser install/status` + 子进程定位
+- [x] selector/文字（NFKC/CJK 折叠/exact-contains）/可访问性名称三模式；iframe 偏移换算与 framePath；deviceScaleFactor=1 使截图像素==CSS 像素
+- [x] 证据绑定：全页截图 SHA-256 + 页面状态（URL/标题/视口/滚动）随候选返回；返回前复核磁盘截图 hash；页面变化即失效
+- [x] MCP `locate_dom`（12 工具）+ CLI `locate-dom`；测试 234 项（含 DOM 三项 + MCP 未就绪路径）通过
+- [ ] 文档完善、完整 gate、干净安装；Claude 与 Codex 真实"网页定位 → 批注 → 查看"验收；发布 v0.4.0
+
 ## 待完成
 
 - [ ] 0.4.0：DOM selector/文本/可访问性名称定位，处理 DPR/缩放/滚动/iframe 与截图关联证据
