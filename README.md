@@ -232,7 +232,7 @@ codex plugin marketplace remove agent-callout
 | Node.js 24.18、24.21 | 本版已实测                               |
 | Node.js 20.10、20.19 | 旧版已实测，本版待回归                   |
 | Codex CLI 0.154.0    | MCP 0.3.0 OCR 定位与批注（macOS）        |
-| Claude Code 2.1.260  | 0.2.1 Plugin 已验收；0.3.0 合并后更新    |
+| Claude Code 2.1.270  | Plugin 0.3.0 OCR 定位与批注（macOS）     |
 | Linux                | 尚未完成项目级验证                       |
 
 v0.2.1 已发布：密集说明框避让、目标保护、折线引线、排版告警和预览像素指标通过了 179 项测试、干净安装及双客户端视觉 A/B。完整证据见[发布记录](docs/releases/0.2.1.md)。

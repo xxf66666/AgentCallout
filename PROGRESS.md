@@ -4,10 +4,10 @@
 
 ## 当前状态
 
-- 阶段：MVP、0.1.3、0.2.0 与 0.2.1 已发布；下一阶段为可选本地 OCR
+- 阶段：MVP、0.1.3、0.2.0、0.2.1 与 0.3.0（可选本地 OCR）已发布；下一阶段为 0.3.1 一键交接包
 - GitHub：`https://github.com/xxf66666/AgentCallout`（公开仓库，`main` 已推送）
 - 发布分支：`main`；0.2.1 核心 `9384df7`，显示兼容修复 `a3812a5`
-- 当前发布门槛：0.2.1 完整 gate、干净安装和双客户端 A/B 已通过，见 [发布记录](docs/releases/0.2.1.md)
+- 当前发布门槛：0.3.0 完整 gate、干净安装、双客户端 OCR 闭环与 Plugin 验收已通过，见 [发布记录](docs/releases/0.3.0.md)
 - 已知外部限制：Codex 可选 Skills-only Marketplace 曾受客户端固定 30 秒 clone 超时影响；CLI+MCP 主路径已验证
 
 ## 已完成
@@ -95,7 +95,8 @@
 - [x] macOS OCR 运行时安装与真实定位：中文 unique/93、英文 ROI+反色 unique/95、反白按钮低置信度 38–48（坐标与源图一致，`requiresConfirmation` 生效）
 - [x] 打包与干净安装：pack 14 文件、生产 audit 0 漏洞、精确 commit 全局安装 0.3.0、doctor/self-test 通过
 - [x] Claude Code 真实“定位 → 确认 → 批注 → 查看”；Codex CLI 0.154.0 `codex exec` 真实闭环，另验证 not-found 不猜坐标与 ENOENT 结构化错误
-- [ ] 合并 main、推送并发布 `v0.3.0` 与 `agent-callout--v0.3.0` 标签；Claude Plugin marketplace 0.3.0 更新验收
+- [x] 合并 main（`a311066..b9eec5e`）并推送；Claude Code 2.1.270 marketplace 新装 Plugin 0.3.0，headless 会话经 Plugin MCP 通过 doctor/定位/确认/批注/查看闭环
+- [x] 发布标签 `v0.3.0` 与 `agent-callout--v0.3.0`（指向最终发布提交）
 
 ## 待完成
 

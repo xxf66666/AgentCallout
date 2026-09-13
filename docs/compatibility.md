@@ -8,7 +8,8 @@
 - **VERIFIED**（macOS 26.6.2 arm64 / Node 24.21.0，`17cb5c7`）：本地与 GitHub 干净 clone 完整 verify（220 passed + 2 skipped）、3 份 dist 复现、pack 14 文件、生产 audit 0 漏洞、精确 commit 全局安装与 doctor/self-test、OCR 运行时安装与状态、CLI 真实定位（中文 unique/93、英文 ROI+反色 unique/95、反白按钮低置信度确认）。
 - **VERIFIED**（真实客户端闭环）：Claude Code（构建产物）与 Codex CLI 0.154.0（全局 0.3.0 + `codex mcp add` + `codex exec`）各自完成“定位文字 → 确认候选 → 批注 → 查看结果”；Codex 另验证 `not-found` 不猜坐标与 `ENOENT` 结构化错误路径。详见[发布记录](releases/0.3.0.md)。
 - 已知平台差异：OCR 置信度不跨平台可比（同一按钮 Windows 原型约 96 分、macOS 38–48 分，坐标同样正确）；macOS libvips 有一条无害 fontconfig stderr 提示；文字度量几何随平台差异约 1–3 px，测试以 win32 精确金标准 + 其他平台结构断言处理。
-- **NOT VERIFIED**：Linux、Node 20/22 回归、三平台 CI 矩阵（0.4.x）；Claude Plugin marketplace 0.3.0 更新与 Codex Skills-only Plugin 0.3.0（合并 main 后按 README 路径另行验收）。
+- **VERIFIED**（合并 main 后补验）：Claude Code 2.1.270 Plugin marketplace 新装 0.3.0（user scope、enabled），headless 新会话经 Plugin MCP 完成 doctor（product 0.3.0）→ `locate_text`（low-confidence/48，`requiresConfirmation`）→ `crop_image` 确认 → `annotate_image`（0 warning）→ 预览与全分辨率复查无遮挡。
+- **NOT VERIFIED**：Linux、Node 20/22 回归、三平台 CI 矩阵（0.4.x）；Codex Skills-only Plugin 0.3.0（已知 30 秒 clone 超时，不阻塞 CLI+MCP 主路径）。
 
 ## 0.2.1 发布验证（2026-09-06）
 
