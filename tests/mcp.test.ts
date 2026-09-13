@@ -66,6 +66,7 @@ describe("AgentCallout MCP server", () => {
     server = createAgentCalloutMcpServer({
       fixedAllowedRoots: [directory],
       ocrRuntimeDirectory: join(directory, "optional-ocr-not-installed"),
+      domRuntimeDirectory: join(directory, "optional-dom-not-installed"),
       beforePreview: async (result) => beforePreview?.(result),
       beforePreviewRead: async (preview) => beforePreviewRead?.(preview)
     });
