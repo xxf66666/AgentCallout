@@ -1,5 +1,14 @@
 # AgentCallout 兼容性与验证记录
 
+## 0.4.1 发布验证（2026-09-13）
+
+`codex/revision-diff`（自 v0.4.0）交付 working copy、fork 与 revision diff：`fork-lineage`/`fork_lineage`（全链拷贝 + fork.json，不重写 sidecar 字节）与 `diff-revisions`/`diff_revisions`（稳定 ID 对比 + lineage 关系，工具总数 14），设计见 [ADR-0012](adr/0012-working-copy-fork-diff.md)。自动 merge 评估结论：推迟。
+
+- **VERIFIED**（macOS 26.6.2 arm64 / Node 24.21.0，`3868fa9`）：本地与 GitHub 干净 clone 完整 verify（236 passed + 2 skipped、3 份 dist 复现）、pack、生产 audit 0 漏洞、精确 commit 全局安装 0.4.1。
+- **VERIFIED**（自动化）：全链拷贝与 fork.json 证据、working-copy 模式、diff 三态、跨 fork 关系判定；另修复 lineage 模块对 /var→/private/var 符号链接根目录的拒绝问题。
+- **VERIFIED**（真实客户端闭环）：Claude Code 2.1.270（CLI）创建 rev1、fork 至协作者副本并分叉 rev2；Codex CLI 0.154.0（MCP `diff_revisions`）对同一对 sidecar 得到与 CLI 完全一致的结果（forked；added/removed/changed 三态）并正确解读分歧。详见[发布记录](releases/0.4.1.md)。
+- **NOT VERIFIED**：自动 merge（评估后推迟）；其余同 0.4.0 的 NOT VERIFIED 范围。
+
 ## 0.4.0 发布验证（2026-09-13）
 
 `codex/dom-locator`（自 v0.3.1）交付可选浏览器 DOM 定位：固定 playwright-core 1.63.0 + 用户已装 Chrome，`browser install/status`、CLI `locate-dom` 与 MCP `locate_dom`（工具总数 12），设计见 [ADR-0011](adr/0011-browser-dom-locator.md)。

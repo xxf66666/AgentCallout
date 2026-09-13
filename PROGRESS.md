@@ -130,7 +130,10 @@
 - [x] `fork-lineage`/`fork_lineage`：全链拷贝 + fork.json（模式、源 lineage 身份、逐文件 hash）；不重写 sidecar 字节
 - [x] `diff-revisions`/`diff_revisions`：稳定 ID 级 added/removed/changed + lineage 关系判定（same-lineage/forked/unrelated）；MCP 工具总数 14
 - [x] 测试 4 项（全链拷贝、working-copy 模式、diff 三态、跨 fork 关系）通过；全套 240 项通过
-- [ ] 文档、完整 gate、干净安装；真实客户端 fork→diff 验收；发布 v0.4.1
+- [x] 文档（docs/lineage.md、README、SKILL）；完整 gate（236+2、dist 复现）、干净 clone、pack、audit 0 漏洞、全局安装 0.4.1
+- [x] 真实客户端 fork→diff 验收：Claude 创建 rev1+fork+rev2 分歧；Codex MCP diff_revisions 结果与 CLI 完全一致并正确解读
+- [x] 发布标签 `v0.4.1` 与 `agent-callout--v0.4.1`（指向最终发布提交）
+- [x] 交付 GUI 与系统截图入口评估（docs/research-gui-evaluation.md），结论均为推迟
 
 ## 待完成
 
