@@ -1,0 +1,27 @@
+<!doctype html>
+<html>
+  <head>
+    <title>DOM fixture outer</title>
+  </head>
+  <body style="margin: 0; height: 2400px; font-family: sans-serif">
+    <div style="position: fixed; top: 8px; right: 8px" role="banner">Fixed header</div>
+    <button
+      id="save"
+      style="position: absolute; top: 120px; left: 40px; width: 120px; height: 40px"
+    >
+      保存 Save
+    </button>
+    <p style="position: absolute; top: 300px; left: 40px; width: 300px">回调地址输入说明</p>
+    <iframe
+      src="./inner.html"
+      style="
+        position: absolute;
+        top: 500px;
+        left: 40px;
+        width: 400px;
+        height: 200px;
+        border: 1px solid #333;
+      "
+    ></iframe>
+  </body>
+</html>

@@ -222,6 +222,23 @@ async function run() {
     const limited = candidates.slice(0, maxCandidates);
     const scroll = await page.evaluate(() => ({ x: globalThis.scrollX, y: globalThis.scrollY }));
     const screenshotBuffer = await page.screenshot({ fullPage: true, type: "png" });
+    // Defensive device-pixel-ratio check: the context pins deviceScaleFactor
+    // to 1, so full-page screenshot pixels must equal CSS page size. A
+    // mismatch means the coordinates-to-screenshot contract is broken.
+    const pageSize = await page.evaluate(() => ({
+      width: Math.ceil(globalThis.document.documentElement.scrollWidth),
+      height: Math.ceil(globalThis.document.documentElement.scrollHeight)
+    }));
+    const pngWidth = screenshotBuffer.readUInt32BE(16);
+    const pngHeight = screenshotBuffer.readUInt32BE(20);
+    if (Math.abs(pngWidth - pageSize.width) > 2 || Math.abs(pngHeight - pageSize.height) > 2) {
+      throw Object.assign(
+        new Error(
+          `Screenshot pixel size ${pngWidth}x${pngHeight} does not match CSS page size ${pageSize.width}x${pageSize.height}; a device pixel ratio other than 1 is not supported.`
+        ),
+        { code: "DOM_DPR_MISMATCH" }
+      );
+    }
     await writeFile(request.screenshotPath, screenshotBuffer);
     const screenshotSha256 = createHash("sha256").update(screenshotBuffer).digest("hex");
 

@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -593,4 +594,57 @@ describe("optional OCR runtime", () => {
     },
     120_000
   );
+
+  it("the network guard blocks fetch, http(s), net, tls and dns in the offline worker context", async () => {
+    const guardPath = "assets/ocr-runtime/network-guard.cjs"; // repo-root relative; vitest runs with root cwd
+    const probe = `
+      require("./${guardPath}");
+      const http = require("node:http");
+      const dns = require("node:dns");
+      const net = require("node:net");
+      const tls = require("node:tls");
+      const results = {};
+      const record = (name, fn) => {
+        try { fn(); results[name] = "allowed"; }
+        catch (error) {
+          results[name] = String(error.message).includes("AGENT_CALLOUT_OCR_NETWORK_DISABLED")
+            ? "blocked"
+            : "unexpected:" + error.message;
+        }
+      };
+      record("http.request", () => http.request("http://example.invalid"));
+      record("http.get", () => http.get("http://example.invalid"));
+      record("net.connect", () => net.connect(80, "example.invalid"));
+      record("tls.connect", () => tls.connect(443, "example.invalid"));
+      record("dns.lookup", () => dns.lookup("example.invalid", () => {}));
+      process.stdout.write(JSON.stringify(results));
+      void Promise.resolve();
+    `;
+    const stdout = await new Promise<string>((resolve, reject) => {
+      const child = spawn(process.execPath, ["-e", probe], { cwd: process.cwd() });
+      const chunks: Buffer[] = [];
+      child.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
+      child.on("error", reject);
+      child.on("exit", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    });
+    const results = JSON.parse(stdout) as Record<string, string>;
+    for (const name of ["http.request", "http.get", "net.connect", "tls.connect", "dns.lookup"]) {
+      expect(results[name]).toBe("blocked");
+    }
+    // fetch is disabled asynchronously by the guard's replacement.
+    const fetchBlocked = await new Promise<string>((resolve) => {
+      const child = spawn(
+        process.execPath,
+        [
+          "-e",
+          `require("./${guardPath}"); fetch("http://example.invalid").then(() => process.stdout.write("allowed")).catch((error) => process.stdout.write(String(error.message).includes("AGENT_CALLOUT_OCR_NETWORK_DISABLED") ? "blocked" : "unexpected"));`
+        ],
+        { cwd: process.cwd() }
+      );
+      const chunks: Buffer[] = [];
+      child.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
+      child.on("exit", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    });
+    expect(fetchBlocked).toBe("blocked");
+  });
 });

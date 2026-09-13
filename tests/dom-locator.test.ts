@@ -1,11 +1,36 @@
-import { mkdtemp, realpath, rm } from "node:fs/promises";
+import { mkdtemp, readdir, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
 
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 
-import { inspectBrowserRuntime, locateDom } from "../src/locator/dom/index.js";
+import {
+  installBrowserRuntime,
+  inspectBrowserRuntime,
+  locateDom
+} from "../src/locator/dom/index.js";
+
+// The committed fixture pages replace machine-local fixtures: they travel
+// with the repo and resolve through file:// URLs from this test file.
+function fixtureUrl(name: string): string {
+  return new URL(`./fixtures/dom/${name}`, import.meta.url).href;
+}
+
+// One real runtime install per file run, kept inside a suite-local temp
+// directory so no machine state outside the test can influence it.
+const suiteRoot = await realpath(await mkdtemp(join(tmpdir(), "agent-callout-dom-suite-")));
+const runtimeDirectory = join(suiteRoot, "runtime");
+let runtimeReady = false;
+let runtimeIssues: string[] = [];
+try {
+  await installBrowserRuntime({ runtimeDirectory });
+  const status = await inspectBrowserRuntime({ runtimeDirectory });
+  runtimeReady = status.ready;
+  runtimeIssues = status.issues;
+} catch (error) {
+  runtimeIssues = [String(error)];
+}
 
 describe("AgentCallout browser DOM locator", () => {
   let directory: string;
@@ -40,23 +65,85 @@ describe("AgentCallout browser DOM locator", () => {
     expect(existsSync(join(runtime, "node_modules"))).toBe(false);
   });
 
-  const chromePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-  const chromeInstalled = existsSync(chromePath);
-  const installedRuntime = "/tmp/dom-rt";
-
-  test.skipIf(!chromeInstalled || !existsSync(join(installedRuntime, "node_modules")))(
-    "locates text and accessible-name candidates with screenshot-bound evidence",
-    async () => {
-      const result = await locateDom({
-        url: "file:///private/tmp/dom-fixture.html",
-        locator: { kind: "accessible", value: "保存 Save", exact: true },
-        screenshotPath: join(directory, "验收页面.png")
+  test(
+    "locates selector, text and accessible candidates on committed fixtures",
+    { timeout: 240_000 },
+    async (ctx) => {
+      if (!runtimeReady) {
+        // Visible skip with the exact runtime reason (usually a missing
+        // Chrome on the runner, or a network-less install failure).
+        ctx.skip(true, runtimeIssues.join(" ") || "browser runtime not ready");
+        return;
+      }
+      const byText = await locateDom({
+        url: fixtureUrl("outer.html"),
+        locator: { kind: "text", value: "保存 Save", exact: true },
+        screenshotPath: join(directory, "验收页面.png"),
+        runtimeDirectory
       });
-      expect(result.ok).toBe(true);
-      expect(result.candidates).toHaveLength(1);
-      expect(result.candidates[0]?.rect).toEqual({ x: 40, y: 120, width: 120, height: 40 });
-      expect(result.screenshot.sha256).toMatch(/^[0-9a-f]{64}$/);
-      expect(result.page.title).toContain("验收页面");
+      expect(byText.candidates).toHaveLength(1);
+      expect(byText.candidates[0]?.rect).toEqual({ x: 40, y: 120, width: 120, height: 40 });
+      expect(byText.candidates[0]?.tag).toBe("button");
+      expect(byText.page.title).toContain("DOM fixture outer");
+      expect(byText.screenshot.sha256).toMatch(/^[0-9a-f]{64}$/);
+      expect(byText.screenshot.sizeBytes).toBeGreaterThan(0);
+      expect(existsSync(byText.screenshot.path)).toBe(true);
+
+      const bySelector = await locateDom({
+        url: fixtureUrl("outer.html"),
+        locator: { kind: "selector", value: "#save" },
+        screenshotPath: join(directory, "验收页面-selector.png"),
+        runtimeDirectory
+      });
+      expect(bySelector.candidates[0]?.rect).toEqual({ x: 40, y: 120, width: 120, height: 40 });
+
+      const byAccessible = await locateDom({
+        url: fixtureUrl("outer.html"),
+        locator: { kind: "accessible", value: "保存 Save", exact: true },
+        screenshotPath: join(directory, "验收页面-accessible.png"),
+        runtimeDirectory
+      });
+      expect(byAccessible.candidates[0]?.rect).toEqual({ x: 40, y: 120, width: 120, height: 40 });
+      expect(byAccessible.candidates[0]?.role).toBe("button");
+    }
+  );
+
+  test(
+    "locates iframe content in top-level page coordinates",
+    { timeout: 240_000 },
+    async (ctx) => {
+      if (!runtimeReady) {
+        ctx.skip(true, runtimeIssues.join(" ") || "browser runtime not ready");
+        return;
+      }
+      const inner = await locateDom({
+        url: fixtureUrl("outer.html"),
+        locator: { kind: "text", value: "内框按钮", exact: true },
+        screenshotPath: join(directory, "验收页面-inner.png"),
+        runtimeDirectory
+      });
+      expect(inner.candidates).toHaveLength(1);
+      const innerRect = inner.candidates[0]?.rect;
+      expect(innerRect?.x).toBeGreaterThanOrEqual(39);
+      expect(innerRect?.x).toBeLessThanOrEqual(43);
+      expect(innerRect?.y).toBeGreaterThanOrEqual(499);
+      expect(innerRect?.y).toBeLessThanOrEqual(503);
+      expect(inner.candidates[0]?.framePath.length).toBeGreaterThan(0);
+    }
+  );
+
+  test(
+    "re-installs idempotently inside the requested directory",
+    { timeout: 240_000 },
+    async () => {
+      if (!runtimeReady) return; // nothing to re-install; the install itself failed
+      await installBrowserRuntime({ runtimeDirectory });
+      const status = await inspectBrowserRuntime({ runtimeDirectory });
+      expect(status.playwrightVersion).toMatch(/^\d+\./);
+      const entries = (await readdir(runtimeDirectory)).sort();
+      expect(entries).toEqual(
+        expect.arrayContaining(["package.json", "package-lock.json", "locate-worker.mjs"])
+      );
     }
   );
 });

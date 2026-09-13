@@ -25,7 +25,7 @@ export class LineageError extends Error {
   readonly code: string;
 
   constructor(code: string, message: string) {
-    super(message);
+    super(`${code}: ${message}`);
     this.name = "LineageError";
     this.code = code;
   }
@@ -57,9 +57,7 @@ function isInsideRoots(candidate: string, roots: readonly string[]): boolean {
 
 // Canonicalize roots through symlinks (macOS /var -> /private/var) the same
 // way the core module does, so allowed roots match realpath'd candidates.
-async function canonicalRootsList(
-  allowedRoots: readonly string[] | undefined
-): Promise<string[]> {
+async function canonicalRootsList(allowedRoots: readonly string[] | undefined): Promise<string[]> {
   const resolved: string[] = [];
   for (const root of allowedRoots ?? []) {
     const absolute = path.resolve(root);

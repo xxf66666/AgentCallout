@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile, realpath, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -187,5 +187,55 @@ describe("AgentCallout lineage fork and diff", () => {
     expect(diff.lineageRelation).toBe("forked");
     expect(diff.added).toEqual([]);
     expect(diff.removed).toEqual(["box-1"]);
+  });
+
+  test("fork and diff reject invalid sources, targets and out-of-roots paths", async () => {
+    const sidecarPath = await annotateFixture();
+
+    // A directory that does not exist as the fork target parent.
+    await expect(
+      forkLineage({
+        sidecarPath,
+        targetDirectory: join(directory, "不存在的父级", "副本"),
+        allowedRoots: [directory]
+      })
+    ).rejects.toThrow(/LINEAGE_TARGET_INVALID/u);
+
+    // Removing the original image makes the lineage unforkable.
+    await rm(join(directory, "示例 截图.png"));
+    await expect(
+      forkLineage({
+        sidecarPath,
+        targetDirectory: join(directory, "副本"),
+        allowedRoots: [directory]
+      })
+    ).rejects.toThrow(/LINEAGE_SOURCE_INVALID/u);
+
+    // diff against a non-sidecar file must fail loudly.
+    await expect(
+      diffRevisions({
+        sidecarPathA: join(directory, "示例 截图.annotated.json"),
+        sidecarPathB: join(directory, "示例 截图.png"),
+        allowedRoots: [directory]
+      })
+    ).rejects.toThrow();
+  });
+
+  test("a tampered fork.json degrades the relation instead of crashing the diff", async () => {
+    const sidecarPath = await annotateFixture();
+    const forked = await forkLineage({
+      sidecarPath,
+      targetDirectory: join(directory, "被篡改副本"),
+      allowedRoots: [directory]
+    });
+    await writeFile(join(forked.forkDirectory, "fork.json"), "{corrupted", "utf8");
+
+    const diff = await diffRevisions({
+      sidecarPathA: sidecarPath,
+      sidecarPathB: join(forked.forkDirectory, "示例 截图.annotated.json"),
+      allowedRoots: [directory]
+    });
+    expect(diff.lineageRelation).toBe("same-lineage");
+    expect(diff.added).toEqual([]);
   });
 });

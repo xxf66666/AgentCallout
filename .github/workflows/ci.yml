@@ -15,7 +15,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        node: [20, 22, 24]
+        node: [22, 24]
     steps:
       - name: Configure git line endings
         run: git config --global core.autocrlf false
@@ -29,6 +29,22 @@ jobs:
       - name: Full verification gate
         shell: bash
         run: set -o pipefail; npm run verify 2>&1 | tee verify-output.log
+  ocr-real-runtime:
+    name: OCR real runtime install (optional)
+    runs-on: ubuntu-latest
+    needs: []
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Run OCR real-install tests
+        env:
+          AGENT_CALLOUT_OCR_REAL_RUNTIME: "1"
+        run: npx vitest run tests/ocr-runtime.test.ts
+
       - name: Push failure log to ci-logs branch
         if: failure()
         shell: bash

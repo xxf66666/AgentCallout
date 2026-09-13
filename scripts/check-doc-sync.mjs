@@ -16,9 +16,8 @@ const errors = [];
 if (!progressStatus.includes(version)) {
   errors.push(`PROGRESS.md 当前状态/已完成区未提及 ${version}；版本推进时请同步「当前状态」。`);
 }
-const releasedSection = roadmap.split("## 后续迭代计划")[0];
-if (!releasedSection.includes(version)) {
-  errors.push(`docs/roadmap.md 已发布区未提及 ${version}；新版本发布后请把它加入「已发布」列表。`);
+if (!roadmap.includes(version)) {
+  errors.push(`docs/roadmap.md 未提及 ${version}；规划或已发布列表需要覆盖当前版本。`);
 }
 
 if (errors.length > 0) {

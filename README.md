@@ -20,7 +20,7 @@ AgentCallout 在本机处理 PNG、JPEG、WebP，不上传截图，也不需要 
 
 ## 安装
 
-需要 Node.js `>=20.10.0`、Git，并能访问 GitHub 和 npm。
+需要 Node.js `>=22`（v0.4.1 为最后一个支持 Node 20 的版本）、Git，并能访问 GitHub 和 npm。
 
 - 只用 Claude Code：只执行 Claude 的两条命令。
 - 只用 Codex：只执行 Codex 的两条命令。
@@ -253,15 +253,16 @@ codex plugin marketplace remove agent-callout
 
 ## 兼容性与限制
 
-| 环境                 | 状态                                     |
-| -------------------- | ---------------------------------------- |
-| Windows 11           | 0.3.0 开发测试与 OCR 实测                |
-| macOS 26 arm64       | 本版发布验收：CLI/MCP/OCR 与双客户端闭环 |
-| Node.js 24.18、24.21 | 本版已实测                               |
-| Node.js 20.10、20.19 | 旧版已实测，本版待回归                   |
-| Codex CLI 0.154.0    | MCP 0.3.0 OCR 定位与批注（macOS）        |
-| Claude Code 2.1.270  | Plugin 0.3.0 OCR 定位与批注（macOS）     |
-| Linux                | 尚未完成项目级验证                       |
+| 环境                 | 状态                                       |
+| -------------------- | ------------------------------------------ |
+| Windows 11           | 0.3.0 开发测试与 OCR 实测                  |
+| macOS 26 arm64       | 本版发布验收：CLI/MCP/OCR 与双客户端闭环   |
+| Node.js 24.18、24.21 | 本版已实测                                 |
+| Node.js 20           | 支持线于 v0.5.0 上移至 22；20 用户用 0.4.x |
+| Node.js 22、24       | CI 矩阵全绿；发布级回归见 roadmap v0.6.1   |
+| Codex CLI 0.154.0    | MCP 0.3.0 OCR 定位与批注（macOS）          |
+| Claude Code 2.1.270  | Plugin 0.3.0 OCR 定位与批注（macOS）       |
+| Linux                | 尚未完成项目级验证                         |
 
 v0.2.1 已发布：密集说明框避让、目标保护、折线引线、排版告警和预览像素指标通过了 179 项测试、干净安装及双客户端视觉 A/B。完整证据见[发布记录](docs/releases/0.2.1.md)。
 
@@ -275,7 +276,7 @@ v0.3.1 已发布：`create-handoff` 一键交接包（批注 PNG + 完整 JSON +
 
 浅色说明框、独立编号配色和语义 tone 已可用：普通说明使用默认 `docs-light` 或 `info`，错误使用 `danger`。旧版 1.0 批注仍保留原有样式。
 
-后续依次开发一键交接包、浏览器 DOM 定位和协作能力，详见[路线图](docs/roadmap.md)。系统截图、GUI 和视频尚未实现。
+输入资源上限：单图 ≤50 MB 且 ≤4000 万像素（超出返回稳定错误，不静默缩放）。后续按 roadmap 推进批量批注、候选可视化、报告导出与 npm 分发。系统截图、GUI 和视频尚未实现。
 
 ## 详细文档
 
