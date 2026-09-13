@@ -7,6 +7,7 @@
 - **VERIFIED**（macOS 26.6.2 arm64 / Node 24.21.0，`3868fa9`）：本地与 GitHub 干净 clone 完整 verify（236 passed + 2 skipped、3 份 dist 复现）、pack、生产 audit 0 漏洞、精确 commit 全局安装 0.4.1。
 - **VERIFIED**（自动化）：全链拷贝与 fork.json 证据、working-copy 模式、diff 三态、跨 fork 关系判定；另修复 lineage 模块对 /var→/private/var 符号链接根目录的拒绝问题。
 - **VERIFIED**（真实客户端闭环）：Claude Code 2.1.270（CLI）创建 rev1、fork 至协作者副本并分叉 rev2；Codex CLI 0.154.0（MCP `diff_revisions`）对同一对 sidecar 得到与 CLI 完全一致的结果（forked；added/removed/changed 三态）并正确解读分歧。详见[发布记录](releases/0.4.1.md)。
+- **VERIFIED**（合并 main 后补验）：Claude Code 2.1.270 Plugin 经官方 marketplace update 0.3.1 → 0.4.1，headless 新会话经 Plugin MCP doctor 报告 `agent-callout v0.4.1 — ok: true`。
 - **NOT VERIFIED**：自动 merge（评估后推迟）；其余同 0.4.0 的 NOT VERIFIED 范围。
 
 ## 0.4.0 发布验证（2026-09-13）
