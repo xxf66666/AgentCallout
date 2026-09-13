@@ -4,11 +4,11 @@
 
 ## 当前状态
 
-- 阶段：MVP、0.1.3、0.2.0、0.2.1、0.3.0（可选本地 OCR）与 0.3.1（一键交接包）已发布；下一阶段为 0.4.0 浏览器 DOM 定位
+- 阶段：0.1.3、0.2.0、0.2.1、0.3.0（OCR）、0.3.1（交接包）、0.4.0（DOM 定位）、0.4.1（fork/diff）已发布；下一阶段为 v0.5.0（测试债清偿与宿主回归），规划见 [roadmap](docs/roadmap.md)
 - GitHub：`https://github.com/xxf66666/AgentCallout`（公开仓库，`main` 已推送）
-- 发布分支：`main`；0.2.1 核心 `9384df7`，显示兼容修复 `a3812a5`
-- 当前发布门槛：0.3.1 完整 gate、干净安装与跨 AI 交接闭环已通过，见 [发布记录](docs/releases/0.3.1.md)
-- 已知外部限制：Codex 可选 Skills-only Marketplace 曾受客户端固定 30 秒 clone 超时影响；CLI+MCP 主路径已验证
+- 当前发布门槛：0.4.1 完整 gate、干净安装与跨 AI fork/diff 闭环已通过，见 [发布记录](docs/releases/0.4.1.md)
+- CI：三平台（ubuntu/macos/windows）× Node 20/22/24 矩阵 9/9，见 `.github/workflows/ci.yml`
+- 已知外部限制：Codex 可选 Skills-only Marketplace 固定 30 秒 clone 超时（NOT VERIFIED，不阻塞 CLI+MCP 主路径）；gh CLI 未登录（GitHub Release 补建被阻，见 BLOCKERS.md）
 
 ## 已完成
 
@@ -135,13 +135,13 @@
 - [x] 发布标签 `v0.4.1` 与 `agent-callout--v0.4.1`（指向最终发布提交）
 - [x] 交付 GUI 与系统截图入口评估（docs/research-gui-evaluation.md），结论均为推迟
 
-## 待完成
+## 待完成（按 [roadmap](docs/roadmap.md) 迭代计划推进）
 
-- [ ] 0.4.0：DOM selector/文本/可访问性名称定位，处理 DPR/缩放/滚动/iframe 与截图关联证据
-- [ ] 0.4.x：显式 working copy/fork/revision diff、分支合并评估及系统截图/轻量 GUI 评估
-- [ ] 非 Windows 平台回归（不阻塞 Windows-first MVP）
-- [ ] 跨目录复制 lineage 的 fork 只记录不自动合并；后续评估显式 branch/merge 模型
-- [ ] 解决或规避 Codex Git Marketplace 内部 30 秒 clone 超时（不阻塞 CLI+MCP 主路径）
+- [ ] 先行任务：GitHub Release 补建（v0.1.2 是否补建需核对；被 gh 未登录阻塞，见 BLOCKERS.md）、防漂移检查、Node 支持线决策、依赖升级联动流程成文
+- [ ] v0.5.0：DOM 测试 fixture 化、lineage/OCR 测试债补齐、ADR-0004 Codex 0.154 图片可见性回归、DPR 防御校验、超大图资源边界
+- [ ] v0.5.1+：批量批注、候选可视化核对、报告导出、npm 分发、自诊断（详见 roadmap）
+- [ ] Codex Git Marketplace 30 秒 clone 超时（外部阻塞，不阻塞 CLI+MCP 主路径）
+- [ ] 远期不排期：fork 三方合并、第三 MCP 宿主、Firefox/WebKit、DPR≠1、GUI（复核条件见 roadmap）
 
 ## 验证日志
 
