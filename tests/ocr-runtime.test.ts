@@ -541,14 +541,18 @@ describe("optional OCR runtime", () => {
     "recognizes a real local English image and keeps repeat installation idempotent",
     async () => {
       const runtimeDirectory = process.env.AGENT_CALLOUT_OCR_REAL_RUNTIME as string;
-      const installed = await installOcrRuntime({ runtimeDirectory, languages: ["eng"] });
-      expect(installed).toMatchObject({ installed: false, ready: true });
-      expect(installed.models).toContainEqual({
+      // First install validates the pinned download and model hashes.
+      const first = await installOcrRuntime({ runtimeDirectory, languages: ["eng"] });
+      expect(first.ready).toBe(true);
+      expect(first.models).toContainEqual({
         language: "eng",
         version: "4.0.0_best_int",
         sizeBytes: 5_199_098,
         sha256: "5dc5d8d640a212c9d6184921ba103b186f50e0fed9ee716c53e6b312b400d747"
       });
+      // Repeat installation must be idempotent.
+      const second = await installOcrRuntime({ runtimeDirectory, languages: ["eng"] });
+      expect(second).toMatchObject({ installed: false, ready: true });
       const label = await sharp({
         text: { text: "HELLO OCR", font: "Arial 72", rgba: true }
       })
@@ -571,7 +575,7 @@ describe("optional OCR runtime", () => {
         expect.arrayContaining(["HELLO", "OCR"])
       );
     },
-    60_000
+    240_000
   );
 
   it.runIf(typeof process.env.AGENT_CALLOUT_OCR_REAL_RUNTIME === "string")(
