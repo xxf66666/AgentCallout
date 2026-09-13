@@ -1,75 +1,103 @@
 # AgentCallout 路线图
 
-更新于 2026-09-06。版本顺序代表验收优先级；真实完成状态以 [PROGRESS](../PROGRESS.md) 和[兼容性证据](compatibility.md)为准。
+更新于 2026-09-13（经四视角规划与对抗评审的后续迭代计划）。版本顺序代表验收优先级；真实完成状态以 [PROGRESS](../PROGRESS.md) 和[兼容性证据](compatibility.md)为准。
 
-## 已发布：0.1–0.2.0
+## 已发布（0.1 → 0.4.1）
 
-- 本地处理 PNG/JPEG/WebP，支持矩形、椭圆、箭头、文字、说明框、编号、高亮、聚光灯、模糊和不可恢复的纯色遮挡。
-- AnnotationSpec 1.1 提供浅色/深色/高对比 preset、语义 tone 和独立编号配色；1.0 保留旧样式与重放行为。
-- 生成 PNG、普通 JSON sidecar 和 Markdown 引用；稳定 ID 支持追加式 revision，保留原图和历史。
-- CLI、本地 stdio MCP、Claude Code Plugin、Codex CLI+MCP 均有 GitHub 安装路径和真实调用证据。
-- 0.2.0 已提供 changed-region 局部复核和不含路径、hash、ID、文字、精确几何的安全 sidecar 摘要。
-- 每次最多一张 512 px / 64 KiB 预览，减少传输像素与重复图片轮次；未把这些数据换算为图片 token 或费用。
+- **0.1–0.2.0**：十类批注、AnnotationSpec 1.0/1.1、append-only .revN 修订、CLI/MCP/Plugin 分发、changed-region 局部复核与安全 sidecar 摘要。
+- **0.2.1**：密集说明框避让、折线引线、排版 warning、预览像素指标、`auto` 显示标记。
+- **0.3.0**：可选本地中英文 OCR 定位（`locate-text`/`locate_text`，多候选与置信度确认门禁，截图/原图 hash 绑定）。
+- **0.3.1**：`create-handoff`/`verify-handoff` 跨 AI 一键交接包（普通目录+JSON，manifest/摘要/HANDOFF.md 入口）。
+- **0.4.0**：可选浏览器 DOM 定位（`locate-dom`/`locate_dom`，selector/文字/可访问性名称，截图 SHA-256 + 页面状态绑定，iframe 偏移）。
+- **0.4.1**：`fork-lineage`/`diff-revisions`（working copy/fork 显式化与稳定 ID 级差异对比；自动 merge 评估后推迟）。
+- 平台与工程：CI 三平台 × Node 20/22/24 矩阵 9/9；CLI 与 stdio MCP 14 工具；Claude Plugin 与 Codex CLI+MCP 双分发路径。
 
-浅色说明框和语义配色已实现。后续继续检查 Agent 是否正确选用，普通说明默认采用 `docs-light`，实际错误采用 `danger`，明确需要旧视觉时才采用 `classic-red`。
+---
 
-## 0.2.1：密集批注与排版质量（已发布）
+## 后续迭代计划
 
-本版已完成，当前下一优先版本为 0.3.0。
+### 先行任务（立即执行，纯文档与流程，不占版本窗口）
 
-- 多个说明框自动避让，提前保护全部目标区域，包含后出现的批注目标。
-- 箭头和编号引线支持确定性的折线路径，绕开说明框、编号及其他目标；碰撞检查覆盖描边和箭头头部。
-- 优化边缘、角落、小按钮及长文字，空间不足时保留批注并报告明确 warning。
-- 输出稳定问题代码，覆盖引线过短、文字裁切、目标被覆盖、说明框重叠、空间不足及路线受阻。
-- 预览增加 `pixelMetrics`：原图/局部/预览像素数与缩减比例，只描述实际发送的 raster。
-- 建立普通、编号、混合批注的 1、3、6、10 项场景，以及边角、固定文字障碍、折线路由、长文字和失败降级测试。
-- 新布局只作用于 AnnotationSpec 1.1；已有 1.0 保留旧渲染路径和同环境 PNG golden。
+发布可见性与文档状态信任修复——纯文档+CI 提交直接合并 main，不打新 tag、不触发重验收：
 
-验收要求是相同输入确定性渲染、可用空间内说明框不重叠、目标可见、引线与箭头完整；不能满足时必须明确报告限制。几何断言须结合真实 PNG 像素检查，不能只检查 sidecar。
+- PROGRESS.md 头部「当前状态/待完成」重写至 v0.4.1 事实；decisions.md 主表 D-001/D-003/D-008 与 ADR-0009 状态行按现有证据逐条对齐。
+- 为缺失的 6 个主版本标签补建 GitHub Release（v0.1.3/v0.2.0/v0.3.0/v0.3.1/v0.4.0/v0.4.1，另核对 v0.1.2 是否补建或有意不建）；正文取自 docs/releases，附安装命令与兼容表链接。
+- README 兼容表按证据三档如实更新（Linux 与 Node 20.10/20.19 维持「仅 CI 矩阵守护」表述，无新证据不改口）；GitHub topics 与 CI badge。
+- 新增「任意 stdio MCP 宿主接入」文档小节，明确标注 NOT VERIFIED。
+- 防漂移检查合入 CI：结构化锚定 PROGRESS「当前状态」与 decisions 状态行，比对最新 tag。
+- **Node 支持线决策**（完备性评审补充）：Node 20 已 EOL，须先决策 engine floor 是否/何时上移 22，再定 v0.6.1 的回归范围；同时登记依赖升级联动流程（sharp/playwright-core 升级 → dist 重提交 + 基线重录 + compatibility 版本行）。
+- 执行前置：gh 认证（Release 补建与 topics 需要）。
 
-完整 179 项测试与构建、示例重放和视觉检查、干净 clone 安装、doctor/CLI/MCP/Plugin 验证，以及 Claude Code/Codex 真实密集批注和修订视觉 A/B 已通过。实际客户端发现的旧 `low` 显示 hint 不兼容也已修为 `auto`。指定目标之外的源文字仍需视觉复核，详见[发布记录](releases/0.2.1.md)。
+### v0.5.0 —— 真实绿灯：堵住「绿灯假象」测试债，为后续版本提供可信地基
 
-## 0.3.0：OCR 自动定位（已发布）
+- **DOM 定位测试 fixture 化（大项）**：fixture HTML 与预期状态入库 `tests/fixtures/`；删除 `/tmp/dom-rt`、`file:///private/tmp/...`、硬编码 macOS Chrome 路径；运行时与状态全部走测试临时目录。
+- CI 策略：可预装 Chrome 的格子尽力真实执行（评估 playwright-core 安装成本），不可用格子显式打印 skip 原因且状态可见。
+- DPR 防御校验：launch 显式 `deviceScaleFactor:1` 并断言截图实际像素==CSS viewport，不一致返回稳定错误码（防御性失败，非 DPR≠1 支持）。
+- lineage 模块错误分支测试补齐（fork 源损坏、fork.json 篡改、路径规范化、目录冲突）。
+- OCR 测试债同构修复：恢复 2 个长期 skip 的运行时真实安装测试；补「断网沙箱子进程」离线回归。
+- **ADR-0004 回归**：Codex 0.154 下 structuredContent 与 ImageContent 同结果的真实双端重测（触发条件已满足）。
+- 超大图资源边界：补渲染管线资源上限测试或 README 显式声明输入上限与稳定失败语义。
 
-用户可以说“把保存按钮标出来”或“标注所有校验失败的位置”。
+### v0.5.1 —— 整套截图一次标完：批量批注与跨图连续编号
 
-- 增加可选本地 OCR locator，默认安装不下载 OCR 语言模型。
-- 支持中英文、精确匹配、包含匹配和多结果。
-- 返回候选文字、bbox、置信度和与输入截图绑定的定位证据。
-- 多候选或低置信度先由 AI 查看/确认，不静默选择坐标。
-- OCR 只产生 AnnotationSpec 目标坐标，最终由现有渲染器批注。
+- **`annotate --batch`（大项）**：普通 JSON 清单（逐项=图片路径+完整 spec），跨图连续编号（利用现有 number 字段）与逐图独立编号两种模式；零新增 spec 字段。
+- 执行语义：逐图顺序、默认 fail-fast、`--continue` 显式继续零静默跳过；单图失败隔离、逐图汇总、无半成品残留；须定义宿主超时/中断语义（批量上限、宿主断开后服务端行为、分批建议）。
+- MCP `annotate_batch`：按图片工具契约（省略 structuredContent，单一 JSON TextContent 逐图汇总 + 至多一张聚合预览）。
+- 质量基线顺带采集：批量验收时统计逐图 layout warning 出现率，作为布局器改进证据。
+- 文档：「一次评审整套截图→批量批注→连续编号→交付」端到端 recipe。
 
-验收覆盖中英文 UI、小字体、DPI 缩放、重复按钮、无结果与低置信度；记录真实定位准确性、延迟和模型安装体积。OCR 不作为安全敏感信息检测承诺。
+### v0.5.2 —— 看得见再确认：候选可视化核对 + Chromium 多引擎
 
-## 0.3.1：跨 AI 一键交接包（已发布）
+- **`preview-candidates`（大项）**：把 OCR/DOM 候选 bbox 画为编号描边框，生成独立 PNG 与 512px/64KiB 预览；把「多候选/低置信度必须确认」从读 JSON 变成看图选号。
+- preview 为临时核对产物：不写 sidecar、不进修订链、不自动生成批注；与 core 现有区域 preview 明确命名区分。
+- Chromium 多引擎：`browser status` 枚举本机 Chrome/Edge（零下载），`locate-dom` 支持 engine 选择并记入候选证据 **engine + 主版本字段**。
+- 公网证据采集（非阻塞、不作 gate 通过条件）：固定公网页面清单的人工深度验收流程，网络不可用显式跳过。
+- Firefox/WebKit 仅出书面评估；文档明确可访问性名称为启发式计算。
 
-- 增加 `create-handoff` 命令，自动生成批注 PNG、JSON sidecar、manifest（文件 SHA-256）、安全摘要和 Markdown 入口；`verify-handoff` 与 MCP `create_handoff`/`verify_handoff` 同步提供。
-- 清楚说明 PNG 已压平，JSON 保存机器可读批注语义。
-- 安全摘要默认不公开路径、hash、ID、文字和精确几何；完整 sidecar 仍按敏感文档处理。
-- 接收方无需安装 AgentCallout 即可读普通 JSON；安装后可校验、重渲染和继续修订。
-- 校验文件关联、缺失附件和修订链；不把摘要描述成签名、加密或原图验证。
+### v0.6.0 —— 从批注到交付：报告导出与模板重放
 
-验收使用实际移交目录：另一个 AI 能定位文档入口、区分原图/批注语义、理解限制，并在具备工具和匹配原图时继续修订。
+- **`build-report`（大项）**：一个或多个已验证 sidecar → 普通 `review-report.md`（逐图 Markdown 图片引用、按稳定 ID 的批注清单、tone 语义、1.0 如实标注、layout warning 逐图、可选安全摘要章节）。
+- 报告确定性：排序规则显式、同批输入重复生成逐字节一致；默认引用最新修订输出、可选修订号；不写时间戳；MCP 端仅 ≤4KiB 结构化摘要。
+- **`apply-template`**：从已验证 sidecar 按稳定 ID 筛选批注组，以 normalized 坐标重放到新截图——同分辨率精确、等宽高比按比例缩放并报告系数；输出为普通 AnnotationSpec 1.1 spec 供检查后再 annotate（越界/裁边沿用 validate 语义）；不做图像特征自动对齐。
+- 注意（完备性评审）：批注文字写入 Markdown 须处理转义（尖括号/HTML/链接语法）与图片路径编码；`create-handoff`（给 AI）与 `build-report`（给人）分工要在文档中一句话辨析。
 
-## 0.4.0：浏览器 DOM 定位（已发布）
+### v0.6.1 —— npm 分发与安装链路加固
 
-- 根据 selector、文本或可访问性名称找到元素。
-- 处理缩放、DPR、滚动、固定定位和 iframe，明确 viewport 与整页截图坐标。
-- 绑定截图和 DOM 定位证据；截图变化后拒绝无证据复用旧坐标。
-- DOM 适配器只输出 bbox 与证据，不复制批注渲染逻辑。
-- 浏览器运行库保持可选，不增加默认渲染安装负担。
+- **npm 正式发布（大项）**：去 private、prepublishOnly 挂 verify、元数据核对、pack 结构清单核对（tarball 内 dist 与发布 commit 逐字节一致锚定）；npm 与 GitHub 双安装路径并列；不自动 publish、无 postinstall 下载、无遥测。
+- 发布级前置回归（二选一落地、另一项如实标注）：干净 Linux 环境完整发布纪律行程（无头「图片可见」操作定义动工前明确）；或 Node 支持线决策后的最低/次低版本发布级回归。
+- bootstrap 加固：锁等待 stderr 可见持有者 PID 与等待时长、超时报错附恢复指引；多进程并发与同版本重装测试。
+- 三类安装/残留故障 runbook 入 docs（malformed canonical、Windows EBUSY、install-links 残留）+「git 安装迁移到 npm」章节。
+- 示例库扩充（可搭车或拆至 v0.7.0）：OCR 多候选确认、DOM 证据、交接包、fork/diff 协作四组端到端示例。
 
-验收包括实际浏览器截图与像素目标对应、滚动/缩放变化、固定元素、嵌套 iframe、元素缺失、多结果和过期截图。
+### v0.7.0 —— 自诊断：修订链与安装的只读诊断
 
-## 0.4.x：协作与平台完善
+- **`workdir-doctor`（大项）**：修订链只读诊断——逐环状态、首个断点定位、完好前缀与恢复建议（如「rev0–rev6 完好，可从 rev6 fork」）；不做自动修复、不重写字节、不做 merge。
+- doctor 安装诊断：bin 真实路径、安装来源启发式识别（npm/git/Plugin 缓存，未知来源兜底）、dist 完整性与 Sharp 载入检测、install-links 风险与版本陈旧提示。
+- 双来源（npm/GitHub 安装）诊断路径真实验证并记 compatibility。
 
-- 明确 working copy、fork 和 revision diff（已交付：`fork-lineage` + `diff-revisions`，见 ADR-0012）；评估分支合并。目录锁仅协调同一目录，不能当作全局版本控制。自动 merge 评估结论：推迟。
-- 建立 Windows、macOS、Linux CI，并回归 Node 20/22/24；不同平台的渲染证据分开记录。（已交付，9/9 矩阵通过）
-- 继续解决或规避 Codex 可选 Skills-only Marketplace 的 30 秒 clone 超时，保持 CLI+MCP 主路径可用。
-- 评估系统截图入口和轻量 GUI（已完成评估，结论均为推迟，见 [评估记录](research-gui-evaluation.md)），复用现有 core、Spec 和 sidecar。
+### 依赖与并行建议
 
-## 产品边界
+- 先行任务立即做（gh 认证是唯一前置）；v0.5.0 的 ADR-0004 回归结论是 v0.5.1 MCP 批量返回形态的前置；v0.5.1 的 CLI 批量与 v0.5.2 的 Edge 枚举可提前并行。
+- v0.5.2 preview-candidates 的 DOM 半边验收依赖 v0.5.0 fixture 化；OCR 半边不依赖。
+- v0.6.1 Linux 行程可与 v0.5.0 的 Linux 真机验证共用一次机器；Node 支持线决策须先于 v0.6.1 回归范围。
+- v0.7.0 workdir-doctor 无硬前置、可提前设计；doctor 安装诊断依赖 npm 双来源场景成熟。
 
-保持本地优先、无需模型 API Key、默认无遥测、不上传截图。不会把可逆批注层藏进 PNG metadata，也不发明专有压缩/解码格式。OCR、DOM、截图和 GUI 使用独立适配器。
+### 远期（不排期）
 
-录屏、视频、云同步、账号和计费尚未承诺；若未来引入，需要单独定义性能、隐私和交付验收。路线图的普通技术选择由项目自主验证，不以缩减上述目标换取发布。
+- fork 三方合并（ADR-0012 维持推迟；复核条件：至少两例真实跨会话 fork 收敛记录，经公开 issue 收集，严禁埋点遥测）。
+- 第三个 MCP 宿主真实验收（有真实第三宿主信号时复启）。
+- Firefox/WebKit 引擎适配（仅在书面评估证明可零下载复用本机浏览器时立项）。
+- DPR≠1 显式坐标支持（待真实 HiDPI 用户信号）。
+- 批量定位（先批量 OCR/DOM 再统一批注）；批注质量度量（以 v0.5.1 warning 基线为起点）。
+- npm registry 发布之外的独立可执行程序（Sharp 原生资源与签名成本高，保留观察）。
+
+### 外部阻塞
+
+- Codex Skills-only Git Marketplace 30 秒 clone 超时（不阻塞 CLI+MCP 主路径，新版 Codex 发布时重测）。
+- gh CLI 未登录：阻塞 Release 补建与 topics，须先认证或等效 token。
+- CI runner 浏览器可得性、OCR 运行时下载可达性：v0.5.0 动工时实测，不可用格子显式 skip。
+- Linux 真机/无头环境可得性（v0.6.1 回归行程资源前置）。
+
+---
+
+历史路线（0.1–0.4.x 各版细节）见 [PROGRESS](../PROGRESS.md)、[兼容性证据](compatibility.md)、[发布记录](releases/) 与 [ADR 索引](decisions.md)。产品边界不变：本地优先、无需模型 API Key、默认无遥测、不上传截图；OCR/DOM/截图/GUI 均为独立可选适配器。
