@@ -142,7 +142,7 @@
 - [x] worker DPR 防御（DOM_DPR_MISMATCH）；lineage 错误分支测试；OCR 网络隔离回归 + 专用 CI job
 - [x] Node 支持线上移 >=22（CI 22/24）；防漂移门禁 check:docs 入 verify；版本 0.5.0
 - [x] ADR-0004 回归：Codex 0.154 确认预览图进入模型上下文，图片返回形态立场维持
-- [ ] 完整 gate 收口、干净 clone、合并 main、双标签发布 v0.5.0；Claude Plugin 更新
+- [x] 完整 gate 收口（241+2）、干净 clone、合并 main、双标签发布 v0.5.0；Claude Plugin 0.4.1→0.5.0 更新并经 headless doctor 验证
 
 ## 待完成（按 [roadmap](docs/roadmap.md) 迭代计划推进）
 
