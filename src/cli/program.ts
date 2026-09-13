@@ -1,6 +1,6 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 import sharp from "sharp";
@@ -8,6 +8,7 @@ import sharp from "sharp";
 import {
   AGENT_CALLOUT_VERSION,
   AgentCalloutRevisionError,
+  annotateBatch,
   annotateImage,
   createContactSheet,
   createHandoffPackage,
@@ -56,7 +57,11 @@ interface OutputOptions extends CommonOptions {
   overwrite?: boolean;
 }
 
-interface AnnotateOptions extends SpecOptions, OutputOptions {}
+interface AnnotateOptions extends SpecOptions, OutputOptions {
+  batch?: string;
+  batchNumbering?: "continuous" | "per-image";
+  continueBatch?: boolean;
+}
 
 interface RevisionOptions extends CommonOptions {
   edits?: string;
@@ -743,10 +748,59 @@ export function createCliProgram(io: CliIo = defaultIo): Command {
 
   addSpecOptions(
     addOutputOptions(
-      program.command("annotate <input>").description("Render annotations onto an image.")
+      program
+        .command("annotate [input]")
+        .description("Render annotations onto an image (single or --batch).")
+        .option(
+          "--batch <file>",
+          "Batch manifest JSON (items[] with input/spec/specPath/output); replaces <input>"
+        )
+        .option("--batch-numbering <mode>", "continuous or per-image", (value: string) => {
+          if (value !== "continuous" && value !== "per-image") {
+            throw new InvalidArgumentError("Batch numbering must be continuous or per-image.");
+          }
+          return value;
+        })
+        .option("--continue-batch", "Keep going after a failed batch item (default fail-fast)")
     )
-  ).action(async (input: string, options: AnnotateOptions) => {
+  ).action(async (input: string | undefined, options: AnnotateOptions) => {
     const allowedRoots = resolvedRoots(options);
+    if (options.batch !== undefined) {
+      if (input !== undefined || options.spec !== undefined || options.specJson !== undefined) {
+        throw new InvalidArgumentError(
+          "--batch cannot be combined with <input>, --spec or --spec-json."
+        );
+      }
+      const manifestPath = resolve(options.batch);
+      const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
+        items?: unknown;
+        numbering?: "continuous" | "per-image";
+        continueOnError?: boolean;
+      };
+      const items = (Array.isArray(manifest) ? manifest : manifest.items) as never;
+      const numbering = options.batchNumbering ?? manifest.numbering;
+      const result = await annotateBatch({
+        items,
+        ...(numbering === undefined ? {} : { numbering }),
+        ...(options.continueBatch === undefined
+          ? manifest.continueOnError === undefined
+            ? {}
+            : { continueOnError: manifest.continueOnError }
+          : { continueOnError: options.continueBatch }),
+        manifestDirectory: dirname(manifestPath),
+        ...(allowedRoots === undefined ? {} : { allowedRoots })
+      });
+      writeResult(io, result, options, () =>
+        [
+          `Batch complete: ${result.okCount}/${result.total} annotated (${result.numbering} numbering).`,
+          ...result.failures.map((failure) => `  [item ${failure.index}] ${failure.message}`)
+        ].join("\n")
+      );
+      return;
+    }
+    if (input === undefined) {
+      throw new InvalidArgumentError("An input image is required unless --batch is used.");
+    }
     const result = await annotateImage({
       inputPath: input,
       spec: await loadSpec(options),

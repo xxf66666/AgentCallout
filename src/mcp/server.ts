@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { delimiter, join, resolve, sep } from "node:path";
+import { basename, delimiter, dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -14,6 +14,7 @@ import {
   AGENT_CALLOUT_VERSION,
   AgentCalloutHandoffError,
   AgentCalloutRevisionError,
+  annotateBatch,
   annotateImage,
   createContactSheet,
   createHandoffPackage,
@@ -270,6 +271,22 @@ const contactSheetInputSchema = z
   .strict();
 
 const doctorInputSchema = z.object({}).strict();
+
+const batchItemSchema = z
+  .object({
+    input: pathSchema,
+    spec: specSchema,
+    output: pathSchema.optional()
+  })
+  .strict();
+
+const annotateBatchInputSchema = z
+  .object({
+    items: z.array(batchItemSchema).min(1).max(32),
+    numbering: z.enum(["continuous", "per-image"]).optional(),
+    continueOnError: z.boolean().optional()
+  })
+  .strict();
 
 const forkLineageInputSchema = z
   .object({
@@ -881,6 +898,99 @@ export function createAgentCalloutMcpServer(options: AgentCalloutMcpServerOption
         return structuredToolResult(
           await diffRevisions({ sidecarPathA, sidecarPathB, allowedRoots })
         );
+      })
+  );
+
+  server.registerTool(
+    "annotate_batch",
+    {
+      title: "Batch annotate images",
+      description:
+        "Annotate 1-32 images in one call with optional continuous cross-image numbering. Sequential per-item isolation; default fail-fast, continueOnError collects failures. Returns a per-item JSON summary plus at most one aggregate contact-sheet preview.",
+      inputSchema: annotateBatchInputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false
+      }
+    },
+    async ({ items, numbering, continueOnError }) =>
+      safeToolCall(async () => {
+        const allowedRoots = await rootAuthority.roots();
+        const batch = await annotateBatch({
+          items: items.map((item) => ({
+            input: item.input,
+            spec: item.spec,
+            ...(item.output === undefined ? {} : { output: item.output })
+          })),
+          ...(numbering === undefined ? {} : { numbering }),
+          ...(continueOnError === undefined ? {} : { continueOnError }),
+          allowedRoots
+        });
+
+        const summary = {
+          operation: batch.operation,
+          numbering: batch.numbering,
+          total: batch.total,
+          okCount: batch.okCount,
+          failureCount: batch.failureCount,
+          results: batch.results.map((item) => ({
+            index: item.index,
+            outputPath: item.outputPath,
+            sidecarPath: item.sidecarPath,
+            annotationCount: item.annotationCount,
+            warnings: item.warnings
+          })),
+          failures: batch.failures
+        };
+
+        if (batch.okCount === 0) {
+          return { content: [textContent(summary)], isError: false };
+        }
+
+        const firstOutput = batch.results[0]?.outputPath;
+        if (firstOutput === undefined) {
+          return { content: [textContent(summary)], isError: false };
+        }
+        const sheetDirectory = dirname(firstOutput);
+        const sheet = await createContactSheet({
+          inputPaths: batch.results.map((item) => item.outputPath),
+          outputPath: join(sheetDirectory, `batch-contact-sheet-${batch.results.length}.png`),
+          cellWidth: 320,
+          cellHeight: 200,
+          labels: false,
+          allowedRoots
+        });
+        const preview = await createBoundedPreview(sheet, allowedRoots, options.beforePreviewRead);
+        return {
+          content: [
+            textContent({
+              ...summary,
+              preview: {
+                available: true,
+                mode: "compact-overview",
+                width: preview.width,
+                height: preview.height,
+                sizeBytes: preview.sizeBytes,
+                coveredOutputs: batch.results.map((item) => basename(item.outputPath))
+              }
+            }),
+            {
+              type: "image",
+              data: preview.data,
+              mimeType: "image/png",
+              _meta: {
+                "codex/imageDetail": PREVIEW_DETAIL,
+                "agent-callout/previewMode": "compact-overview",
+                "agent-callout/previewWidth": preview.width,
+                "agent-callout/previewHeight": preview.height,
+                "agent-callout/previewBytes": preview.sizeBytes
+              }
+            }
+          ],
+          isError: false
+        };
       })
   );
 

@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-- 阶段：0.1.3、0.2.0、0.2.1、0.3.0（OCR）、0.3.1（交接包）、0.4.0（DOM 定位）、0.4.1（fork/diff）已发布；下一阶段为 v0.5.0（测试债清偿与宿主回归），规划见 [roadmap](docs/roadmap.md)
+- 阶段：0.1.3–0.5.1 已发布；进行中 v0.6.0（批量批注）。规划见 [roadmap](docs/roadmap.md)
 - GitHub：`https://github.com/xxf66666/AgentCallout`（公开仓库，`main` 已推送）
 - 当前发布门槛：0.4.1 完整 gate、干净安装与跨 AI fork/diff 闭环已通过，见 [发布记录](docs/releases/0.4.1.md)
 - CI：三平台（ubuntu/macos/windows）× Node 20/22/24 矩阵 9/9，见 `.github/workflows/ci.yml`
@@ -143,6 +143,13 @@
 - [x] Node 支持线上移 >=22（CI 22/24）；防漂移门禁 check:docs 入 verify；版本 0.5.0
 - [x] ADR-0004 回归：Codex 0.154 确认预览图进入模型上下文，图片返回形态立场维持
 - [x] 完整 gate 收口（241+2）、干净 clone、合并 main、双标签发布 v0.5.0；Claude Plugin 0.4.1→0.5.0 更新并经 headless doctor 验证
+
+## v0.6.0 进行中（2026-09-14）
+
+- 分支 `codex/batch-annotate`：批量批注（roadmap 批量项，版本号因 0.5.1 补丁顺延为 0.6.0）。
+- [x] `annotateBatch` core + CLI `annotate --batch`（manifest/数组、specPath、continuous/per-image 编号、fail-fast/continue）+ MCP `annotate_batch`（15 工具，聚合 contact-sheet 预览）
+- [x] 测试 6 项（限额、连续编号、fail-fast/continue、specPath、CLI manifest、MCP 双图+编号断言）通过；全套 247+2 通过
+- [ ] 文档、干净 clone、真实双客户端批量验收；发布 v0.6.0
 
 ## 待完成（按 [roadmap](docs/roadmap.md) 迭代计划推进）
 

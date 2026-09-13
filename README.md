@@ -110,6 +110,14 @@ agent-callout locate-dom "https://example.test/form" --text "保存" --screensho
 
 按 CSS selector、文字或可访问性名称返回候选框，坐标绑定全页截图 SHA-256 与页面状态；页面变化后旧坐标失效，批注使用当次截图。完整参数与证据语义见[网页元素定位文档](docs/dom.md)。
 
+## 一次标完整套截图
+
+```powershell
+agent-callout annotate --batch .\batch.json --json
+```
+
+批量清单是普通 JSON：`items[]`（每项 = 图片路径 + 完整 spec 或 specPath 引用），`numbering: "continuous"` 让所有编号批注跨图连续 1..N（默认 per-image）。逐图顺序执行、单图失败隔离，默认 fail-fast，`--continue-batch` 跳过失败图继续。MCP 等价工具 `annotate_batch` 返回逐图汇总与一张聚合总览预览。
+
 ## 把结果交给另一个 AI
 
 推荐用一条命令生成完整交接包：

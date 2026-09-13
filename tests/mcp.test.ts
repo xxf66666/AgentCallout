@@ -109,10 +109,11 @@ describe("AgentCallout MCP server", () => {
     expect(injected.isError).toBe(true);
   });
 
-  test("initializes with workflow instructions and exactly fourteen strict tools", async () => {
+  test("initializes with workflow instructions and exactly fifteen strict tools", async () => {
     expect(client.getInstructions()).toContain("Inspect the screenshot before annotating");
     const listed = await client.listTools();
     expect(listed.tools.map((tool) => tool.name).sort()).toEqual([
+      "annotate_batch",
       "annotate_image",
       "create_contact_sheet",
       "create_handoff",
@@ -134,9 +135,13 @@ describe("AgentCallout MCP server", () => {
       expect(tool.inputSchema.properties).not.toHaveProperty("allowedRoots");
       expect(tool.inputSchema.properties).not.toHaveProperty("runtimeDirectory");
       if (
-        ["annotate_image", "create_contact_sheet", "crop_image", "revise_annotation"].includes(
-          tool.name
-        )
+        [
+          "annotate_batch",
+          "annotate_image",
+          "create_contact_sheet",
+          "crop_image",
+          "revise_annotation"
+        ].includes(tool.name)
       ) {
         expect(tool.inputSchema.properties).not.toHaveProperty("overwrite");
         expect(tool.inputSchema.properties).not.toHaveProperty("revisionNumber");
@@ -234,7 +239,7 @@ describe("AgentCallout MCP server", () => {
 
     const doctor = (await client.callTool({ name: "doctor", arguments: {} })) as CallToolResult;
     expect(doctor.structuredContent).toMatchObject({
-      product: { name: "agent-callout", version: "0.5.1" },
+      product: { name: "agent-callout", version: "0.6.0" },
       ok: true,
       limits: { maxPixels: 40_000_000, maxAnnotations: 200 },
       mcp: { maxPreviewBytes: 64 * 1024, maxPreviewDimension: 512, previewDetail: "auto" }
@@ -1086,5 +1091,85 @@ describe("AgentCallout MCP server", () => {
     expect(payload?.error?.code).toBe("DOM_RUNTIME_NOT_READY");
     expect(payload?.error?.message).toContain("browser install");
     expect(result.content.some((item) => item.type === "image")).toBe(false);
+  });
+
+  test("annotate_batch annotates multiple images with one aggregate preview", async () => {
+    for (const name of ["批量A.png", "批量B.png"]) {
+      await sharp({
+        create: {
+          width: 160,
+          height: 110,
+          channels: 4,
+          background: { r: 40, g: 90, b: 160, alpha: 1 }
+        }
+      })
+        .png()
+        .toFile(join(directory, name));
+    }
+    const result = (await client.callTool({
+      name: "annotate_batch",
+      arguments: {
+        numbering: "continuous",
+        items: [
+          {
+            input: join(directory, "批量A.png"),
+            spec: {
+              version: "1.1",
+              annotations: [
+                {
+                  id: "b1",
+                  type: "numbered-callout",
+                  target: { x: 30, y: 25, width: 60, height: 30 },
+                  text: "问题一",
+                  number: 1
+                }
+              ]
+            }
+          },
+          {
+            input: join(directory, "批量B.png"),
+            spec: {
+              version: "1.1",
+              annotations: [
+                {
+                  id: "b2",
+                  type: "numbered-callout",
+                  target: { x: 30, y: 25, width: 60, height: 30 },
+                  text: "问题二",
+                  number: 1
+                }
+              ]
+            }
+          }
+        ]
+      }
+    })) as CallToolResult;
+    expect(result.isError).not.toBe(true);
+    const images = result.content.filter((item) => item.type === "image");
+    expect(images).toHaveLength(1);
+    const text = result.content.find((item) => item.type === "text");
+    const payload = (text?.type === "text" ? JSON.parse(text.text) : undefined) as
+      | {
+          okCount?: number;
+          failureCount?: number;
+          results?: { annotationCount: number; sidecarPath: string }[];
+        }
+      | undefined;
+    expect(payload?.okCount).toBe(2);
+    expect(payload?.failureCount).toBe(0);
+    expect(payload?.results).toHaveLength(2);
+    // Continuous numbering: first image number 1, second image number 2.
+    const sidecarA = JSON.parse(
+      await readFile(payload?.results?.[0]?.sidecarPath ?? "", "utf8")
+    ) as {
+      resolvedAnnotations: { id: string; number?: number }[];
+    };
+    const sidecarB = JSON.parse(
+      await readFile(payload?.results?.[1]?.sidecarPath ?? "", "utf8")
+    ) as {
+      resolvedAnnotations: { id: string; number?: number }[];
+    };
+    expect(sidecarA.resolvedAnnotations.find((a) => a.id === "b1")?.number).toBe(1);
+    expect(sidecarB.resolvedAnnotations.find((a) => a.id === "b2")?.number).toBe(2);
   });
 });
