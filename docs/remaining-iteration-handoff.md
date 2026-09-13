@@ -1,48 +1,27 @@
 # AgentCallout 剩余迭代接力清单
 
-更新日期：2026-09-13
+更新日期：2026-09-13（第二轮接力完成后）
 
 ## 当前状态
 
-- 已发布：`v0.2.1`，远端 `main` 为 `a311066`。
-- 开发中：`v0.3.0` OCR，当前分支 `codex/ocr-locator`，本地 HEAD `550e2e9`。
-- OCR 工作树还有未提交改动，不能重置、覆盖或从 `main` 重新开发。
+- 已发布：`v0.2.1` → `v0.3.0`（OCR）→ `v0.3.1`（交接包）→ `v0.4.0`（DOM 定位）；远端 `main` 为 `8c65654`。
+- CI：GitHub Actions 三平台 × Node 20/22/24 矩阵已交付且 9/9 通过（`1beb408`）；失败日志自动推送 `ci-logs-<os>-<node>` 分支（匿名可读）。
+- 本轮由单一 Agent 顺序完成 v0.3.0 收口、v0.3.1、v0.4.0 与 CI 矩阵；每个版本均经完整 gate、干净 clone/安装、真实双客户端验收并打双标签（`vX.Y.Z` + `agent-callout--vX.Y.Z`）。
 - 后续不使用 BMAD。
 
-## 1. v0.3.0：完成 OCR 并发布
+## 证据与文档入口
 
-- 收口现有中英文 OCR、精确/包含匹配、多候选、置信度、ROI 和离线运行时。
-- 多候选或低置信度必须让 AI 确认，不能自动猜坐标。
-- 精简 README，补齐 OCR、兼容性、安全和发布文档。
-- 重跑完整测试、构建、打包、干净安装。
-- Claude Code 和 Codex 都完成真实的“识别文字 → 批注 → 查看结果”。
-- 提交并推送分支，合并 `main`，发布 `v0.3.0`。
+- 发布记录：`docs/releases/0.3.0.md`、`0.3.1.md`、`0.4.0.md`；兼容性证据：`docs/compatibility.md`（各版 VERIFIED/NOT VERIFIED 分列）。
+- ADR-0009（OCR）、ADR-0010（交接包）、ADR-0011（DOM 定位）；进度：`PROGRESS.md`。
+- 本机注意：远端用 SSH 推送（HTTPS 无凭据）；`gh` CLI 未登录，CI 结果经匿名 GitHub API（`/actions/runs`）验证。
 
-## 2. v0.3.1：跨 AI 一键交接包
+## 待完成（从固定 commit `8c65654` 建独立 `codex/` 分支并行认领）
 
-- 增加 `create-handoff`。
-- 输出批注 PNG、完整 JSON、manifest、安全摘要和 Markdown 入口。
-- 接收方不安装 AgentCallout 也能读取；安装后可以验证、重渲染和修订。
-- 使用普通目录和 JSON，不发明专有压缩或解码格式。
-- 测试篡改、缺文件、重名、中文路径、并发和失败恢复。
+1. **working copy / fork / revision diff**：目录副本 fork 的显式记录与两个 revN 之间的差异对比（ADR-0006 已立场：只记录不自动合并）；自动 merge 先评估再决定。
+2. **Codex Skills-only Marketplace 30 秒 clone 超时**：外部客户端阻塞，历史记录明确不阻塞 CLI+MCP 主路径；仅在有新线索时处理。
+3. **系统截图入口与轻量 GUI 评估**：评估性任务，复用现有 core/Spec/sidecar，最后进行。
+4. **DOM 深化（可选）**：Firefox/WebKit 引擎、公网深度场景、DPR≠1 的显式用例（当前固定 DPR=1 规避）。
 
-## 3. v0.4.0：浏览器 DOM 定位
+## 纪律（沿用）
 
-- 根据 selector、文本或可访问性名称定位网页元素。
-- 正确处理 DPR、缩放、滚动、固定元素和 iframe。
-- 定位结果必须绑定截图 hash 和页面状态，页面变化后旧坐标失效。
-- DOM 只负责输出 bbox，继续复用现有批注渲染器。
-- Claude Code 和 Codex 各完成一次真实网页定位批注。
-
-## 4. v0.4.x：协作与平台完善
-
-- 增加 working copy、fork 和 revision diff；自动 merge 先评估再决定。
-- CI 覆盖 Windows、macOS、Linux 和 Node 20/22/24。
-- 继续处理 Codex Marketplace 30 秒 clone 超时。
-- 最后评估系统截图入口和轻量 GUI。
-
-## 执行顺序
-
-先由一个 Agent 独占当前工作树完成并推送 `v0.3.0`。之后其他 Agent 从固定 commit 建独立 `codex/` 分支，再并行处理 `v0.3.1`、`v0.4.0` 和 `v0.4.x`。
-
-每个版本只有在完整测试、干净安装、真实客户端验收、正常提交和推送后，才能标记完成。禁止 force push、覆盖现有改动或把工具可见当成端到端通过。
+每个版本只有在完整测试、干净安装、真实客户端验收、正常提交和推送后，才能标记完成。禁止 force push、覆盖现有改动或把工具可见当成端到端通过。测试夹具须隔离环境状态（勿依赖用户级缓存，参见 MCP DOM 夹具的教训）。
