@@ -4,7 +4,7 @@ description: Annotate existing PNG, JPEG, or WebP screenshots with callouts, arr
 license: MIT
 metadata:
   author: AgentCallout contributors
-  version: "0.3.0"
+  version: "0.3.1"
 ---
 
 # AgentCallout
@@ -21,7 +21,7 @@ Turn an existing screenshot into a reproducible annotated PNG and JSON sidecar. 
 6. Inspect the returned compact overview. It is limited to 512px/64 KiB and uses the host-compatible `auto` display hint. If small text or exact placement is unclear, use `crop_image` on the saved output instead of repeatedly requesting a full-size preview. If the host does not expose image content, open the absolute output path. Check arrow targets, text wrapping, target occlusion, and callout overlap, including nearby source text outside the target rectangle.
 7. When a committed annotate sidecar needs adjustment, call `revise_annotation` with ordered stable-ID `add`, `set`, or `remove` edits. A full same-ID replacement is `{"op":"set","id":"...","annotation":{...}}`; never invent `op:"replace"`. Do not delete prior PNG/JSON files, rewrite the full root spec, or guess a revision number. Supply `inputPath` when the original moved or when the parent uses basename-only input semantics; the bytes must match the parent hash.
 8. Inspect every returned revision preview. `changed-region` contains touched annotations plus any collateral auto-layout movement and carries an original-canvas `sourceRect`; use it for local QA without another crop, but do not claim it proves global layout. `compact-overview` means focus was dispersed, too large, global, unavailable, or intentionally kept low-detail around blur/redact. `none` means sensitive coverage changed: no image was sent, so review the saved output only under the applicable privacy policy. If the host omits ImageContent unexpectedly, say visual verification remains incomplete.
-9. When handing an existing sidecar to another AI, call `inspect_annotation_sidecar` for a small integrity/inventory summary. It deliberately omits paths, hashes, IDs, annotation text, style, and raw geometry. The ordinary JSON sidecar remains directly readable without installing AgentCallout.
+9. When handing an existing sidecar to another AI, prefer `create_handoff`: it packages the annotated PNG, the full JSON sidecar, a SHA-256 manifest, a safety summary, and a HANDOFF.md entry into one plain directory, keeping original file names so the receiver can continue revisions. Verify with `verify_handoff` or `agent-callout verify-handoff`. The package omits the original only when explicitly requested (`includeOriginal: false` / `--no-original`); say re-render and revise are unavailable in that case. For a lightweight integrity/inventory summary without packaging, call `inspect_annotation_sidecar`; it deliberately omits paths, hashes, IDs, annotation text, style, and raw geometry. The ordinary JSON sidecar remains directly readable without installing AgentCallout.
 10. Return the final absolute path and the tool-provided Markdown image reference.
 
 ## Annotation choices
@@ -62,6 +62,6 @@ Turn an existing screenshot into a reproducible annotated PNG and JSON sidecar. 
 - Treat only an existing, fully validated revision sidecar as the commit marker. A PNG without its sidecar is an orphan, not a successful revision; do not describe the two-file publish as power-loss atomic or cryptographically signed.
 - For revisions, `set` is a full same-ID replacement that preserves order. `add` needs a new explicit ID and may use `afterId`; never touch the same ID twice in one edit batch.
 - Revision locks coordinate one sidecar directory. A complete lineage copied elsewhere is an independent working copy that can fork; never describe it as a global cross-directory head.
-- When another AI will consume the deliverable, include both the flattened PNG and the versioned JSON sidecar. The JSON is directly readable without AgentCallout and identifies annotation IDs, geometry, warnings, hashes, and lineage; the PNG alone cannot reliably separate original pixels from overlays.
+- When another AI will consume the deliverable, prefer a `create_handoff` package over loose files: it bundles the flattened PNG and the versioned JSON sidecar with a hash manifest and a Markdown entry. The JSON is directly readable without AgentCallout and identifies annotation IDs, geometry, warnings, hashes, and lineage; the PNG alone cannot reliably separate original pixels from overlays. A tampered or missing package file is reported by `verify_handoff` as `HANDOFF_HASH_MISMATCH` or `HANDOFF_FILE_MISSING`; report it instead of re-packaging silently.
 
 Read [AnnotationSpec reference](references/annotation-spec.md) when constructing or modifying a spec beyond a simple single annotation.

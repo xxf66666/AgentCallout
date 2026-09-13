@@ -98,9 +98,16 @@
 - [x] 合并 main（`a311066..b9eec5e`）并推送；Claude Code 2.1.270 marketplace 新装 Plugin 0.3.0，headless 会话经 Plugin MCP 通过 doctor/定位/确认/批注/查看闭环
 - [x] 发布标签 `v0.3.0` 与 `agent-callout--v0.3.0`（指向最终发布提交）
 
+## 0.3.1 进行中（2026-09-13）
+
+- 分支 `codex/handoff-package`（自 `7d1a9e3` / v0.3.0）：跨 AI 一键交接包，设计见 [ADR-0010](docs/adr/0010-cross-ai-handoff-package.md)。
+- [x] `createHandoffPackage` / `verifyHandoffPackage` core + CLI `create-handoff`/`verify-handoff` + MCP `create_handoff`/`verify_handoff`（11 工具）
+- [x] 普通目录 + 普通 JSON：保留原名 sidecar/PNG（修订链兼容）、`manifest.json`（角色+SHA-256+字节）、`summary.json` 安全摘要、`HANDOFF.md` 入口、默认附原图（`--no-original` 显式声明不可修订）
+- [x] 测试 8 项：布局/字节一致、--no-original、保留名冲突、目标存在与 overwrite、缺原图失败无半成品、篡改/缺文件/坏 manifest、包内 revise 后 verify 仍过、并发仅一方成功、中文路径、CLI 双命令；全套 228+2 通过
+- [ ] 完整 gate、打包、干净安装；真实客户端交接验收（一方创建、另一方校验并修订）；发布 v0.3.1
+
 ## 待完成
 
-- [ ] 0.3.1：`create-handoff` 一键 PNG/sidecar/安全摘要/Markdown 交接包
 - [ ] 0.4.0：DOM selector/文本/可访问性名称定位，处理 DPR/缩放/滚动/iframe 与截图关联证据
 - [ ] 0.4.x：显式 working copy/fork/revision diff、分支合并评估及系统截图/轻量 GUI 评估
 - [ ] 非 Windows 平台回归（不阻塞 Windows-first MVP）

@@ -12,9 +12,11 @@ import { z } from "zod";
 
 import {
   AGENT_CALLOUT_VERSION,
+  AgentCalloutHandoffError,
   AgentCalloutRevisionError,
   annotateImage,
   createContactSheet,
+  createHandoffPackage,
   createImagePreview,
   cropImage,
   getCoreDoctorReport,
@@ -24,6 +26,7 @@ import {
   OcrImageError,
   OcrRuntimeError,
   reviseAnnotation,
+  verifyHandoffPackage,
   validateSpecForImage
 } from "../index.js";
 import type { PreviewPixelMetrics } from "../index.js";
@@ -158,6 +161,29 @@ const locateTextInputSchema = z
 const inspectSidecarInputSchema = z
   .object({
     sidecarPath: pathSchema.describe("AgentCallout annotate sidecar to validate.")
+  })
+  .strict();
+
+const createHandoffInputSchema = z
+  .object({
+    sidecarPath: pathSchema.describe("Validated AgentCallout annotate sidecar to package."),
+    outputDirectory: pathSchema
+      .describe("Target handoff directory; defaults to a sibling <sidecar-stem>.handoff directory.")
+      .optional(),
+    includeOriginal: z
+      .boolean()
+      .describe("Copy the original image for re-rendering and revision. Default true.")
+      .optional(),
+    overwrite: z
+      .boolean()
+      .describe("Replace an existing handoff directory. Default false.")
+      .optional()
+  })
+  .strict();
+
+const verifyHandoffInputSchema = z
+  .object({
+    handoffDirectory: pathSchema.describe("Handoff package directory created by create_handoff.")
   })
   .strict();
 
@@ -296,6 +322,7 @@ function toolError(error: unknown): CallToolResult {
     error: {
       code:
         error instanceof AgentCalloutRevisionError ||
+        error instanceof AgentCalloutHandoffError ||
         error instanceof OcrImageError ||
         error instanceof OcrRuntimeError
           ? error.code
@@ -628,6 +655,58 @@ export function createAgentCalloutMcpServer(options: AgentCalloutMcpServerOption
       safeToolCall(async () => {
         const allowedRoots = await rootAuthority.roots();
         return structuredToolResult(await inspectAnnotationSidecar({ sidecarPath, allowedRoots }));
+      })
+  );
+
+  server.registerTool(
+    "create_handoff",
+    {
+      title: "Create handoff package",
+      description:
+        "Package a validated annotate sidecar into a plain directory: annotated PNG, full JSON, manifest with SHA-256, safety summary and a Markdown entry. Receivers can read it without AgentCallout; with AgentCallout they can verify, re-render and revise.",
+      inputSchema: createHandoffInputSchema,
+      outputSchema: structuredOutputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false
+      }
+    },
+    async ({ sidecarPath, outputDirectory, includeOriginal, overwrite }) =>
+      safeToolCall(async () => {
+        const allowedRoots = await rootAuthority.roots();
+        return structuredToolResult(
+          await createHandoffPackage({
+            sidecarPath,
+            ...(outputDirectory === undefined ? {} : { outputDirectory }),
+            ...(includeOriginal === undefined ? {} : { includeOriginal }),
+            ...(overwrite === undefined ? {} : { overwrite }),
+            allowedRoots
+          })
+        );
+      })
+  );
+
+  server.registerTool(
+    "verify_handoff",
+    {
+      title: "Verify handoff package",
+      description:
+        "Verify a handoff package: manifest shape, per-file SHA-256 hashes, and the packaged annotation sidecar against its output.",
+      inputSchema: verifyHandoffInputSchema,
+      outputSchema: structuredOutputSchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ handoffDirectory }) =>
+      safeToolCall(async () => {
+        const allowedRoots = await rootAuthority.roots();
+        return structuredToolResult(await verifyHandoffPackage({ handoffDirectory, allowedRoots }));
       })
   );
 

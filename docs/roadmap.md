@@ -43,7 +43,7 @@
 
 ## 0.3.1：跨 AI 一键交接包
 
-- 增加 `create-handoff` 命令，自动生成批注 PNG、JSON sidecar、安全摘要和 Markdown 入口。
+- 增加 `create-handoff` 命令，自动生成批注 PNG、JSON sidecar、manifest（文件 SHA-256）、安全摘要和 Markdown 入口；`verify-handoff` 与 MCP `create_handoff`/`verify_handoff` 同步提供。
 - 清楚说明 PNG 已压平，JSON 保存机器可读批注语义。
 - 安全摘要默认不公开路径、hash、ID、文字和精确几何；完整 sidecar 仍按敏感文档处理。
 - 接收方无需安装 AgentCallout 即可读普通 JSON；安装后可校验、重渲染和继续修订。

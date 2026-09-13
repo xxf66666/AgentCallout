@@ -1,10 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
+  copyFile,
   link,
   lstat,
+  mkdir,
   open,
   readFile,
   realpath,
+  rename,
   rm,
   stat,
   writeFile,
@@ -36,6 +39,8 @@ import {
   resolveBundledFontPath,
   type RendererVersions
 } from "../renderer/index.js";
+
+export const AGENT_CALLOUT_VERSION = "0.3.1";
 
 export const DEFAULT_IMAGE_LIMITS = Object.freeze({
   maxFileBytes: 50 * 1024 * 1024,
@@ -3937,5 +3942,564 @@ export async function getCoreDoctorReport(): Promise<CoreDoctorReport> {
     expectedFontSha256: BUNDLED_FONT_SHA256,
     checks,
     warnings
+  };
+}
+
+// ---------- Cross-AI handoff packages (ADR-0010) ----------
+
+export const HANDOFF_PACKAGE_VERSION = "1.0";
+
+/** File names reserved for the handoff package itself (case-insensitive). */
+const HANDOFF_RESERVED_NAMES = new Set(["manifest.json", "summary.json", "handoff.md"]);
+const HANDOFF_TEMP_PREFIX = ".tmp-handoff-";
+
+export type HandoffErrorCode =
+  | "HANDOFF_SIDECAR_INVALID"
+  | "HANDOFF_NAME_CONFLICT"
+  | "HANDOFF_TARGET_EXISTS"
+  | "HANDOFF_ORIGINAL_MISSING"
+  | "HANDOFF_TARGET_INVALID";
+
+export class AgentCalloutHandoffError extends Error {
+  readonly code: HandoffErrorCode;
+
+  constructor(code: HandoffErrorCode, message: string) {
+    super(message);
+    this.name = "AgentCalloutHandoffError";
+    this.code = code;
+  }
+}
+
+export type HandoffFileRole =
+  "annotated-output" | "annotation-sidecar" | "original-input" | "safety-summary" | "entry";
+
+export interface CreateHandoffArguments extends ImageSafetyOptions {
+  /** An annotate sidecar (base or any `.revN`) that validated successfully. */
+  sidecarPath: string;
+  /** Target directory; defaults to `<sidecar-stem>.handoff` beside the sidecar. */
+  outputDirectory?: string | undefined;
+  /** Copy the original input image so the receiver can re-render and revise. Default true. */
+  includeOriginal?: boolean | undefined;
+  /** Replace an existing handoff directory at the target path. Default false. */
+  overwrite?: boolean | undefined;
+  /** Optional lower cumulative lineage byte budget for embedded/core callers. */
+  maxRevisionChainBytes?: number | undefined;
+}
+
+export interface HandoffCreationResult {
+  handoffDirectory: string;
+  manifestPath: string;
+  entryPath: string;
+  summaryPath: string;
+  sidecarPath: string;
+  outputPath: string;
+  originalPath: string | undefined;
+  annotationCount: number;
+  revisionNumber: number | undefined;
+}
+
+export interface VerifyHandoffArguments extends ImageSafetyOptions {
+  handoffDirectory: string;
+  /** Optional lower cumulative lineage byte budget for embedded/core callers. */
+  maxRevisionChainBytes?: number | undefined;
+}
+
+export interface HandoffVerificationIssue {
+  code:
+    | "HANDOFF_MANIFEST_INVALID"
+    | "HANDOFF_FILE_MISSING"
+    | "HANDOFF_HASH_MISMATCH"
+    | "HANDOFF_SIDECAR_INVALID";
+  path: string | undefined;
+  detail: string;
+}
+
+export interface HandoffVerificationResult {
+  valid: boolean;
+  handoffDirectory: string;
+  filesChecked: number;
+  sidecarValid: boolean;
+  annotationCount: number | undefined;
+  issues: HandoffVerificationIssue[];
+}
+
+interface HandoffManifestFile {
+  path: string;
+  role: HandoffFileRole;
+  sha256: string;
+  sizeBytes: number;
+}
+
+interface HandoffManifest {
+  handoffVersion: string;
+  generator: { name: string; version: string };
+  createdAt: string;
+  originalIncluded: boolean;
+  annotation: {
+    manifestVersion: string;
+    annotationSpecVersion: string;
+    annotationCount: number;
+    outputDimensions: Dimensions;
+  };
+  files: HandoffManifestFile[];
+}
+
+function handoffNameConflict(basename: string): AgentCalloutHandoffError {
+  return new AgentCalloutHandoffError(
+    "HANDOFF_NAME_CONFLICT",
+    `HANDOFF_NAME_CONFLICT: the file name "${basename}" is reserved for the handoff package itself; rename the annotated output and retry.`
+  );
+}
+
+function isReservedHandoffName(basename: string): boolean {
+  return HANDOFF_RESERVED_NAMES.has(basename.toLowerCase());
+}
+
+async function handoffFileRecord(
+  directory: string,
+  basename: string,
+  role: HandoffFileRole
+): Promise<HandoffManifestFile> {
+  const bytes = await readFile(path.join(directory, basename));
+  return { path: basename, role, sha256: sha256(bytes), sizeBytes: bytes.byteLength };
+}
+
+function buildHandoffMarkdown(names: {
+  sidecarName: string;
+  outputName: string;
+  originalName: string | undefined;
+  summaryName: string;
+  annotationCount: number;
+}): string {
+  const { sidecarName, outputName, originalName, summaryName, annotationCount } = names;
+  const originalSection = originalName
+    ? `- \`${originalName}\`：原图拷贝，可用于重新渲染与继续修订。
+`
+    : "";
+  const withoutOriginal = originalName
+    ? ""
+    : `- 本包**未包含原图**：接收方不可重渲染或修订；如需要，请向发送方索取原图。
+`;
+  const revisitSection = originalName
+    ? `\`\`\`bash
+agent-callout verify-handoff <本目录> --json
+agent-callout revise ${sidecarName} --edits edits.json
+agent-callout annotate ${originalName} --spec spec.json --output 新输出.png
+\`\`\`
+
+修订编辑使用 \`add\` / \`set\` / \`remove\` 操作，写入新的 \`.revN\` 文件，不覆盖历史。重新渲染可从 \`${sidecarName}\` 的 \`annotationSpec\` 字段取得完整批注参数。
+`
+    : `\`\`\`bash
+agent-callout verify-handoff <本目录> --json
+\`\`\`
+`;
+  return `# AgentCallout 截图批注交接包
+
+本目录由 AgentCallout 的 \`create-handoff\` 命令生成，全部是普通目录与 JSON 文件；不安装 AgentCallout 也能阅读。包内共 ${annotationCount} 条批注。
+
+## 文件清单
+
+- \`HANDOFF.md\`：本说明文件。
+- \`manifest.json\`：创建时快照的文件清单（角色、SHA-256、字节数），用于发现损坏或篡改。
+- \`${summaryName}\`：安全摘要（不含路径、hash、批注 ID 与批注文字）。
+- \`${outputName}\`：批注结果 PNG。图片已压平，仅凭 PNG 无法区分原图内容与后加批注。
+- \`${sidecarName}\`：完整机器可读批注记录（普通 JSON），是批注语义的事实来源。
+${originalSection}
+## 不安装 AgentCallout 如何阅读
+
+1. 先查看 \`${outputName}\`。
+2. 每条批注的文字、类型与几何见 \`${sidecarName}\` 的 \`resolvedAnnotations\` 数组；\`revision\` 字段描述修订历史。
+3. \`${summaryName}\` 提供快速安全概览（是否使用 blur/redact、批注数量等）。
+
+## 安装 AgentCallout 后
+
+${revisitSection}
+## 隐私提示
+
+- \`blur\` 只是视觉弱化，不是不可恢复；敏感内容应使用 \`redact\`。
+- 原图与批注 JSON 可能包含截图中的敏感文字，对外传播前请自行检查。
+${withoutOriginal}
+`;
+}
+
+export async function createHandoffPackage(
+  arguments_: CreateHandoffArguments
+): Promise<HandoffCreationResult> {
+  const sidecarPath = await canonicalInputPath(arguments_.sidecarPath, arguments_.allowedRoots);
+  let summary: AnnotationSidecarSummary;
+  try {
+    summary = await inspectAnnotationSidecar({
+      sidecarPath,
+      allowedRoots: arguments_.allowedRoots,
+      maxRevisionChainBytes: arguments_.maxRevisionChainBytes
+    });
+  } catch {
+    throw new AgentCalloutHandoffError(
+      "HANDOFF_SIDECAR_INVALID",
+      "HANDOFF_SIDECAR_INVALID: the annotate sidecar did not validate; run inspect-sidecar for details."
+    );
+  }
+
+  const sidecarDirectory = path.dirname(sidecarPath);
+  const rawManifest = JSON.parse(await readFile(sidecarPath, "utf8")) as {
+    paths: { inputs: string[]; output: string };
+  };
+  const inputReference = rawManifest.paths.inputs[0];
+  if (inputReference === undefined) {
+    throw new AgentCalloutHandoffError(
+      "HANDOFF_SIDECAR_INVALID",
+      "HANDOFF_SIDECAR_INVALID: the annotate sidecar lists no input image."
+    );
+  }
+  const outputName = path.basename(path.resolve(sidecarDirectory, rawManifest.paths.output));
+  const originalName = path.basename(path.resolve(sidecarDirectory, inputReference));
+  const sidecarName = path.basename(sidecarPath);
+  const stem = sidecarName.replace(/\.json$/u, "").replace(/\.rev\d+$/u, "");
+
+  if (isReservedHandoffName(sidecarName)) throw handoffNameConflict(sidecarName);
+  if (isReservedHandoffName(outputName)) throw handoffNameConflict(outputName);
+  if (isReservedHandoffName(originalName)) throw handoffNameConflict(originalName);
+
+  const includeOriginal = arguments_.includeOriginal ?? true;
+  const inputPath = path.resolve(sidecarDirectory, inputReference);
+  if (includeOriginal && !(await pathExists(inputPath))) {
+    throw new AgentCalloutHandoffError(
+      "HANDOFF_ORIGINAL_MISSING",
+      `HANDOFF_ORIGINAL_MISSING: the original input image "${originalName}" is required to include it in the handoff package.`
+    );
+  }
+
+  const target =
+    arguments_.outputDirectory === undefined
+      ? path.join(sidecarDirectory, `${stem}.handoff`)
+      : await canonicalWritablePath(
+          path.resolve(arguments_.outputDirectory),
+          arguments_.allowedRoots,
+          "Handoff target"
+        );
+  if (path.resolve(target) === path.resolve(sidecarDirectory)) {
+    throw new AgentCalloutHandoffError(
+      "HANDOFF_TARGET_INVALID",
+      "HANDOFF_TARGET_INVALID: the handoff target must not be the sidecar's own directory."
+    );
+  }
+  if (await pathExists(target)) {
+    if (!(arguments_.overwrite ?? false)) {
+      throw new AgentCalloutHandoffError(
+        "HANDOFF_TARGET_EXISTS",
+        `HANDOFF_TARGET_EXISTS: ${target} already exists; pass overwrite to replace it.`
+      );
+    }
+  }
+
+  const temporaryDirectory = path.join(
+    path.dirname(target),
+    `${HANDOFF_TEMP_PREFIX}${randomUUID()}`
+  );
+  await mkdir(temporaryDirectory);
+  try {
+    await copyFile(sidecarPath, path.join(temporaryDirectory, sidecarName));
+    await copyFile(
+      path.resolve(sidecarDirectory, rawManifest.paths.output),
+      path.join(temporaryDirectory, outputName)
+    );
+    if (includeOriginal) {
+      await copyFile(inputPath, path.join(temporaryDirectory, originalName));
+    }
+    await writeFile(
+      path.join(temporaryDirectory, "summary.json"),
+      JSON.stringify(summary, null, 2),
+      "utf8"
+    );
+    await writeFile(
+      path.join(temporaryDirectory, "HANDOFF.md"),
+      buildHandoffMarkdown({
+        sidecarName,
+        outputName,
+        originalName: includeOriginal ? originalName : undefined,
+        summaryName: "summary.json",
+        annotationCount: summary.annotations.total
+      }),
+      "utf8"
+    );
+
+    const files: HandoffManifestFile[] = [];
+    files.push(await handoffFileRecord(temporaryDirectory, outputName, "annotated-output"));
+    files.push(await handoffFileRecord(temporaryDirectory, sidecarName, "annotation-sidecar"));
+    if (includeOriginal) {
+      files.push(await handoffFileRecord(temporaryDirectory, originalName, "original-input"));
+    }
+    files.push(await handoffFileRecord(temporaryDirectory, "summary.json", "safety-summary"));
+    files.push(await handoffFileRecord(temporaryDirectory, "HANDOFF.md", "entry"));
+    const manifest: HandoffManifest = {
+      handoffVersion: HANDOFF_PACKAGE_VERSION,
+      generator: { name: "agent-callout", version: AGENT_CALLOUT_VERSION },
+      createdAt: new Date().toISOString(),
+      originalIncluded: includeOriginal,
+      annotation: {
+        manifestVersion: summary.manifestVersion,
+        annotationSpecVersion: summary.annotationSpecVersion,
+        annotationCount: summary.annotations.total,
+        outputDimensions: summary.outputDimensions
+      },
+      files
+    };
+    await writeFile(
+      path.join(temporaryDirectory, "manifest.json"),
+      JSON.stringify(manifest, null, 2),
+      "utf8"
+    );
+
+    const trashDirectory = path.join(
+      path.dirname(target),
+      `${HANDOFF_TEMP_PREFIX}old-${randomUUID()}`
+    );
+    let replaced = false;
+    if (arguments_.overwrite ?? false) {
+      if (await pathExists(target)) {
+        await rename(target, trashDirectory);
+        replaced = true;
+      }
+    }
+    try {
+      await rename(temporaryDirectory, target);
+    } catch (error) {
+      if (replaced) {
+        await rename(trashDirectory, target);
+      }
+      if (!replaced && isPublishConflict(error)) {
+        throw new AgentCalloutHandoffError(
+          "HANDOFF_TARGET_EXISTS",
+          `HANDOFF_TARGET_EXISTS: ${target} already exists; pass overwrite to replace it.`
+        );
+      }
+      throw error;
+    }
+    if (replaced) {
+      await rm(trashDirectory, { recursive: true, force: true });
+    }
+    return {
+      handoffDirectory: target,
+      manifestPath: path.join(target, "manifest.json"),
+      entryPath: path.join(target, "HANDOFF.md"),
+      summaryPath: path.join(target, "summary.json"),
+      sidecarPath: path.join(target, sidecarName),
+      outputPath: path.join(target, outputName),
+      originalPath: includeOriginal ? path.join(target, originalName) : undefined,
+      annotationCount: summary.annotations.total,
+      revisionNumber: summary.revision.number
+    };
+  } catch (error) {
+    await rm(temporaryDirectory, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+function isPublishConflict(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    ((error as { code?: unknown }).code === "ENOTEMPTY" ||
+      (error as { code?: unknown }).code === "EEXIST" ||
+      (error as { code?: unknown }).code === "ENOTDIR")
+  );
+}
+
+interface ParsedHandoffManifestFile {
+  entry: HandoffManifestFile;
+  absolutePath: string;
+}
+
+function parseHandoffManifest(value: unknown): HandoffManifest {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error("Handoff manifest must be a JSON object.");
+  }
+  const candidate = value as Partial<HandoffManifest>;
+  if (candidate.handoffVersion !== HANDOFF_PACKAGE_VERSION) {
+    throw new Error(`Handoff manifest version must be "${HANDOFF_PACKAGE_VERSION}".`);
+  }
+  if (
+    typeof candidate.generator !== "object" ||
+    candidate.generator === null ||
+    typeof candidate.generator.name !== "string" ||
+    typeof candidate.generator.version !== "string"
+  ) {
+    throw new Error("Handoff manifest generator must include name and version.");
+  }
+  if (typeof candidate.createdAt !== "string" || Number.isNaN(Date.parse(candidate.createdAt))) {
+    throw new Error("Handoff manifest createdAt must be an ISO-8601 timestamp.");
+  }
+  if (typeof candidate.originalIncluded !== "boolean") {
+    throw new Error("Handoff manifest originalIncluded must be a boolean.");
+  }
+  if (
+    typeof candidate.annotation !== "object" ||
+    candidate.annotation === null ||
+    typeof candidate.annotation.annotationCount !== "number"
+  ) {
+    throw new Error("Handoff manifest annotation summary is invalid.");
+  }
+  if (!Array.isArray(candidate.files) || candidate.files.length === 0) {
+    throw new Error("Handoff manifest files must be a non-empty array.");
+  }
+  for (const file of candidate.files) {
+    if (
+      typeof file !== "object" ||
+      file === null ||
+      typeof file.path !== "string" ||
+      file.path === "" ||
+      file.path.includes("/") ||
+      file.path.includes("\\") ||
+      file.path.startsWith(".")
+    ) {
+      throw new Error("Handoff manifest file entries must use plain file names.");
+    }
+    if (typeof file.role !== "string") {
+      throw new Error("Handoff manifest file entries must declare a role.");
+    }
+    if (typeof file.sha256 !== "string" || !/^[0-9a-f]{64}$/u.test(file.sha256)) {
+      throw new Error("Handoff manifest file hashes must be lowercase SHA-256 hex digests.");
+    }
+    if (
+      typeof file.sizeBytes !== "number" ||
+      !Number.isInteger(file.sizeBytes) ||
+      file.sizeBytes < 0
+    ) {
+      throw new Error("Handoff manifest file sizes must be non-negative integers.");
+    }
+  }
+  return candidate as HandoffManifest;
+}
+
+export async function verifyHandoffPackage(
+  arguments_: VerifyHandoffArguments
+): Promise<HandoffVerificationResult> {
+  const roots = await canonicalRoots(arguments_.allowedRoots);
+  let handoffDirectory: string;
+  try {
+    handoffDirectory = await realpath(path.resolve(arguments_.handoffDirectory));
+    assertInsideRoots(handoffDirectory, roots, "Handoff directory");
+    const information = await stat(handoffDirectory);
+    if (!information.isDirectory()) throw new Error("Handoff path must be a directory.");
+  } catch (error) {
+    if (error instanceof AgentCalloutHandoffError) throw error;
+    throw new AgentCalloutHandoffError(
+      "HANDOFF_TARGET_INVALID",
+      `HANDOFF_TARGET_INVALID: ${String(error instanceof Error ? error.message : error)}`
+    );
+  }
+
+  const issues: HandoffVerificationIssue[] = [];
+  let manifest: HandoffManifest | undefined;
+  try {
+    manifest = parseHandoffManifest(
+      JSON.parse(await readFile(path.join(handoffDirectory, "manifest.json"), "utf8"))
+    );
+  } catch (error) {
+    issues.push({
+      code: "HANDOFF_MANIFEST_INVALID",
+      path: "manifest.json",
+      detail: `manifest.json could not be parsed as a valid handoff manifest: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    });
+  }
+
+  let filesChecked = 0;
+  let sidecarValid = false;
+  let annotationCount: number | undefined;
+  if (manifest === undefined) {
+    return {
+      valid: false,
+      handoffDirectory,
+      filesChecked: 0,
+      sidecarValid: false,
+      annotationCount: undefined,
+      issues
+    };
+  }
+
+  const presentRoles = new Set(manifest.files.map((file) => file.role));
+  for (const requiredRole of [
+    "annotated-output",
+    "annotation-sidecar",
+    "safety-summary",
+    "entry"
+  ] as const) {
+    if (!presentRoles.has(requiredRole)) {
+      issues.push({
+        code: "HANDOFF_MANIFEST_INVALID",
+        path: "manifest.json",
+        detail: `manifest.json is missing a file entry with role "${requiredRole}".`
+      });
+    }
+  }
+  if (manifest.originalIncluded !== presentRoles.has("original-input")) {
+    issues.push({
+      code: "HANDOFF_MANIFEST_INVALID",
+      path: "manifest.json",
+      detail: "manifest.json originalIncluded does not match the listed files."
+    });
+  }
+
+  let sidecarEntry: ParsedHandoffManifestFile | undefined;
+  for (const file of manifest.files) {
+    const absolutePath = path.join(handoffDirectory, file.path);
+    if (!(await pathExists(absolutePath))) {
+      issues.push({
+        code: "HANDOFF_FILE_MISSING",
+        path: file.path,
+        detail: `Listed file "${file.path}" is missing from the package.`
+      });
+      continue;
+    }
+    const bytes = await readFile(absolutePath);
+    const digest = sha256(bytes);
+    if (digest !== file.sha256 || bytes.byteLength !== file.sizeBytes) {
+      issues.push({
+        code: "HANDOFF_HASH_MISMATCH",
+        path: file.path,
+        detail: `File "${file.path}" does not match the recorded SHA-256.`
+      });
+      continue;
+    }
+    filesChecked += 1;
+    if (file.role === "annotation-sidecar") {
+      sidecarEntry = { entry: file, absolutePath };
+    }
+  }
+
+  if (sidecarEntry === undefined) {
+    issues.push({
+      code: "HANDOFF_SIDECAR_INVALID",
+      path: undefined,
+      detail: "No intact annotation sidecar remains in the package."
+    });
+  } else {
+    try {
+      const summary = await inspectAnnotationSidecar({
+        sidecarPath: sidecarEntry.absolutePath,
+        allowedRoots: arguments_.allowedRoots,
+        maxRevisionChainBytes: arguments_.maxRevisionChainBytes
+      });
+      sidecarValid = true;
+      annotationCount = summary.annotations.total;
+    } catch {
+      issues.push({
+        code: "HANDOFF_SIDECAR_INVALID",
+        path: sidecarEntry.entry.path,
+        detail: "The packaged annotation sidecar no longer validates against its output."
+      });
+    }
+  }
+
+  return {
+    valid: issues.length === 0 && sidecarValid,
+    handoffDirectory,
+    filesChecked,
+    sidecarValid,
+    annotationCount,
+    issues
   };
 }

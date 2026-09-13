@@ -10,6 +10,7 @@ import {
   AgentCalloutRevisionError,
   annotateImage,
   createContactSheet,
+  createHandoffPackage,
   cropImage,
   getCoreDoctorReport,
   installOcrRuntime,
@@ -20,7 +21,8 @@ import {
   OcrImageError,
   OcrRuntimeError,
   reviseAnnotation,
-  validateSpecForImage
+  validateSpecForImage,
+  verifyHandoffPackage
 } from "../index.js";
 import { startStdioMcpServer } from "../mcp/server.js";
 
@@ -78,6 +80,12 @@ interface DoctorOptions {
 interface OcrOptions extends CommonOptions {
   runtimeDirectory?: string;
   languages?: ("eng" | "chi_sim")[];
+}
+
+interface HandoffOptions extends CommonOptions {
+  outputDir?: string;
+  original?: boolean;
+  overwrite?: boolean;
 }
 
 interface LocateOptions extends OcrOptions {
@@ -637,6 +645,55 @@ export function createCliProgram(io: CliIo = defaultIo): Command {
       ...(allowedRoots === undefined ? {} : { allowedRoots })
     });
     writeResult(io, result, options, () => formatGenerated("Revision", result));
+  });
+
+  addCommonOptions(
+    program
+      .command("create-handoff <parentSidecar>")
+      .description(
+        "Create a plain-directory handoff package (PNG + full JSON + manifest + summary + entry)."
+      )
+      .option("--output-dir <path>", "Target handoff directory")
+      .option(
+        "--no-original",
+        "Omit the original image; the package cannot be re-rendered or revised"
+      )
+      .option("--overwrite", "Replace an existing handoff directory at the target path")
+  ).action(async (parentSidecar: string, options: HandoffOptions) => {
+    const allowedRoots = resolvedRoots(options);
+    const result = await createHandoffPackage({
+      sidecarPath: parentSidecar,
+      ...(options.outputDir === undefined ? {} : { outputDirectory: options.outputDir }),
+      ...(options.original === undefined ? {} : { includeOriginal: options.original }),
+      ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
+      ...(allowedRoots === undefined ? {} : { allowedRoots })
+    });
+    writeResult(io, result, options, () =>
+      [
+        `Handoff package: ${result.handoffDirectory}`,
+        `  annotations: ${result.annotationCount}${result.revisionNumber === undefined ? "" : ` (revision ${result.revisionNumber})`}`,
+        `  verify: agent-callout verify-handoff ${result.handoffDirectory}`
+      ].join("\n")
+    );
+  });
+
+  addCommonOptions(
+    program
+      .command("verify-handoff <handoffDirectory>")
+      .description("Verify a handoff package manifest, file hashes and packaged sidecar.")
+  ).action(async (handoffDirectory: string, options: HandoffOptions) => {
+    const allowedRoots = resolvedRoots(options);
+    const result = await verifyHandoffPackage({
+      handoffDirectory,
+      ...(allowedRoots === undefined ? {} : { allowedRoots })
+    });
+    writeResult(io, result, options, () =>
+      result.valid
+        ? `Handoff package OK: ${result.filesChecked} files verified.`
+        : `Handoff package INVALID:\n${result.issues
+            .map((issue) => `  [${issue.code}] ${issue.path ?? ""} ${issue.detail}`.trimEnd())
+            .join("\n")}`
+    );
   });
 
   addOutputOptions(

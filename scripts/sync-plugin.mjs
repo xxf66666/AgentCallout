@@ -47,7 +47,7 @@ const versionRecords = {
   claudeManifest: claudeManifest.version,
   marketplace: marketplaceEntry.version,
   core: await versionFromText(
-    path.join(repositoryRoot, "src", "index.ts"),
+    path.join(repositoryRoot, "src", "core", "index.ts"),
     /AGENT_CALLOUT_VERSION\s*=\s*"([^"]+)"/u,
     "core"
   ),

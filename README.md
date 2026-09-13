@@ -101,19 +101,21 @@ OCR 只返回文字候选框，不会自动把文字框扩成整个按钮。多�
 
 ## 把结果交给另一个 AI
 
-把下面两份文件一起交付，另一个 AI 才能明确区分原图内容和后加批注：
+推荐用一条命令生成完整交接包：
+
+```powershell
+agent-callout create-handoff .\screenshot.annotated.json --json
+agent-callout verify-handoff .\screenshot.annotated.handoff --json
+```
+
+它在 sidecar 旁生成 `screenshot.annotated.handoff/` 普通目录：批注 PNG、完整 JSON、`manifest.json`（文件 SHA-256 清单）、`summary.json` 安全摘要和 `HANDOFF.md` 入口，默认附原图（`--no-original` 可省略，此时不可修订）。接收方不安装 AgentCallout 也能阅读；安装后可校验、重渲染并继续修订。细节见[交接包文档](docs/handoff.md)。
+
+手工交付时，把下面两份文件一起交付，另一个 AI 才能明确区分原图内容和后加批注：
 
 - `*.annotated.png`：给人和视觉模型看的结果；
 - 同名 `*.annotated.json`：记录每条批注的文字、类型、位置和修订关系。
 
 另一个 AI **不必安装 AgentCallout 才能读 JSON**。安装后还能校验文件、生成安全摘要、重新渲染和继续修订。分享前请检查 JSON 中的批注文字与文件信息；需要提供原图时，也先检查其中的敏感内容。仅凭一张压平 PNG，无法可靠还原批注层。
-
-Markdown 交付可同时链接两份文件：
-
-```markdown
-![批注结果](./screenshot.annotated.png)
-[机器可读批注层](./screenshot.annotated.json)
-```
 
 ## 模糊和安全遮挡不是一回事
 
@@ -178,6 +180,8 @@ agent-callout inspect .\screenshot.png --json
 agent-callout inspect-sidecar .\screenshot.annotated.json --json
 agent-callout annotate .\screenshot.png --spec .\annotations.json --output .\screenshot.annotated.png
 agent-callout revise .\screenshot.annotated.json --edits .\edits.json
+agent-callout create-handoff .\screenshot.annotated.json --json
+agent-callout verify-handoff .\screenshot.annotated.handoff --json
 agent-callout --help
 ```
 
@@ -188,7 +192,7 @@ agent-callout --help
 <details>
 <summary><strong>给开发者：MCP、Skill 和 AnnotationSpec</strong></summary>
 
-MCP 提供 9 个工具：
+MCP 提供 11 个工具：
 
 - `doctor`：检查运行环境。
 - `inspect_image`：读取图片尺寸、格式和哈希。
@@ -199,6 +203,8 @@ MCP 提供 9 个工具：
 - `crop_image`：裁剪局部，便于 Agent 放大检查。
 - `create_contact_sheet`：把多张图片合成联系表。
 - `locate_text`：使用可选本地 OCR 返回与原图 hash 绑定的文字候选、坐标和置信度。
+- `create_handoff`：把已验证 sidecar 打包为跨 AI 交接目录（PNG/JSON/manifest/摘要/入口）。
+- `verify_handoff`：校验交接包 manifest、逐文件 hash 与打包 sidecar。
 
 新建批注请使用 AnnotationSpec 1.1，它提供可读的默认样式、preset 和语义 tone；已有的 AnnotationSpec 1.0 sidecar 仍受支持。需要保持 canonical JSON 或像素兼容时，请保持其 1.0 版本原样重放。两个版本都以左上角为原点，支持像素坐标和 `0..1` 标准化坐标。完整字段见 [AnnotationSpec 1.0 和 1.1](docs/annotation-spec.md)。
 

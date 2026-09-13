@@ -108,19 +108,21 @@ describe("AgentCallout MCP server", () => {
     expect(injected.isError).toBe(true);
   });
 
-  test("initializes with workflow instructions and exactly nine strict tools", async () => {
+  test("initializes with workflow instructions and exactly eleven strict tools", async () => {
     expect(client.getInstructions()).toContain("Inspect the screenshot before annotating");
     const listed = await client.listTools();
     expect(listed.tools.map((tool) => tool.name).sort()).toEqual([
       "annotate_image",
       "create_contact_sheet",
+      "create_handoff",
       "crop_image",
       "doctor",
       "inspect_annotation_sidecar",
       "inspect_image",
       "locate_text",
       "revise_annotation",
-      "validate_annotation_spec"
+      "validate_annotation_spec",
+      "verify_handoff"
     ]);
 
     for (const tool of listed.tools) {
@@ -228,7 +230,7 @@ describe("AgentCallout MCP server", () => {
 
     const doctor = (await client.callTool({ name: "doctor", arguments: {} })) as CallToolResult;
     expect(doctor.structuredContent).toMatchObject({
-      product: { name: "agent-callout", version: "0.3.0" },
+      product: { name: "agent-callout", version: "0.3.1" },
       ok: true,
       limits: { maxPixels: 40_000_000, maxAnnotations: 200 },
       mcp: { maxPreviewBytes: 64 * 1024, maxPreviewDimension: 512, previewDetail: "auto" }
@@ -1016,5 +1018,51 @@ describe("AgentCallout MCP server", () => {
     } finally {
       await rm(outside, { recursive: true, force: true });
     }
+  });
+
+  test("create_handoff and verify_handoff exchange a plain-directory package", async () => {
+    const annotated = (await client.callTool({
+      name: "annotate_image",
+      arguments: {
+        inputPath,
+        outputPath: join(directory, "handoff-base.png"),
+        spec: {
+          version: "1.1",
+          annotations: [
+            { id: "handoff-box", type: "rectangle", rect: { x: 20, y: 20, width: 50, height: 25 } }
+          ]
+        }
+      }
+    })) as CallToolResult;
+    expect(annotated.isError).not.toBe(true);
+    const annotateText = annotated.content.find((item) => item.type === "text");
+    const annotatePayload = (
+      annotateText?.type === "text" ? JSON.parse(annotateText.text) : undefined
+    ) as { outputPath?: string; sidecarPath?: string } | undefined;
+    if (annotatePayload?.sidecarPath === undefined) throw new Error("Missing sidecar path.");
+
+    const created = (await client.callTool({
+      name: "create_handoff",
+      arguments: { sidecarPath: annotatePayload.sidecarPath }
+    })) as CallToolResult;
+    expect(created.isError).not.toBe(true);
+    const createdText = created.content.find((item) => item.type === "text");
+    const createdPayload = (
+      createdText?.type === "text" ? JSON.parse(createdText.text) : undefined
+    ) as { handoffDirectory?: string; annotationCount?: number } | undefined;
+    expect(createdPayload?.handoffDirectory).toBe(join(directory, "handoff-base.handoff"));
+    expect(createdPayload?.annotationCount).toBe(1);
+
+    const verified = (await client.callTool({
+      name: "verify_handoff",
+      arguments: { handoffDirectory: createdPayload?.handoffDirectory ?? "" }
+    })) as CallToolResult;
+    expect(verified.isError).not.toBe(true);
+    const verifiedText = verified.content.find((item) => item.type === "text");
+    const verifiedPayload = (
+      verifiedText?.type === "text" ? JSON.parse(verifiedText.text) : undefined
+    ) as { valid?: boolean; filesChecked?: number; issues?: unknown[] } | undefined;
+    expect(verifiedPayload?.valid).toBe(true);
+    expect(verifiedPayload?.filesChecked).toBe(5);
   });
 });
