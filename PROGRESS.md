@@ -124,6 +124,14 @@
 - [x] GitHub Actions 三平台 × Node 20/22/24 矩阵，完整 verify gate；首次运行 6/9 通过，暴露并修复 Windows CRLF（`.gitattributes` + autocrlf off）与 handoff Windows rename 冲突码（EPERM）后 9/9 通过（`1beb408`）
 - [x] 失败日志自动推送 `ci-logs-<os>-<node>` 分支，匿名可读，摆脱 API 凭据依赖
 
+## 0.4.1 进行中（2026-09-13）
+
+- 分支 `codex/revision-diff`（自 v0.4.0）：working copy、fork 与 revision diff，设计见 [ADR-0012](docs/adr/0012-working-copy-fork-diff.md)。
+- [x] `fork-lineage`/`fork_lineage`：全链拷贝 + fork.json（模式、源 lineage 身份、逐文件 hash）；不重写 sidecar 字节
+- [x] `diff-revisions`/`diff_revisions`：稳定 ID 级 added/removed/changed + lineage 关系判定（same-lineage/forked/unrelated）；MCP 工具总数 14
+- [x] 测试 4 项（全链拷贝、working-copy 模式、diff 三态、跨 fork 关系）通过；全套 240 项通过
+- [ ] 文档、完整 gate、干净安装；真实客户端 fork→diff 验收；发布 v0.4.1
+
 ## 待完成
 
 - [ ] 0.4.0：DOM selector/文本/可访问性名称定位，处理 DPR/缩放/滚动/iframe 与截图关联证据

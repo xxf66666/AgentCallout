@@ -127,6 +127,13 @@ agent-callout locate-dom "https://example.test" --text "保存" --screenshot pag
 - `*.annotated.png`：给人和视觉模型看的结果；
 - 同名 `*.annotated.json`：记录每条批注的文字、类型、位置和修订关系。
 
+多 AI 协作时，用 `fork-lineage` 把整个 lineage 显式复制给协作者（记录 `fork.json`），用 `diff-revisions` 按稳定 ID 对比任意两个 sidecar 的差异与 lineage 关系：
+
+```powershell
+agent-callout fork-lineage .\screenshot.annotated.json .\collaborator-copy --mode working-copy --json
+agent-callout diff-revisions .\screenshot.annotated.json .\collaborator-copy\screenshot.annotated.json --json
+```
+
 另一个 AI **不必安装 AgentCallout 才能读 JSON**。安装后还能校验文件、生成安全摘要、重新渲染和继续修订。分享前请检查 JSON 中的批注文字与文件信息；需要提供原图时，也先检查其中的敏感内容。仅凭一张压平 PNG，无法可靠还原批注层。
 
 ## 模糊和安全遮挡不是一回事
@@ -204,7 +211,7 @@ agent-callout --help
 <details>
 <summary><strong>给开发者：MCP、Skill 和 AnnotationSpec</strong></summary>
 
-MCP 提供 12 个工具：
+MCP 提供 14 个工具：
 
 - `doctor`：检查运行环境。
 - `inspect_image`：读取图片尺寸、格式和哈希。
@@ -217,6 +224,8 @@ MCP 提供 12 个工具：
 - `locate_text`：使用可选本地 OCR 返回与原图 hash 绑定的文字候选、坐标和置信度。
 - `create_handoff`：把已验证 sidecar 打包为跨 AI 交接目录（PNG/JSON/manifest/摘要/入口）。
 - `verify_handoff`：校验交接包 manifest、逐文件 hash 与打包 sidecar。
+- `fork_lineage`：把整个修订 lineage 复制到新目录并记录 fork/working-copy 意图。
+- `diff_revisions`：按稳定 ID 对比两个 sidecar，报告 lineage 关系。
 - `locate_dom`：用可选本地浏览器运行时按 selector/文字/可访问性名称定位网页元素，返回与截图 hash 绑定的候选框。
 
 新建批注请使用 AnnotationSpec 1.1，它提供可读的默认样式、preset 和语义 tone；已有的 AnnotationSpec 1.0 sidecar 仍受支持。需要保持 canonical JSON 或像素兼容时，请保持其 1.0 版本原样重放。两个版本都以左上角为原点，支持像素坐标和 `0..1` 标准化坐标。完整字段见 [AnnotationSpec 1.0 和 1.1](docs/annotation-spec.md)。

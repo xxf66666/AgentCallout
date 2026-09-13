@@ -25,6 +25,8 @@ import {
   inspectImage,
   locateDom,
   locateText,
+  diffRevisions,
+  forkLineage,
   OcrImageError,
   OcrRuntimeError,
   reviseAnnotation,
@@ -268,6 +270,22 @@ const contactSheetInputSchema = z
   .strict();
 
 const doctorInputSchema = z.object({}).strict();
+
+const forkLineageInputSchema = z
+  .object({
+    sidecarPath: pathSchema.describe("Head sidecar of the lineage to copy."),
+    targetDirectory: pathSchema.describe("New directory for the copied lineage."),
+    mode: z.enum(["fork", "working-copy"]).optional(),
+    overwrite: z.boolean().optional()
+  })
+  .strict();
+
+const diffRevisionsInputSchema = z
+  .object({
+    sidecarPathA: pathSchema.describe("First sidecar (baseline)."),
+    sidecarPathB: pathSchema.describe("Second sidecar (comparison target).")
+  })
+  .strict();
 
 type GeneratedImageResult = Awaited<ReturnType<typeof cropImage>>;
 type ImageToolResult = GeneratedImageResult | Awaited<ReturnType<typeof reviseAnnotation>>;
@@ -808,6 +826,60 @@ export function createAgentCalloutMcpServer(options: AgentCalloutMcpServerOption
             ...(domRuntimeDirectory === undefined ? {} : { runtimeDirectory: domRuntimeDirectory }),
             ...(browserExecutablePath === undefined ? {} : { browserExecutablePath })
           })
+        );
+      })
+  );
+
+  server.registerTool(
+    "fork_lineage",
+    {
+      title: "Fork annotation lineage",
+      description:
+        "Copy a whole revision lineage (all .revN sidecars, outputs and the original image) to a new directory and record the fork or working-copy intent in fork.json. Sidecar bytes are not rewritten.",
+      inputSchema: forkLineageInputSchema,
+      outputSchema: structuredOutputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false
+      }
+    },
+    async ({ sidecarPath, targetDirectory, mode, overwrite }) =>
+      safeToolCall(async () => {
+        const allowedRoots = await rootAuthority.roots();
+        return structuredToolResult(
+          await forkLineage({
+            sidecarPath,
+            targetDirectory,
+            ...(mode === undefined ? {} : { mode }),
+            ...(overwrite === undefined ? {} : { overwrite }),
+            allowedRoots
+          })
+        );
+      })
+  );
+
+  server.registerTool(
+    "diff_revisions",
+    {
+      title: "Diff annotation revisions",
+      description:
+        "Compare two validated sidecars by stable annotation IDs (added/removed/changed with old and new values) and report their lineage relation (same-lineage, forked, unrelated).",
+      inputSchema: diffRevisionsInputSchema,
+      outputSchema: structuredOutputSchema,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ sidecarPathA, sidecarPathB }) =>
+      safeToolCall(async () => {
+        const allowedRoots = await rootAuthority.roots();
+        return structuredToolResult(
+          await diffRevisions({ sidecarPathA, sidecarPathB, allowedRoots })
         );
       })
   );

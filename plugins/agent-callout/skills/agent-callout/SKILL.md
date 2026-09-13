@@ -4,7 +4,7 @@ description: Annotate existing PNG, JPEG, or WebP screenshots with callouts, arr
 license: MIT
 metadata:
   author: AgentCallout contributors
-  version: "0.4.0"
+  version: "0.4.1"
 ---
 
 # AgentCallout
@@ -23,7 +23,8 @@ Turn an existing screenshot into a reproducible annotated PNG and JSON sidecar. 
 8. Inspect every returned revision preview. `changed-region` contains touched annotations plus any collateral auto-layout movement and carries an original-canvas `sourceRect`; use it for local QA without another crop, but do not claim it proves global layout. `compact-overview` means focus was dispersed, too large, global, unavailable, or intentionally kept low-detail around blur/redact. `none` means sensitive coverage changed: no image was sent, so review the saved output only under the applicable privacy policy. If the host omits ImageContent unexpectedly, say visual verification remains incomplete.
 9. When handing an existing sidecar to another AI, prefer `create_handoff`: it packages the annotated PNG, the full JSON sidecar, a SHA-256 manifest, a safety summary, and a HANDOFF.md entry into one plain directory, keeping original file names so the receiver can continue revisions. Verify with `verify_handoff` or `agent-callout verify-handoff`. The package omits the original only when explicitly requested (`includeOriginal: false` / `--no-original`); say re-render and revise are unavailable in that case. For a lightweight integrity/inventory summary without packaging, call `inspect_annotation_sidecar`; it deliberately omits paths, hashes, IDs, annotation text, style, and raw geometry. The ordinary JSON sidecar remains directly readable without installing AgentCallout.
 10. For a web-page target, prefer optional `locate_dom` when the browser runtime is installed: it returns screenshot-hash-bound candidate rects with page-state evidence. Annotate the captured screenshot in the same run - after the page changes, old coordinates are invalid and must be re-located. Multiple candidates require confirmation; a DOM bbox does not claim control semantics by itself.
-11. Return the final absolute path and the tool-provided Markdown image reference.
+11. When several AIs revise the same annotations, use `fork_lineage` to hand a recorded copy to a collaborator and `diff_revisions` to compare two sidecars by stable IDs (same-lineage, forked, or unrelated). Converge differences with explicit `revise` edits; automatic merging does not exist.
+12. Return the final absolute path and the tool-provided Markdown image reference.
 
 ## Annotation choices
 

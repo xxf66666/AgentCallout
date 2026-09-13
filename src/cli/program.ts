@@ -21,6 +21,8 @@ import {
   inspectAnnotationSidecar,
   inspectImage,
   locateDom,
+  diffRevisions,
+  forkLineage,
   locateText,
   OcrImageError,
   OcrRuntimeError,
@@ -819,6 +821,72 @@ export function createCliProgram(io: CliIo = defaultIo): Command {
         : `Handoff package INVALID:\n${result.issues
             .map((issue) => `  [${issue.code}] ${issue.path ?? ""} ${issue.detail}`.trimEnd())
             .join("\n")}`
+    );
+  });
+
+  addCommonOptions(
+    program
+      .command("fork-lineage <parentSidecar> <targetDirectory>")
+      .description(
+        "Copy a whole revision lineage to a new directory and record the fork (or working copy)."
+      )
+      .option(
+        "--mode <mode>",
+        "fork or working-copy",
+        (value: string) => {
+          if (value !== "fork" && value !== "working-copy") {
+            throw new InvalidArgumentError("Mode must be fork or working-copy.");
+          }
+          return value;
+        },
+        "fork"
+      )
+      .option("--overwrite", "Replace an existing target directory")
+  ).action(
+    async (
+      parentSidecar: string,
+      targetDirectory: string,
+      options: HandoffOptions & { mode: "fork" | "working-copy" }
+    ) => {
+      const allowedRoots = resolvedRoots(options);
+      const result = await forkLineage({
+        sidecarPath: parentSidecar,
+        targetDirectory,
+        mode: options.mode,
+        ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
+        ...(allowedRoots === undefined ? {} : { allowedRoots })
+      });
+      writeResult(
+        io,
+        result,
+        options,
+        () =>
+          `Lineage copied to ${result.forkDirectory} (${result.mode}; ${result.copiedFiles} files; source revision ${result.sourceRevisionNumber}).`
+      );
+    }
+  );
+
+  addCommonOptions(
+    program
+      .command("diff-revisions <sidecarA> <sidecarB>")
+      .description(
+        "Compare two sidecars by stable annotation IDs and report their lineage relation."
+      )
+  ).action(async (sidecarA: string, sidecarB: string, options: CommonOptions) => {
+    const allowedRoots = resolvedRoots(options);
+    const result = await diffRevisions({
+      sidecarPathA: sidecarA,
+      sidecarPathB: sidecarB,
+      ...(allowedRoots === undefined ? {} : { allowedRoots })
+    });
+    writeResult(io, result, options, () =>
+      [
+        `Relation: ${result.lineageRelation}.`,
+        `added: ${result.added.length}; removed: ${result.removed.length}; changed: ${result.changed.length}.`,
+        ...result.changed.map(
+          (change) => `  ${change.id}: ${change.changes.map((entry) => entry.field).join(", ")}`
+        )
+      ].join("\n")
     );
   });
 
