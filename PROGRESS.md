@@ -197,4 +197,5 @@
 
 - [x] CI 矩阵 Windows 格暴露 `mkdtemp '\tmp\...' ENOENT`（匿名 issue 通道 #6/#7）；修复为 `tmpdir()`
 - [x] CI 修复：workflow 结构（push-log 步骤归位）、失败匿名 issue 报告通道、OCR 真实安装 job 自包含化（ubuntu 容器复现并验证 15/15）
-- [x] 版本 0.5.1，发布记录见 docs/releases/0.5.1.md
+- [x] CI 全矩阵（含 Windows 与 OCR job）全绿（badge passing @ ebcd4a7）；发布标签 `v0.5.1` 与 `agent-callout--v0.5.1`
+- [x] Claude Plugin 0.5.0→0.5.1 更新并经 headless doctor 验证（v0.5.1 — ok: true）
