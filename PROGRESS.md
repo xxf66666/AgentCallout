@@ -119,6 +119,11 @@
 - [x] Claude Code（CLI）与 Codex 0.154.0（MCP）各自完成真实"网页定位 → 批注 → 查看"；同页面同状态截图 hash 逐字节一致
 - [x] 发布标签 `v0.4.0` 与 `agent-callout--v0.4.0`（指向最终发布提交）
 
+## 0.4.x CI 矩阵（2026-09-13，已完成）
+
+- [x] GitHub Actions 三平台 × Node 20/22/24 矩阵，完整 verify gate；首次运行 6/9 通过，暴露并修复 Windows CRLF（`.gitattributes` + autocrlf off）与 handoff Windows rename 冲突码（EPERM）后 9/9 通过（`1beb408`）
+- [x] 失败日志自动推送 `ci-logs-<os>-<node>` 分支，匿名可读，摆脱 API 凭据依赖
+
 ## 待完成
 
 - [ ] 0.4.0：DOM selector/文本/可访问性名称定位，处理 DPR/缩放/滚动/iframe 与截图关联证据

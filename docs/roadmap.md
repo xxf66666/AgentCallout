@@ -64,7 +64,7 @@
 ## 0.4.x：协作与平台完善
 
 - 明确 working copy、fork 和 revision diff；评估分支合并。目录锁仅协调同一目录，不能当作全局版本控制。
-- 建立 Windows、macOS、Linux CI，并回归 Node 20/22/24；不同平台的渲染证据分开记录。
+- 建立 Windows、macOS、Linux CI，并回归 Node 20/22/24；不同平台的渲染证据分开记录。（已交付，9/9 矩阵通过）
 - 继续解决或规避 Codex 可选 Skills-only Marketplace 的 30 秒 clone 超时，保持 CLI+MCP 主路径可用。
 - 评估系统截图入口和轻量 GUI，复用现有 core、Spec 和 sidecar。
 

@@ -9,6 +9,14 @@
 - **VERIFIED**（真实客户端闭环）：Claude Code 2.1.270（CLI）与 Codex CLI 0.154.0（MCP）各自完成"网页定位 → 批注 → 查看结果"；同一页面同状态两客户端截图 hash 逐字节一致。详见[发布记录](releases/0.4.0.md)。
 - **NOT VERIFIED**：Linux、Node 20/22 回归、三平台 CI 矩阵（0.4.x）；Firefox/WebKit 引擎与公网深度场景；Codex Skills-only Plugin 0.4.0（已知 30 秒 clone 超时）。
 
+## 0.4.x CI 矩阵验证（2026-09-13）
+
+`codex/ci-matrix` 交付 GitHub Actions 三平台矩阵（`.github/workflows/ci.yml`）：`ubuntu-latest`、`macos-latest`、`windows-latest` × Node 20/22/24，每格执行完整 verify gate（format、lint、typecheck、234 项测试、build、3 份 dist 复现）。
+
+- **VERIFIED**（commit `1beb408`，9/9 矩阵格 success）：首次运行即暴露 Windows 的 `core.autocrlf` CRLF 问题（prettier LF 策略）与 handoff 并发创建在 Windows 的 rename 冲突码差异（EPERM 而非 ENOTEMPTY）；两处修复后全矩阵通过。
+- CI 行为：push/PR 到 `main` 触发；失败时把 verify 输出尾部推送到 `ci-logs-<os>-<node>` 分支，无需 API 凭据即可诊断。
+- 历史遗留的“非 Windows 平台回归”与“Node 20/22 待回归”自此由 CI 持续守护；Linux/macOS/Windows 的渲染证据按平台分别产生，不做跨平台字节承诺。
+
 ## 0.3.1 发布验证（2026-09-13）
 
 `codex/handoff-package`（自 v0.3.0 的 `7d1a9e3`）交付跨 AI 一键交接包：`create-handoff`/`verify-handoff` CLI 与 MCP `create_handoff`/`verify_handoff`（工具总数 11），设计见 [ADR-0010](adr/0010-cross-ai-handoff-package.md)。
