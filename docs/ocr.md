@@ -1,8 +1,8 @@
-# 本地 OCR 文字定位（v0.3.0 开发中）
+# 本地 OCR 文字定位
 
 OCR 帮助 Agent 从已有截图中查找中英文文字，返回候选位置和识别证据。它不画图，也不推断整个按钮边界；选定候选后，继续使用现有批注工具。
 
-本页描述开发分支接口，v0.3.0 尚未完成发布验收。当前稳定版本和安装结果见 [README](../README.md)。
+v0.3.0 已按本页契约完成发布验收（Windows 与 macOS 双平台）；平台差异与验收证据见 [README](../README.md)、[兼容性记录](compatibility.md)与[发布记录](releases/0.3.0.md)。
 
 ## 安装与使用
 
@@ -57,4 +57,10 @@ agent-callout locate-text screenshot.png --query "保存" --region 602,561,87,25
 
 图标可能被误认成高分文字，小字、对比度、反白、压缩和中文断词都会影响结果。空结果、低分和多结果需要分别处理；confidence 不用于静默过滤候选。识别有超时和资源上限，失败不返回伪造候选。
 
-当前已具备匹配、图片映射、可选运行时、CLI/MCP 接入及定向测试。完整离线矩阵、打包、干净安装和真实客户端“定位后批注”验收完成前，不宣布 v0.3.0 发布。方案和原始实验边界见 [OCR 调研](research-ocr.md)、[ADR-0009](adr/0009-optional-local-ocr-locator.md)。
+## 验收状态（v0.3.0）
+
+v0.3.0 已完成 Windows 与 macOS 双平台发布验收，包括打包、干净安装和真实客户端“定位 → 确认 → 批注 → 查看结果”闭环，详见[发布记录](releases/0.3.0.md)。macOS 实测（示例图 1000×640）：中文正文 `回调地址` 全图 `unique`/置信度 93；英文标题 `Release settings` 经 ROI+反色 `unique`/95；蓝底白字 `保存` 全图 `not-found`、ROI+4 倍+反色 `low-confidence`（38–48）且 `requiresConfirmation: true`，坐标与源图生成坐标完全一致。低置信度候选按契约经裁剪目视确认后才用于批注。
+
+注意：OCR 置信度是引擎分数，不跨平台可比。同一反白按钮在 Windows 原型约为 96 分，macOS 正式运行时为 38–48 分；两边坐标同样正确。不能把某一平台的分数阈值经验照搬到另一平台，`requiresConfirmation` 的判断以运行时阈值为准。
+
+完整离线矩阵的边界与方案见 [OCR 调研](research-ocr.md)、[ADR-0009](adr/0009-optional-local-ocr-locator.md)。

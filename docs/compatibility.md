@@ -1,10 +1,14 @@
 # AgentCallout 兼容性与验证记录
 
-## 0.3.0 本地开发里程碑（2026-09-13）
+## 0.3.0 发布验证（2026-09-13）
 
-`codex/ocr-locator` 已接入显式安装的 Tesseract.js 7 中英文 OCR locator、CLI `ocr install/status` 与 `locate-text`、MCP `locate_text`、原图 hash/ROI/缩放/反色映射、多候选和置信度证据。Windows Node 24 下 222 项测试通过；固定 `eng` 与 `chi_sim` 本地运行时的 14 项真实测试通过，根/Plugin dist 可复现。
+`codex/ocr-locator` 已完成可选本地 OCR locator 的发布验收：功能 `d338dc8`（Windows 开发测试）+ 跨平台测试修复 `17cb5c7`（macOS 发布验收）。CLI `ocr install/status`、`locate-text`、MCP `locate_text`、原图 hash/ROI/缩放/反色映射、多候选与置信度证据全部接入。
 
-该状态仍是 **PARTIALLY VERIFIED**：尚未完成精确 commit 的干净 clone/打包安装，也尚未用 Claude Code 和 Codex 完成“定位文字 → 查看候选 → 批注 → 查看结果”的发布级闭环，因此稳定发布仍为 v0.2.1。
+- **VERIFIED**（Windows x64 / Node 24.18，`d338dc8`）：222/222 tests、全 gate、3 份 dist 复现、固定运行时中英文真实识别。
+- **VERIFIED**（macOS 26.6.2 arm64 / Node 24.21.0，`17cb5c7`）：本地与 GitHub 干净 clone 完整 verify（220 passed + 2 skipped）、3 份 dist 复现、pack 14 文件、生产 audit 0 漏洞、精确 commit 全局安装与 doctor/self-test、OCR 运行时安装与状态、CLI 真实定位（中文 unique/93、英文 ROI+反色 unique/95、反白按钮低置信度确认）。
+- **VERIFIED**（真实客户端闭环）：Claude Code（构建产物）与 Codex CLI 0.154.0（全局 0.3.0 + `codex mcp add` + `codex exec`）各自完成“定位文字 → 确认候选 → 批注 → 查看结果”；Codex 另验证 `not-found` 不猜坐标与 `ENOENT` 结构化错误路径。详见[发布记录](releases/0.3.0.md)。
+- 已知平台差异：OCR 置信度不跨平台可比（同一按钮 Windows 原型约 96 分、macOS 38–48 分，坐标同样正确）；macOS libvips 有一条无害 fontconfig stderr 提示；文字度量几何随平台差异约 1–3 px，测试以 win32 精确金标准 + 其他平台结构断言处理。
+- **NOT VERIFIED**：Linux、Node 20/22 回归、三平台 CI 矩阵（0.4.x）；Claude Plugin marketplace 0.3.0 更新与 Codex Skills-only Plugin 0.3.0（合并 main 后按 README 路径另行验收）。
 
 ## 0.2.1 发布验证（2026-09-06）
 
