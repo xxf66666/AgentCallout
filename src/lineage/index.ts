@@ -55,17 +55,25 @@ function isInsideRoots(candidate: string, roots: readonly string[]): boolean {
   return roots.some((root) => candidate === root || candidate.startsWith(root + path.sep));
 }
 
+// Canonicalize roots through symlinks (macOS /var -> /private/var) the same
+// way the core module does, so allowed roots match realpath'd candidates.
+async function canonicalRootsList(
+  allowedRoots: readonly string[] | undefined
+): Promise<string[]> {
+  const resolved: string[] = [];
+  for (const root of allowedRoots ?? []) {
+    const absolute = path.resolve(root);
+    resolved.push(await realpath(absolute).catch(() => absolute));
+  }
+  return resolved;
+}
+
 async function canonicalExistingPath(
   inputPath: string,
   allowedRoots: readonly string[] | undefined
 ): Promise<string> {
   const resolved = await realpath(path.resolve(inputPath));
-  if (
-    isInsideRoots(
-      resolved,
-      (allowedRoots ?? []).map((root) => path.resolve(root))
-    )
-  ) {
+  if (isInsideRoots(resolved, await canonicalRootsList(allowedRoots))) {
     return resolved;
   }
   throw new LineageError("LINEAGE_TARGET_INVALID", "Path is outside the allowed roots.");
@@ -150,12 +158,7 @@ export async function forkLineage(arguments_: ForkLineageArguments): Promise<For
     // realpath of an existing directory; containment is checked next.
   }
   const resolvedParent = await realpath(targetParent);
-  if (
-    !isInsideRoots(
-      resolvedParent,
-      (arguments_.allowedRoots ?? []).map((root) => path.resolve(root))
-    )
-  ) {
+  if (!isInsideRoots(resolvedParent, await canonicalRootsList(arguments_.allowedRoots))) {
     throw new LineageError("LINEAGE_TARGET_INVALID", "Fork target is outside the allowed roots.");
   }
 
