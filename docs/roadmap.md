@@ -73,7 +73,7 @@
 - 三类安装/残留故障 runbook 入 docs（malformed canonical、Windows EBUSY、install-links 残留）+「git 安装迁移到 npm」章节。
 - 示例库扩充（可搭车或拆至 v0.7.0）：OCR 多候选确认、DOM 证据、交接包、fork/diff 协作四组端到端示例。
 
-### v0.7.0 —— 自诊断：修订链与安装的只读诊断
+### v0.8.0 —— 自诊断：修订链与安装的只读诊断
 
 - **`workdir-doctor`（大项）**：修订链只读诊断——逐环状态、首个断点定位、完好前缀与恢复建议（如「rev0–rev6 完好，可从 rev6 fork」）；不做自动修复、不重写字节、不做 merge。
 - doctor 安装诊断：bin 真实路径、安装来源启发式识别（npm/git/Plugin 缓存，未知来源兜底）、dist 完整性与 Sharp 载入检测、install-links 风险与版本陈旧提示。
