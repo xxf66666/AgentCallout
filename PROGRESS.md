@@ -115,7 +115,9 @@
 - [x] selector/文字（NFKC/CJK 折叠/exact-contains）/可访问性名称三模式；iframe 偏移换算与 framePath；deviceScaleFactor=1 使截图像素==CSS 像素
 - [x] 证据绑定：全页截图 SHA-256 + 页面状态（URL/标题/视口/滚动）随候选返回；返回前复核磁盘截图 hash；页面变化即失效
 - [x] MCP `locate_dom`（12 工具）+ CLI `locate-dom`；测试 234 项（含 DOM 三项 + MCP 未就绪路径）通过
-- [ ] 文档完善、完整 gate、干净安装；Claude 与 Codex 真实"网页定位 → 批注 → 查看"验收；发布 v0.4.0
+- [x] 文档（docs/dom.md、README、SKILL）；完整 gate（232+2、dist 复现）、干净 clone、pack 15 文件、audit 0 漏洞、全局安装 0.4.0
+- [x] Claude Code（CLI）与 Codex 0.154.0（MCP）各自完成真实"网页定位 → 批注 → 查看"；同页面同状态截图 hash 逐字节一致
+- [x] 发布标签 `v0.4.0` 与 `agent-callout--v0.4.0`（指向最终发布提交）
 
 ## 待完成
 

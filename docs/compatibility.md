@@ -1,5 +1,14 @@
 # AgentCallout 兼容性与验证记录
 
+## 0.4.0 发布验证（2026-09-13）
+
+`codex/dom-locator`（自 v0.3.1）交付可选浏览器 DOM 定位：固定 playwright-core 1.63.0 + 用户已装 Chrome，`browser install/status`、CLI `locate-dom` 与 MCP `locate_dom`（工具总数 12），设计见 [ADR-0011](adr/0011-browser-dom-locator.md)。
+
+- **VERIFIED**（macOS 26.6.2 arm64 / Node 24.21.0，`1f746bf`）：本地与 GitHub 干净 clone 完整 verify（232 passed + 2 skipped、3 份 dist 复现）、pack 15 文件、生产 audit 0 漏洞、精确 commit 全局安装 0.4.0 与 doctor/browser status。
+- **VERIFIED**（定位与证据）：主帧文字、iframe 偏移换算与可访问性名称定位与 fixture 几何一致；候选绑定全页截图 SHA-256 与页面状态，返回前复核磁盘截图 hash；运行时未安装时 CLI/核心/MCP 三层干净失败。
+- **VERIFIED**（真实客户端闭环）：Claude Code 2.1.270（CLI）与 Codex CLI 0.154.0（MCP）各自完成"网页定位 → 批注 → 查看结果"；同一页面同状态两客户端截图 hash 逐字节一致。详见[发布记录](releases/0.4.0.md)。
+- **NOT VERIFIED**：Linux、Node 20/22 回归、三平台 CI 矩阵（0.4.x）；Firefox/WebKit 引擎与公网深度场景；Codex Skills-only Plugin 0.4.0（已知 30 秒 clone 超时）。
+
 ## 0.3.1 发布验证（2026-09-13）
 
 `codex/handoff-package`（自 v0.3.0 的 `7d1a9e3`）交付跨 AI 一键交接包：`create-handoff`/`verify-handoff` CLI 与 MCP `create_handoff`/`verify_handoff`（工具总数 11），设计见 [ADR-0010](adr/0010-cross-ai-handoff-package.md)。
