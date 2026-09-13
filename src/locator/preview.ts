@@ -43,6 +43,7 @@ export interface CandidatePreviewResult {
   outputPath: string;
   /** SHA-256 of the written preview PNG, for downstream integrity checks. */
   outputSha256: string;
+  outputDimensions: { width: number; height: number };
   candidateCount: number;
   width: number;
   height: number;
@@ -119,6 +120,7 @@ export async function renderCandidatePreview(
     operation: "candidate-preview",
     outputPath,
     outputSha256: createHash("sha256").update(output).digest("hex"),
+    outputDimensions: { width, height },
     candidateCount: arguments_.candidates.length,
     width,
     height
