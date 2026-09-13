@@ -29,22 +29,6 @@ jobs:
       - name: Full verification gate
         shell: bash
         run: set -o pipefail; npm run verify 2>&1 | tee verify-output.log
-  ocr-real-runtime:
-    name: OCR real runtime install (optional)
-    runs-on: ubuntu-latest
-    needs: []
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - name: Run OCR real-install tests
-        env:
-          AGENT_CALLOUT_OCR_REAL_RUNTIME: "1"
-        run: npx vitest run tests/ocr-runtime.test.ts
-
       - name: Push failure log to ci-logs branch
         if: failure()
         shell: bash
@@ -56,3 +40,33 @@ jobs:
           git add -f failure-tail.txt
           git commit -m "ci failure (${{ matrix.os }} node ${{ matrix.node }}) ${{ github.sha }}"
           git push -f origin "ci-logs-${{ matrix.os }}-${{ matrix.node }}"
+
+  ocr-real-runtime:
+    name: OCR real runtime install (optional)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure git line endings
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Run OCR real-install tests
+        env:
+          AGENT_CALLOUT_OCR_REAL_RUNTIME: "1"
+        shell: bash
+        run: set -o pipefail; npx vitest run tests/ocr-runtime.test.ts 2>&1 | tee ocr-output.log
+      - name: Push failure log to ci-logs branch
+        if: failure()
+        shell: bash
+        run: |
+          tail -c 30000 ocr-output.log > failure-tail.txt || true
+          git config user.name ci-bot
+          git config user.email ci-bot@users.noreply.github.com
+          git checkout -B ci-logs-ocr-real-runtime
+          git add -f failure-tail.txt
+          git commit -m "ci failure (ocr real runtime) ${{ github.sha }}"
+          git push -f origin ci-logs-ocr-real-runtime
