@@ -245,6 +245,8 @@ v0.2.1 已发布：密集说明框避让、目标保护、折线引线、排版�
 
 v0.3.0 已发布：可选本地中英文 OCR 定位通过 Windows 与 macOS 双平台 222 项测试、干净安装、生产依赖 0 漏洞，以及 Claude Code 与 Codex 真实“识别文字 → 确认 → 批注 → 查看结果”验收。多候选或低置信度必须确认，`not-found` 不代表文字不存在；平台间置信度分数不可比。完整证据见[发布记录](docs/releases/0.3.0.md)与[本地 OCR 文档](docs/ocr.md)。
 
+v0.3.1 已发布：`create-handoff` 一键交接包（批注 PNG + 完整 JSON + manifest + 安全摘要 + Markdown 入口，普通目录与 JSON）通过 230 项测试、干净安装与跨 AI 真实交接验收——Codex 创建，Claude 校验并在包内修订。完整证据见[发布记录](docs/releases/0.3.1.md)与[交接包文档](docs/handoff.md)。
+
 自动避让保护的是传入的目标区域。复选框旁的说明文字也需要保留时，应一起框入目标；即使 warning 为空，也要查看是否遮住了其他源内容。
 
 浅色说明框、独立编号配色和语义 tone 已可用：普通说明使用默认 `docs-light` 或 `info`，错误使用 `danger`。旧版 1.0 批注仍保留原有样式。

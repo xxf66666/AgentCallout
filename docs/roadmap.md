@@ -41,7 +41,7 @@
 
 验收覆盖中英文 UI、小字体、DPI 缩放、重复按钮、无结果与低置信度；记录真实定位准确性、延迟和模型安装体积。OCR 不作为安全敏感信息检测承诺。
 
-## 0.3.1：跨 AI 一键交接包
+## 0.3.1：跨 AI 一键交接包（已发布）
 
 - 增加 `create-handoff` 命令，自动生成批注 PNG、JSON sidecar、manifest（文件 SHA-256）、安全摘要和 Markdown 入口；`verify-handoff` 与 MCP `create_handoff`/`verify_handoff` 同步提供。
 - 清楚说明 PNG 已压平，JSON 保存机器可读批注语义。

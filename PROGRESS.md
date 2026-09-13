@@ -4,10 +4,10 @@
 
 ## 当前状态
 
-- 阶段：MVP、0.1.3、0.2.0、0.2.1 与 0.3.0（可选本地 OCR）已发布；下一阶段为 0.3.1 一键交接包
+- 阶段：MVP、0.1.3、0.2.0、0.2.1、0.3.0（可选本地 OCR）与 0.3.1（一键交接包）已发布；下一阶段为 0.4.0 浏览器 DOM 定位
 - GitHub：`https://github.com/xxf66666/AgentCallout`（公开仓库，`main` 已推送）
 - 发布分支：`main`；0.2.1 核心 `9384df7`，显示兼容修复 `a3812a5`
-- 当前发布门槛：0.3.0 完整 gate、干净安装、双客户端 OCR 闭环与 Plugin 验收已通过，见 [发布记录](docs/releases/0.3.0.md)
+- 当前发布门槛：0.3.1 完整 gate、干净安装与跨 AI 交接闭环已通过，见 [发布记录](docs/releases/0.3.1.md)
 - 已知外部限制：Codex 可选 Skills-only Marketplace 曾受客户端固定 30 秒 clone 超时影响；CLI+MCP 主路径已验证
 
 ## 已完成
@@ -104,7 +104,9 @@
 - [x] `createHandoffPackage` / `verifyHandoffPackage` core + CLI `create-handoff`/`verify-handoff` + MCP `create_handoff`/`verify_handoff`（11 工具）
 - [x] 普通目录 + 普通 JSON：保留原名 sidecar/PNG（修订链兼容）、`manifest.json`（角色+SHA-256+字节）、`summary.json` 安全摘要、`HANDOFF.md` 入口、默认附原图（`--no-original` 显式声明不可修订）
 - [x] 测试 8 项：布局/字节一致、--no-original、保留名冲突、目标存在与 overwrite、缺原图失败无半成品、篡改/缺文件/坏 manifest、包内 revise 后 verify 仍过、并发仅一方成功、中文路径、CLI 双命令；全套 228+2 通过
-- [ ] 完整 gate、打包、干净安装；真实客户端交接验收（一方创建、另一方校验并修订）；发布 v0.3.1
+- [x] 完整 gate（228+2、dist 复现）、干净 clone、pack 14 文件、audit 0 漏洞、全局安装 0.3.1 doctor 通过
+- [x] 跨 AI 交接验收：Codex 0.154.0 创建（OCR 确认→批注→打包→自校验）；Claude 2.1.270 接收（独立校验→查看→包内 revise rev1→复核无遮挡）
+- [x] 发布标签 `v0.3.1` 与 `agent-callout--v0.3.1`（指向最终发布提交）
 
 ## 待完成
 

@@ -1,5 +1,14 @@
 # AgentCallout 兼容性与验证记录
 
+## 0.3.1 发布验证（2026-09-13）
+
+`codex/handoff-package`（自 v0.3.0 的 `7d1a9e3`）交付跨 AI 一键交接包：`create-handoff`/`verify-handoff` CLI 与 MCP `create_handoff`/`verify_handoff`（工具总数 11），设计见 [ADR-0010](adr/0010-cross-ai-handoff-package.md)。
+
+- **VERIFIED**（macOS 26.6.2 arm64 / Node 24.21.0，`df4d115`）：本地与 GitHub 干净 clone 完整 verify（228 passed + 2 skipped、3 份 dist 复现）、pack 14 文件、生产 audit 0 漏洞、精确 commit 全局安装 0.3.1 与 doctor/self-test。
+- **VERIFIED**（自动化矩阵）：包布局与 sidecar 字节一致、`--no-original`、保留名冲突、目标已存在与 `--overwrite`、缺原图失败无半成品、中文路径、verify 篡改/缺文件/坏 manifest、包内 revise 后 verify 仍通过、并发创建仅一方成功。
+- **VERIFIED**（跨 AI 交接闭环）：Codex CLI 0.154.0 创建（OCR 确认 → 批注 0 warning → create_handoff → 自校验 5 文件）；Claude Code 2.1.270 作为接收方独立校验、查看批注并在包内 revise 出 rev1，verify 仍 valid，双方批注共存无遮挡。详见[发布记录](releases/0.3.1.md)。
+- **NOT VERIFIED**：Linux、Node 20/22 回归、三平台 CI 矩阵（0.4.x）；Codex Skills-only Plugin 0.3.1（已知 30 秒 clone 超时，不阻塞 CLI+MCP 主路径）。
+
 ## 0.3.0 发布验证（2026-09-13）
 
 `codex/ocr-locator` 已完成可选本地 OCR locator 的发布验收：功能 `d338dc8`（Windows 开发测试）+ 跨平台测试修复 `17cb5c7`（macOS 发布验收）。CLI `ocr install/status`、`locate-text`、MCP `locate_text`、原图 hash/ROI/缩放/反色映射、多候选与置信度证据全部接入。
