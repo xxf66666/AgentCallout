@@ -4,9 +4,9 @@
 
 ## 当前状态
 
-- 阶段：0.1.3–0.6.0 已发布（最新：批量批注 annotate --batch / annotate_batch）；下一阶段 v0.6.1（候选可视化核对 + Edge 多引擎）。规划见 [roadmap](docs/roadmap.md)
+- 阶段：0.1.3–0.6.1 已发布（最新：候选可视化核对 preview-candidates + Edge 多引擎 + 修复 dist 过期提交）；下一阶段 v0.6.2/v0.7.0 按 [roadmap](docs/roadmap.md)
 - GitHub：`https://github.com/xxf66666/AgentCallout`（公开仓库，`main` 已推送）
-- 当前发布门槛：0.6.0 完整 gate、干净安装与双客户端批量验收已通过，见 [发布记录](docs/releases/0.6.0.md)
+- 当前发布门槛：0.6.1 完整 gate、干净安装与双客户端候选预览验收已通过，见 [发布记录](docs/releases/0.6.1.md)
 - CI：三平台（ubuntu/macos/windows）× Node 20/22/24 矩阵 9/9，见 `.github/workflows/ci.yml`
 - 已知外部限制：Codex 可选 Skills-only Marketplace 固定 30 秒 clone 超时（NOT VERIFIED，不阻塞 CLI+MCP 主路径）；gh CLI 未登录（GitHub Release 补建被阻，见 BLOCKERS.md）
 
@@ -152,6 +152,13 @@
 - [x] 文档（README 批量节）、干净 clone（CLEAN60-GATE-OK）、生产 audit 0 漏洞、全局安装 0.6.0
 - [x] 真实双客户端批量验收：Codex 单次 annotate_batch 三图 okCount 3/3、跨图编号 1/2/3（sidecar 断言+人工复核）；Claude CLI 端到端测试覆盖
 - [x] 发布标签 `v0.6.0` 与 `agent-callout--v0.6.0`（指向最终发布提交）
+
+## v0.6.1（2026-09-14，已发布）
+
+- [x] `preview-candidates`/`preview_candidates`（工具 16 个）：候选编号描边框渲染，像素断言；临时确认产物（无 sidecar、不进修订链）
+- [x] Chromium 多引擎：status `engines` 枚举 + `locate-dom --engine`/MCP `engine` + 证据 `browser.engine`/版本；未装引擎返回 `DOM_ENGINE_UNAVAILABLE`
+- [x] 真实缺陷两连修：CandidatePreviewResult 缺 outputSha256/outputDimensions（MCP 校验误报），根因是修复提交带着过期 dist——已重建并验证；Codex 第五轮验收完全无错误
+- [x] 发布标签 `v0.6.1` 与 `agent-callout--v0.6.1`
 
 ## 待完成（按 [roadmap](docs/roadmap.md) 迭代计划推进）
 
