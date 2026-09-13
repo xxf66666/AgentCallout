@@ -1,4 +1,4 @@
-import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -45,7 +45,9 @@ describe("AgentCallout CLI", () => {
   let inputPath: string;
 
   beforeEach(async () => {
-    directory = await mkdtemp(join(tmpdir(), "agent-callout-cli-测试-"));
+    // Canonicalize through symlinks (macOS /var -> /private/var) to match the
+    // realpath-resolved paths the product reports for inputs and outputs.
+    directory = await realpath(await mkdtemp(join(tmpdir(), "agent-callout-cli-测试-")));
     inputPath = join(directory, "截图 示例.png");
     await makeImage(inputPath, { r: 40, g: 100, b: 180 });
   });

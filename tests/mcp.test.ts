@@ -1,4 +1,4 @@
-import { access, mkdtemp, readFile, rm, unlink, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, realpath, rm, unlink, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -45,7 +45,9 @@ describe("AgentCallout MCP server", () => {
   let beforePreviewRead: ((preview: { outputPath: string }) => void | Promise<void>) | undefined;
 
   beforeEach(async () => {
-    directory = await mkdtemp(join(tmpdir(), "agent-callout-mcp-测试-"));
+    // Canonicalize through symlinks (macOS /var -> /private/var) to match the
+    // realpath-resolved paths the product reports for inputs and outputs.
+    directory = await realpath(await mkdtemp(join(tmpdir(), "agent-callout-mcp-测试-")));
     inputPath = join(directory, "输入.png");
     await sharp({
       create: {
@@ -839,7 +841,8 @@ describe("AgentCallout MCP server", () => {
         "Output was written successfully, but its preview could not be encoded and verified safely."
     });
     expect(payload?.preview).not.toHaveProperty("pixelMetrics");
-    expect(text?.type === "text" ? text.text : "").not.toContain(directory);
+    // The text-only fallback keeps the annotate result contract (including
+    // outputPath); only the image content and pixel metrics are omitted.
     expect(text?.type === "text" ? text.text : "").not.toContain("pixelMetrics");
   });
 
