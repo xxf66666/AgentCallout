@@ -46,9 +46,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               title: `[CI] ${{ matrix.os }} node ${{ matrix.node }} failed at ${{ github.sha }}`.slice(0, 90),
-              body: '```
-' + tail + '
-```'
+              body: '```\\n' + tail + '\\n```'
             });
 
       - name: Push failure log to ci-logs branch
@@ -95,9 +93,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               title: `[CI] ${{ matrix.os }} node ${{ matrix.node }} failed at ${{ github.sha }}`.slice(0, 90),
-              body: '```
-' + tail + '
-```'
+              body: '```\\n' + tail + '\\n```'
             });
 
       - name: Push failure log to ci-logs branch
