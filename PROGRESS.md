@@ -135,6 +135,15 @@
 - [x] 发布标签 `v0.4.1` 与 `agent-callout--v0.4.1`（指向最终发布提交）
 - [x] 交付 GUI 与系统截图入口评估（docs/research-gui-evaluation.md），结论均为推迟
 
+## v0.5.0 进行中（2026-09-13）
+
+- 分支 `codex/v0.5.0-green-truth`（自 v0.4.1）：真实绿灯版本，见 [发布记录](docs/releases/0.5.0.md)。
+- [x] DOM 测试 fixture 化：fixtures 入库、套件级运行时、动态 skip 可见、无机器本地依赖
+- [x] worker DPR 防御（DOM_DPR_MISMATCH）；lineage 错误分支测试；OCR 网络隔离回归 + 专用 CI job
+- [x] Node 支持线上移 >=22（CI 22/24）；防漂移门禁 check:docs 入 verify；版本 0.5.0
+- [x] ADR-0004 回归：Codex 0.154 确认预览图进入模型上下文，图片返回形态立场维持
+- [ ] 完整 gate 收口、干净 clone、合并 main、双标签发布 v0.5.0；Claude Plugin 更新
+
 ## 待完成（按 [roadmap](docs/roadmap.md) 迭代计划推进）
 
 - [ ] 先行任务：GitHub Release 补建（v0.1.2 是否补建需核对；被 gh 未登录阻塞，见 BLOCKERS.md）、防漂移检查、Node 支持线决策、依赖升级联动流程成文
