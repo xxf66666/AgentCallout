@@ -2,6 +2,7 @@
 // for OCR/DOM locate candidates onto the source image. The output is a
 // temporary confirmation artifact: no sidecar, not part of the revision
 // chain, and never an annotation by itself.
+import { createHash } from "node:crypto";
 import { readFile, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -40,6 +41,8 @@ export interface RenderCandidatePreviewArguments extends ImageSafetyOptions {
 export interface CandidatePreviewResult {
   operation: "candidate-preview";
   outputPath: string;
+  /** SHA-256 of the written preview PNG, for downstream integrity checks. */
+  outputSha256: string;
   candidateCount: number;
   width: number;
   height: number;
@@ -115,6 +118,7 @@ export async function renderCandidatePreview(
   return {
     operation: "candidate-preview",
     outputPath,
+    outputSha256: createHash("sha256").update(output).digest("hex"),
     candidateCount: arguments_.candidates.length,
     width,
     height
