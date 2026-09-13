@@ -4302,6 +4302,8 @@ function isPublishConflict(error: unknown): boolean {
     "code" in error &&
     ((error as { code?: unknown }).code === "ENOTEMPTY" ||
       (error as { code?: unknown }).code === "EEXIST" ||
+      (error as { code?: unknown }).code === "EPERM" ||
+      (error as { code?: unknown }).code === "EACCES" ||
       (error as { code?: unknown }).code === "ENOTDIR")
   );
 }
