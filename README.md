@@ -109,6 +109,14 @@ agent-callout locate-dom "https://example.test/form" --text "保存" --screensho
 ```
 
 按 CSS selector、文字或可访问性名称返回候选框，坐标绑定全页截图 SHA-256 与页面状态；页面变化后旧坐标失效，批注使用当次截图。完整参数与证据语义见[网页元素定位文档](docs/dom.md)。
+候选确认可视化：把 locate-text / locate-dom 的候选结果画成编号描边框，看图选号再批注：
+
+```powershell
+agent-callout preview-candidates .\page.png --candidates .\locate-result.json --json
+agent-callout locate-dom "https://example.test" --text "提交" --engine edge --screenshot page.png --json
+```
+
+`--engine`/`engine` 支持 Chrome 与 Edge（零下载复用本机浏览器；Windows 无 Chrome 时 Edge 可用）。候选预览是临时确认产物：无 sidecar、不进修订链、本身不是批注。可访问性名称为启发式计算（aria-label/title/placeholder/alt/label），其准确性不在承诺内。
 
 ## 一次标完整套截图
 

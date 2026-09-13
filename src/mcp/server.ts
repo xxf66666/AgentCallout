@@ -26,6 +26,7 @@ import {
   inspectImage,
   locateDom,
   locateText,
+  renderCandidatePreview,
   diffRevisions,
   forkLineage,
   OcrImageError,
@@ -211,7 +212,8 @@ const locateDomInputSchema = z
       .strict()
       .optional(),
     maxCandidates: z.number().int().min(1).max(100).optional(),
-    timeoutMs: z.number().int().min(1_000).max(120_000).optional()
+    timeoutMs: z.number().int().min(1_000).max(120_000).optional(),
+    engine: z.enum(["chrome", "edge"]).optional()
   })
   .strict()
   .refine(
@@ -271,6 +273,24 @@ const contactSheetInputSchema = z
   .strict();
 
 const doctorInputSchema = z.object({}).strict();
+
+const previewCandidatesInputSchema = z
+  .object({
+    inputPath: pathSchema.describe("Source image the candidates were located on."),
+    candidates: z
+      .array(
+        z
+          .object({
+            rect: rectSchema,
+            label: z.string().max(200).optional()
+          })
+          .strict()
+      )
+      .min(1)
+      .max(100),
+    outputPath: pathSchema.optional()
+  })
+  .strict();
 
 const batchItemSchema = z
   .object({
@@ -822,7 +842,8 @@ export function createAgentCalloutMcpServer(options: AgentCalloutMcpServerOption
       screenshotPath,
       viewport,
       maxCandidates,
-      timeoutMs
+      timeoutMs,
+      engine
     }) =>
       safeToolCall(async () => {
         const allowedRoots = await rootAuthority.roots();
@@ -840,6 +861,7 @@ export function createAgentCalloutMcpServer(options: AgentCalloutMcpServerOption
             ...(viewport === undefined ? {} : { viewport }),
             ...(maxCandidates === undefined ? {} : { maxCandidates }),
             ...(timeoutMs === undefined ? {} : { timeoutMs }),
+            ...(engine === undefined ? {} : { engine }),
             ...(domRuntimeDirectory === undefined ? {} : { runtimeDirectory: domRuntimeDirectory }),
             ...(browserExecutablePath === undefined ? {} : { browserExecutablePath })
           })
@@ -975,6 +997,59 @@ export function createAgentCalloutMcpServer(options: AgentCalloutMcpServerOption
                 sizeBytes: preview.sizeBytes,
                 coveredOutputs: batch.results.map((item) => basename(item.outputPath))
               }
+            }),
+            {
+              type: "image",
+              data: preview.data,
+              mimeType: "image/png",
+              _meta: {
+                "codex/imageDetail": PREVIEW_DETAIL,
+                "agent-callout/previewMode": "compact-overview",
+                "agent-callout/previewWidth": preview.width,
+                "agent-callout/previewHeight": preview.height,
+                "agent-callout/previewBytes": preview.sizeBytes
+              }
+            }
+          ],
+          isError: false
+        };
+      })
+  );
+
+  server.registerTool(
+    "preview_candidates",
+    {
+      title: "Preview locate candidates",
+      description:
+        "Draw numbered outline boxes for OCR/DOM locate candidates onto the source image. Temporary confirmation artifact: no sidecar, not part of the revision chain, never an annotation.",
+      inputSchema: previewCandidatesInputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ inputPath, candidates, outputPath }) =>
+      safeToolCall(async () => {
+        const allowedRoots = await rootAuthority.roots();
+        const rendered = await renderCandidatePreview({
+          inputPath,
+          candidates,
+          ...(outputPath === undefined ? {} : { outputPath }),
+          allowedRoots
+        });
+        const preview = await createBoundedPreview(
+          rendered as unknown as Parameters<typeof createBoundedPreview>[0],
+          allowedRoots,
+          options.beforePreviewRead
+        );
+        return {
+          content: [
+            textContent({
+              operation: rendered.operation,
+              outputPath: rendered.outputPath,
+              candidateCount: rendered.candidateCount
             }),
             {
               type: "image",

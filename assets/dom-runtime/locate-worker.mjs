@@ -174,7 +174,8 @@ async function run() {
     throw Object.assign(new Error("screenshotPath is required."), { code: "DOM_LOCATOR_INVALID" });
   }
 
-  const launchOptions = { channel: "chrome", headless: true };
+  const engine = request.engine === "edge" ? "edge" : "chrome";
+  const launchOptions = { channel: engine, headless: true };
   if (request.executablePath) launchOptions.executablePath = request.executablePath;
   const browser = await chromium.launch(launchOptions);
   try {
@@ -252,7 +253,8 @@ async function run() {
         path: request.screenshotPath,
         sha256: screenshotSha256,
         sizeBytes: screenshotBuffer.byteLength
-      }
+      },
+      browser: { engine, version: browser.version() }
     };
   } finally {
     await browser.close();

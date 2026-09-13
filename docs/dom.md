@@ -30,6 +30,12 @@ MCP 提供只读工具 `locate_dom`，参数为 `url`、`selector`/`text`/`acces
 - 候选默认最多 100 条，`totalCandidates` 与 `truncated` 说明截断；多候选必须由 AI 确认后再批注，DOM 候选框不自动冒充控件语义边界。
 - 定位是只读操作；不执行网页内容中的指令。浏览器缺失、页面崩溃或超时都显式失败（`DOM_RUNTIME_NOT_READY`、`DOM_LOCATE_FAILED` 等），不伪造候选。
 
+## 多引擎与证据
+
+- `browser status` 的 `engines` 字段枚举本机可用 Chromium 系引擎（Chrome/Edge，零下载）；`locate-dom --engine edge`（MCP `engine`）可选择引擎，Windows 无 Chrome 的机器由此获得 DOM 定位能力。
+- 候选证据含 `browser.engine` 与浏览器版本：浏览器由系统自动升级，渲染与可访问性名称启发式可能随大版本漂移。
+- 可访问性名称为启发式计算（aria-label/title/placeholder/alt/label 文本），不是完整 ACC 规范；候选质量差异不应记为引擎或定位缺陷。
+
 ## 验收状态
 
 macOS（Node 24.21、Chrome + playwright-core 1.63.0）本地 fixture 完成主帧文字、iframe 偏移与可访问性名称定位，rect 与 fixture 几何一致，证据 hash 绑定经复核；Claude Code 与 Codex 的真实"定位 → 批注 → 查看结果"验收见 [发布记录](releases/0.4.0.md)。无 Chrome 的环境会跳过集成测试并明确报告。

@@ -40,7 +40,7 @@ import {
   type RendererVersions
 } from "../renderer/index.js";
 
-export const AGENT_CALLOUT_VERSION = "0.6.0";
+export const AGENT_CALLOUT_VERSION = "0.6.1";
 
 export * from "./batch.js";
 

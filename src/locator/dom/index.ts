@@ -29,6 +29,8 @@ export interface DomLocateArguments {
   viewport?: { width: number; height: number } | undefined;
   timeoutMs?: number | undefined;
   maxCandidates?: number | undefined;
+  /** Chromium engine to launch. Default: first available (chrome, then edge). */
+  engine?: ChromiumEngine | undefined;
   /** Trusted setting from server startup; never from a locate_dom request. */
   runtimeDirectory?: string | undefined;
   /** Trusted setting from server startup; never from a locate_dom request. */
@@ -57,6 +59,7 @@ export interface DomLocateResult {
     scroll: { x: number; y: number };
   };
   screenshot: { path: string; sha256: string; sizeBytes: number };
+  browser: { engine: string; version: string };
 }
 
 export interface DomRuntimeStatus {
@@ -65,7 +68,9 @@ export interface DomRuntimeStatus {
   runtimeDirectory: string;
   runtimeVersion: string;
   playwrightVersion: string | undefined;
+  /** Deprecated compatibility field: paths of available engines. */
   chromeCandidatePaths: string[];
+  engines: { engine: ChromiumEngine; path: string }[];
   issues: string[];
 }
 
@@ -140,31 +145,66 @@ function resolvedRuntimeDirectory(runtimeDirectory?: string): string {
   return resolved;
 }
 
-function chromeCandidatePaths(): string[] {
+export type ChromiumEngine = "chrome" | "edge";
+
+interface EngineCandidate {
+  engine: ChromiumEngine;
+  path: string;
+}
+
+function engineCandidatePaths(): EngineCandidate[] {
   if (process.platform === "darwin") {
-    return ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"];
+    return [
+      { engine: "chrome", path: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" },
+      { engine: "edge", path: "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge" }
+    ];
   }
   if (process.platform === "win32") {
     return [
-      path.join(
-        process.env["ProgramFiles"] ?? "C:\\Program Files",
-        "Google\\Chrome\\Application\\chrome.exe"
-      ),
-      path.join(
-        process.env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)",
-        "Google\\Chrome\\Application\\chrome.exe"
-      ),
-      path.join(
-        process.env["LOCALAPPDATA"] ?? path.join(homedir(), "AppData", "Local"),
-        "Google\\Chrome\\Application\\chrome.exe"
-      )
+      {
+        engine: "chrome",
+        path: path.join(
+          process.env["ProgramFiles"] ?? "C:\\Program Files",
+          "Google\\Chrome\\Application\\chrome.exe"
+        )
+      },
+      {
+        engine: "chrome",
+        path: path.join(
+          process.env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)",
+          "Google\\Chrome\\Application\\chrome.exe"
+        )
+      },
+      {
+        engine: "chrome",
+        path: path.join(
+          process.env["LOCALAPPDATA"] ?? path.join(homedir(), "AppData", "Local"),
+          "Google\\Chrome\\Application\\chrome.exe"
+        )
+      },
+      {
+        engine: "edge",
+        path: path.join(
+          process.env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)",
+          "Microsoft\\Edge\\Application\\msedge.exe"
+        )
+      },
+      {
+        engine: "edge",
+        path: path.join(
+          process.env["ProgramFiles"] ?? "C:\\Program Files",
+          "Microsoft\\Edge\\Application\\msedge.exe"
+        )
+      }
     ];
   }
   return [
-    "/usr/bin/google-chrome",
-    "/usr/bin/google-chrome-stable",
-    "/usr/bin/chromium",
-    "/usr/bin/chromium-browser"
+    { engine: "chrome", path: "/usr/bin/google-chrome" },
+    { engine: "chrome", path: "/usr/bin/google-chrome-stable" },
+    { engine: "edge", path: "/usr/bin/microsoft-edge" },
+    { engine: "edge", path: "/usr/bin/microsoft-edge-stable" },
+    { engine: "chrome", path: "/usr/bin/chromium" },
+    { engine: "chrome", path: "/usr/bin/chromium-browser" }
   ];
 }
 
@@ -259,9 +299,12 @@ export async function inspectBrowserRuntime(
   if (!existsSync(path.join(target, "locate-worker.mjs"))) {
     issues.push("locate-worker.mjs is missing; reinstall the browser runtime.");
   }
-  const chromeCandidates = chromeCandidatePaths().filter((candidate) => existsSync(candidate));
-  if (chromeCandidates.length === 0) {
-    issues.push("No installed Chrome was found; install Chrome or set the executable path.");
+  const engines = engineCandidatePaths().filter((candidate) => existsSync(candidate.path));
+  const chromeCandidates = engines.map((candidate) => candidate.path);
+  if (engines.length === 0) {
+    issues.push(
+      "No installed Chrome or Edge was found; install one of them or set the executable path."
+    );
   }
   return {
     status: issues.length === 0 ? "ready" : "not-installed",
@@ -270,6 +313,7 @@ export async function inspectBrowserRuntime(
     runtimeVersion: DOM_RUNTIME_VERSION,
     playwrightVersion,
     chromeCandidatePaths: chromeCandidates,
+    engines,
     issues
   };
 }
@@ -298,7 +342,8 @@ async function locateWithRuntime(
         : { maxCandidates: arguments_.maxCandidates }),
       ...(arguments_.browserExecutablePath === undefined
         ? {}
-        : { executablePath: arguments_.browserExecutablePath })
+        : { executablePath: arguments_.browserExecutablePath }),
+      ...(arguments_.engine === undefined ? {} : { engine: arguments_.engine })
     }),
     "utf8"
   );
@@ -365,6 +410,15 @@ export async function locateDom(arguments_: DomLocateArguments): Promise<DomLoca
       "DOM_LOCATOR_INVALID",
       "The screenshot output directory must exist before locating."
     );
+  }
+  if (arguments_.engine !== undefined) {
+    const available = runtime.engines.some((candidate) => candidate.engine === arguments_.engine);
+    if (!available) {
+      throw new DomRuntimeError(
+        "DOM_ENGINE_UNAVAILABLE",
+        `DOM_ENGINE_UNAVAILABLE: the requested browser engine "${arguments_.engine}" is not installed; available engines: ${runtime.engines.map((candidate) => candidate.engine).join(", ") || "none"}.`
+      );
+    }
   }
   const result = await locateWithRuntime(
     resolvedRuntimeDirectory(arguments_.runtimeDirectory),

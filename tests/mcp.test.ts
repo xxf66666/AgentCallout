@@ -109,7 +109,7 @@ describe("AgentCallout MCP server", () => {
     expect(injected.isError).toBe(true);
   });
 
-  test("initializes with workflow instructions and exactly fifteen strict tools", async () => {
+  test("initializes with workflow instructions and exactly sixteen strict tools", async () => {
     expect(client.getInstructions()).toContain("Inspect the screenshot before annotating");
     const listed = await client.listTools();
     expect(listed.tools.map((tool) => tool.name).sort()).toEqual([
@@ -125,6 +125,7 @@ describe("AgentCallout MCP server", () => {
       "inspect_image",
       "locate_dom",
       "locate_text",
+      "preview_candidates",
       "revise_annotation",
       "validate_annotation_spec",
       "verify_handoff"
@@ -138,6 +139,7 @@ describe("AgentCallout MCP server", () => {
         [
           "annotate_batch",
           "annotate_image",
+          "preview_candidates",
           "create_contact_sheet",
           "crop_image",
           "revise_annotation"
@@ -239,7 +241,7 @@ describe("AgentCallout MCP server", () => {
 
     const doctor = (await client.callTool({ name: "doctor", arguments: {} })) as CallToolResult;
     expect(doctor.structuredContent).toMatchObject({
-      product: { name: "agent-callout", version: "0.6.0" },
+      product: { name: "agent-callout", version: "0.6.1" },
       ok: true,
       limits: { maxPixels: 40_000_000, maxAnnotations: 200 },
       mcp: { maxPreviewBytes: 64 * 1024, maxPreviewDimension: 512, previewDetail: "auto" }

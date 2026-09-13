@@ -22,6 +22,7 @@ import {
   inspectAnnotationSidecar,
   inspectImage,
   locateDom,
+  renderCandidatePreview,
   diffRevisions,
   forkLineage,
   locateText,
@@ -102,6 +103,7 @@ interface HandoffOptions extends CommonOptions {
 type BrowserOptions = OcrOptions;
 
 interface LocateDomOptions extends BrowserOptions {
+  engine?: "chrome" | "edge";
   selector?: string;
   text?: string;
   accessible?: string;
@@ -596,8 +598,14 @@ export function createCliProgram(io: CliIo = defaultIo): Command {
         100
       )
       .option("--timeout <ms>", "Navigation and locate timeout", parsePositiveInteger, 15000)
+      .option("--engine <engine>", "Chromium engine: chrome or edge", (value: string) => {
+        if (value !== "chrome" && value !== "edge") {
+          throw new InvalidArgumentError("Engine must be chrome or edge.");
+        }
+        return value;
+      })
       .option("--runtime-directory <path>", "Trusted runtime cache directory")
-      .option("--browser-executable <path>", "Explicit Chrome executable path")
+      .option("--browser-executable <path>", "Explicit browser executable path")
   ).action(async (url: string, options: LocateDomOptions) => {
     const locatorCount = [options.selector, options.text, options.accessible].filter(
       (value) => value !== undefined
@@ -627,7 +635,8 @@ export function createCliProgram(io: CliIo = defaultIo): Command {
         : { runtimeDirectory: options.runtimeDirectory }),
       ...(options.browserExecutable === undefined
         ? {}
-        : { browserExecutablePath: options.browserExecutable })
+        : { browserExecutablePath: options.browserExecutable }),
+      ...(options.engine === undefined ? {} : { engine: options.engine })
     });
     writeResult(io, result, options, () =>
       [
@@ -810,6 +819,52 @@ export function createCliProgram(io: CliIo = defaultIo): Command {
     });
     writeResult(io, result, options, () => formatGenerated("Annotation", result));
   });
+
+  addCommonOptions(
+    program
+      .command("preview-candidates <input>")
+      .description(
+        "Draw numbered outline boxes for locate candidates onto the image (temporary confirmation artifact)."
+      )
+      .requiredOption(
+        "--candidates <file>",
+        "Locate result JSON (locate-text/locate-dom output) or a bare candidate array"
+      )
+      .option("--output <path>", "Output PNG path (default beside the input)")
+  ).action(
+    async (input: string, options: CommonOptions & { candidates: string; output?: string }) => {
+      const allowedRoots = resolvedRoots(options);
+      const parsed = JSON.parse(await readFile(resolve(options.candidates), "utf8")) as
+        | {
+            candidates?: {
+              rect: { x: number; y: number; width: number; height: number };
+              text?: string;
+              name?: string;
+            }[];
+          }
+        | {
+            rect: { x: number; y: number; width: number; height: number };
+            text?: string;
+            name?: string;
+          }[];
+      const rawCandidates = Array.isArray(parsed) ? parsed : (parsed.candidates ?? []);
+      const result = await renderCandidatePreview({
+        inputPath: input,
+        candidates: rawCandidates.map((candidate) => ({
+          rect: candidate.rect,
+          label: candidate.text ?? candidate.name
+        })),
+        ...(options.output === undefined ? {} : { outputPath: options.output }),
+        ...(allowedRoots === undefined ? {} : { allowedRoots })
+      });
+      writeResult(
+        io,
+        result,
+        options,
+        () => `Candidate preview: ${result.candidateCount} numbered boxes -> ${result.outputPath}`
+      );
+    }
+  );
 
   addCommonOptions(
     program

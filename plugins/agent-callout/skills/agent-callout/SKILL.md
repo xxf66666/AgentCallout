@@ -4,7 +4,7 @@ description: Annotate existing PNG, JPEG, or WebP screenshots with callouts, arr
 license: MIT
 metadata:
   author: AgentCallout contributors
-  version: "0.6.0"
+  version: "0.6.1"
 ---
 
 # AgentCallout
