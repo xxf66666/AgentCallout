@@ -167,6 +167,7 @@
 - [x] Linux 容器（node:24）完整 verify 通过（LINUX-GATE-OK，247+4）；docs/npm-distribution.md 发布说明
 - [x] 真实 npm publish 被 npm 登录阻塞（BLOCKERS #0）；解除后一条命令完成
 - [x] 发布标签 `v0.7.0` 与 `agent-callout--v0.7.0`
+- [x] Claude Plugin 0.6.1→0.7.0 更新并经 headless doctor 验证（v0.7.0 — ok: true）
 
 ## v0.7.0（2026-09-14，已发布 / publish 待凭据）
 
