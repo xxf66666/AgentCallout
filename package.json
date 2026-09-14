@@ -1,8 +1,7 @@
 {
   "name": "agent-callout",
-  "version": "0.6.1",
-  "description": "Give AI agents a pen for screenshots.",
-  "private": true,
+  "version": "0.7.0",
+  "description": "Give AI agents a pen for screenshots. Annotate PNG/JPEG/WebP locally with red boxes, arrows, numbered callouts, highlights and irreversible redaction.",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -53,7 +52,8 @@
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build && npm run check:dist && npm run check:docs",
-    "check:docs": "node scripts/check-doc-sync.mjs"
+    "check:docs": "node scripts/check-doc-sync.mjs",
+    "prepublishOnly": "npm run verify"
   },
   "dependencies": {
     "sharp": "0.35.4"
@@ -74,5 +74,9 @@
     "typescript-eslint": "8.68.0",
     "vitest": "4.1.11",
     "zod": "4.5.4"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   }
 }

@@ -40,7 +40,7 @@ import {
   type RendererVersions
 } from "../renderer/index.js";
 
-export const AGENT_CALLOUT_VERSION = "0.6.1";
+export const AGENT_CALLOUT_VERSION = "0.7.0";
 
 export * from "./batch.js";
 
@@ -2918,9 +2918,18 @@ export async function reviseAnnotation(
           arguments_
         );
         if (recovery === "active") {
+          const holderPid = await (async () => {
+            try {
+              const lockBytes = await readFile(lockPath);
+              const parsedLock = JSON.parse(lockBytes.toString("utf8")) as { pid?: unknown };
+              return typeof parsedLock.pid === "number" ? parsedLock.pid : undefined;
+            } catch {
+              return undefined;
+            }
+          })();
           throw revisionFailure(
             "REVISION_CONFLICT",
-            "Another process is revising this annotation lineage."
+            `Another process (pid ${holderPid ?? "unknown"}) is revising this annotation lineage. Wait for it to finish, or if no agent-callout process is actually running, remove the stale lock ${path.join(path.dirname(sidecarPath), ".agent-callout-lock")} and retry.`
           );
         }
         if (recovery === "committed") {
