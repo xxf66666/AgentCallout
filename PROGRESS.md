@@ -168,6 +168,14 @@
 - [x] 真实 npm publish 被 npm 登录阻塞（BLOCKERS #0）；解除后一条命令完成
 - [x] 发布标签 `v0.7.0` 与 `agent-callout--v0.7.0`
 
+## v0.7.0（2026-09-14，已发布 / publish 待凭据）
+
+- [x] package.json npm-ready（去 private、prepublishOnly=verify、publishConfig 官方 registry、pack 清单核对 17 文件）
+- [x] REVISION_CONFLICT 携带持有者 pid 与锁恢复指引；三类故障 runbook 入 docs/runbooks.md；git→npm 迁移章节
+- [x] Linux 容器（node:24）完整 verify 通过（LINUX-GATE-OK，247+4）；docs/npm-distribution.md 发布说明
+- [x] 真实 npm publish 被 npm 登录阻塞（BLOCKERS #0）；解除后一条命令完成
+- [x] 发布标签 `v0.7.0` 与 `agent-callout--v0.7.0`
+
 ## 待完成（按 [roadmap](docs/roadmap.md) 迭代计划推进）
 
 - [ ] 先行任务：GitHub Release 补建（v0.1.2 是否补建需核对；被 gh 未登录阻塞，见 BLOCKERS.md）、防漂移检查、Node 支持线决策、依赖升级联动流程成文
