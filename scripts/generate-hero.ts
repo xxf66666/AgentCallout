@@ -69,9 +69,6 @@ const svgBody = `
   <rect x="968" y="668" width="156" height="56" rx="10" fill="#2563EB"/>
 `;
 
-const texts: Array<Parameters<typeof textOverlay>[0] | number | string> = [];
-void texts;
-
 async function main() {
   await mkdir("examples/hero", { recursive: true });
   const geometry = Buffer.from(
@@ -83,7 +80,9 @@ async function main() {
   overlays.push(await textOverlay("数据报表", 40, 204, { size: 17, color: "#94A3B8", width: 160 }));
   overlays.push(await textOverlay("异常告警", 40, 260, { size: 17, color: "#94A3B8", width: 160 }));
   overlays.push(await textOverlay("系统设置", 40, 316, { size: 17, color: "#94A3B8", width: 160 }));
-  overlays.push(await textOverlay("运营看板 · Order Console", 292, 48, { size: 22, color: "#16324F" }));
+  overlays.push(
+    await textOverlay("运营看板 · Order Console", 292, 48, { size: 22, color: "#16324F" })
+  );
   overlays.push(await textOverlay("近 30 天", 1148, 52, { size: 15, color: "#94A3B8", width: 90 }));
   overlays.push(await textOverlay("支付转化率", 292, 140, { size: 16, color: "#64748B" }));
   overlays.push(await textOverlay("2.41%", 292, 172, { size: 34, color: "#16324F" }));
@@ -93,11 +92,25 @@ async function main() {
   overlays.push(await textOverlay("17 笔", 972, 172, { size: 34, color: "#DC2626" }));
   overlays.push(await textOverlay("近 7 天订单量", 628, 330, { size: 17, color: "#475569" }));
   overlays.push(await textOverlay("待处理", 288, 322, { size: 16, color: "#475569" }));
-  overlays.push(await textOverlay("订单 #20260914-0317  ·  ¥1,280", 300, 360, { size: 15, color: "#334155" }));
-  overlays.push(await textOverlay("订单 #20260914-0298  ·  ¥860", 300, 390, { size: 15, color: "#334155" }));
-  overlays.push(await textOverlay("风控提示：订单 #20260914-0281 支付信息异常", 300, 478, { size: 15, color: "#B45309" }));
+  overlays.push(
+    await textOverlay("订单 #20260914-0317  ·  ¥1,280", 300, 360, { size: 15, color: "#334155" })
+  );
+  overlays.push(
+    await textOverlay("订单 #20260914-0298  ·  ¥860", 300, 390, { size: 15, color: "#334155" })
+  );
+  overlays.push(
+    await textOverlay("风控提示：订单 #20260914-0281 支付信息异常", 300, 478, {
+      size: 15,
+      color: "#B45309"
+    })
+  );
   overlays.push(await textOverlay("API Token", 288, 648, { size: 16, color: "#475569" }));
-  overlays.push(await textOverlay("sk-live-9f3kQ7mZx2Vb8Rw5Tn1LpYd4Ca6He0Gj", 300, 684, { size: 15, color: "#64748B" }));
+  overlays.push(
+    await textOverlay("sk-live-9f3kQ7mZx2Vb8Rw5Tn1LpYd4Ca6He0Gj", 300, 684, {
+      size: 15,
+      color: "#64748B"
+    })
+  );
   overlays.push(await textOverlay("保存更改", 1002, 684, { size: 18, color: "#FFFFFF" }));
 
   const image = await sharp(geometry).composite(overlays).png().toBuffer();
@@ -105,4 +118,4 @@ async function main() {
   console.log("hero base written: examples/hero/hero.png");
 }
 
-main();
+void main();
