@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-- 阶段：0.1.3–0.6.1 已发布（最新：候选可视化核对 preview-candidates + Edge 多引擎 + 修复 dist 过期提交）；下一阶段 v0.6.2/v0.7.0 按 [roadmap](docs/roadmap.md)
+- 阶段：0.1.3–0.7.0 已发布（最新：npm-ready 与安装链路加固）；下一阶段 v0.8.0 自诊断。规划见 [roadmap](docs/roadmap.md)
 - GitHub：`https://github.com/xxf66666/AgentCallout`（公开仓库，`main` 已推送）
 - 当前发布门槛：0.6.1 完整 gate、干净安装与双客户端候选预览验收已通过，见 [发布记录](docs/releases/0.6.1.md)
 - CI：三平台（ubuntu/macos/windows）× Node 20/22/24 矩阵 9/9，见 `.github/workflows/ci.yml`
@@ -159,6 +159,14 @@
 - [x] Chromium 多引擎：status `engines` 枚举 + `locate-dom --engine`/MCP `engine` + 证据 `browser.engine`/版本；未装引擎返回 `DOM_ENGINE_UNAVAILABLE`
 - [x] 真实缺陷两连修：CandidatePreviewResult 缺 outputSha256/outputDimensions（MCP 校验误报），根因是修复提交带着过期 dist——已重建并验证；Codex 第五轮验收完全无错误
 - [x] 发布标签 `v0.6.1` 与 `agent-callout--v0.6.1`
+
+## v0.7.0（2026-09-14，已发布 / publish 待凭据）
+
+- [x] package.json npm-ready（去 private、prepublishOnly=verify、publishConfig 官方 registry、pack 清单核对 17 文件）
+- [x] REVISION_CONFLICT 携带持有者 pid 与锁恢复指引；三类故障 runbook 入 docs/runbooks.md；git→npm 迁移章节
+- [x] Linux 容器（node:24）完整 verify 通过（LINUX-GATE-OK，247+4）；docs/npm-distribution.md 发布说明
+- [x] 真实 npm publish 被 npm 登录阻塞（BLOCKERS #0）；解除后一条命令完成
+- [x] 发布标签 `v0.7.0` 与 `agent-callout--v0.7.0`
 
 ## 待完成（按 [roadmap](docs/roadmap.md) 迭代计划推进）
 
