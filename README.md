@@ -2,24 +2,34 @@
 
 [![CI](https://github.com/xxf66666/AgentCallout/actions/workflows/ci.yml/badge.svg)](https://github.com/xxf66666/AgentCallout/actions/workflows/ci.yml)
 
-**给 AI 一支截图批注笔：让 Claude Code、Codex 为已有截图加红框、箭头、编号、说明、高亮，需要时用不可恢复的方式遮住敏感信息。**
+**你说出哪里有问题，AI 负责把它标清楚——然后亲眼检查，不满意就自己改。**
 
-_Give AI agents a pen for screenshots._
+![AgentCallout 批注效果](examples/hero/hero-annotated.png)
 
-![AgentCallout 示例](examples/contact-sheet.png)
+<p align="center"><sub>上图由 AgentCallout 一次生成：编号说明框、指向箭头，以及对 API Token 的不可恢复遮挡。</sub></p>
 
-AgentCallout 在本机处理 PNG、JPEG、WebP——不上传截图、不需要任何模型 API Key。它把图片处理包装成 Agent 能执行的**「检查 → 批注 → 查看 → 修正」**流程：你只要说清楚想标哪里、说明什么，Agent 负责核对坐标、渲染批注、查看结果并在有遮挡时自行调整。
+它在本机处理 PNG、JPEG、WebP——不上传截图、不需要任何模型 API Key。给 Claude Code 或 Codex 装上它，你说清楚想标哪里，剩下的交给流程：
 
-| 能力         | 入口                                        | 说明                                                               |
-| ------------ | ------------------------------------------- | ------------------------------------------------------------------ |
-| 十类批注     | `annotate` / `annotate_image`               | 矩形、椭圆、箭头、文字、说明框、编号、高亮、聚光灯、模糊、安全遮挡 |
-| 修订历史     | `revise` / `revise_annotation`              | 稳定 ID 增量修改，生成 `.rev1/.rev2/...`，原图与历史全部保留       |
-| 按文字定位   | `locate-text` / `locate_text`               | 可选本地 OCR：中英文候选框 + 置信度，绑定原图 hash                 |
-| 网页元素定位 | `locate-dom` / `locate_dom`                 | 可选浏览器运行时：selector / 文字 / 可访问性名称，绑定截图 hash    |
-| 批量批注     | `annotate --batch` / `annotate_batch`       | 一次标完整套截图，编号跨图连续                                     |
-| 候选确认     | `preview-candidates` / `preview_candidates` | 把定位候选画成编号框，看图选号                                     |
-| 跨 AI 交接   | `create-handoff` / `verify-handoff`         | 一个普通目录：批注 PNG + JSON + manifest + 摘要 + Markdown 入口    |
-| 多 AI 协作   | `fork-lineage` / `diff-revisions`           | 显式分叉副本并按稳定 ID 对比差异                                   |
+```text
+检查原图 → 渲染批注 → AI 亲眼查看预览 → 发现有遮挡/偏移 → 自动修正
+```
+
+## 三个不一样
+
+- **每一步都有证据**：定位候选绑定原图/截图 SHA-256，预览附像素指标，修订是 append-only 的 `.revN` 链——AI 声称"看过了、没遮挡"时，是可以核对的；
+- **本地优先**：截图不出机器、不需要模型 API Key；OCR 与浏览器定位是可选运行时，零下载复用本机引擎；
+- **为跨 AI 交接而生**：批注是"压平 PNG + 普通 JSON"两条腿走路，另一个 AI 不装 AgentCallout 也能读，装了就能校验、重渲染、继续修订。
+
+| 能力                 | 入口                              | 一句话                                                        |
+| -------------------- | --------------------------------- | ------------------------------------------------------------- |
+| 十类批注             | `annotate`                        | 矩形/椭圆/箭头/文字/说明框/编号/高亮/聚光灯/模糊/安全遮挡     |
+| 增量修订             | `revise`                          | 稳定 ID 修改生成 `.revN`，历史可回放                          |
+| 批量批注             | `annotate --batch`                | 一套截图一次标完，编号跨图连续                                |
+| 文字定位（可选）     | `locate-text`                     | 本地 OCR 中英文候选 + 置信度，绑定原图 hash                   |
+| 网页元素定位（可选） | `locate-dom`                      | 本机 Chrome/Edge 按 selector/文字/可访问性名称，绑定截图 hash |
+| 候选确认             | `preview-candidates`              | 候选画成编号框，看图选号不猜坐标                              |
+| 跨 AI 交接           | `create-handoff`                  | 普通目录：PNG + JSON + manifest + 摘要 + 入口                 |
+| 协作分叉             | `fork-lineage` / `diff-revisions` | 显式分叉 + 稳定 ID 级差异对比                                 |
 
 它只负责**批注已有截图**——不做系统截图、录屏、视频编辑或桌面 GUI。
 

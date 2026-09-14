@@ -1,0 +1,588 @@
+{
+  "annotationCount": 4,
+  "annotationSpec": {
+    "annotations": [
+      {
+        "id": "risk-orders",
+        "number": 1,
+        "placement": "auto",
+        "target": {
+          "height": 128,
+          "width": 316,
+          "x": 936,
+          "y": 112
+        },
+        "text": "异常订单连续 3 天上升，先排查支付渠道",
+        "tone": "danger",
+        "type": "numbered-callout"
+      },
+      {
+        "id": "conversion",
+        "number": 2,
+        "placement": "bottom",
+        "target": {
+          "height": 128,
+          "width": 316,
+          "x": 256,
+          "y": 112
+        },
+        "text": "支付转化率环比 +0.6%",
+        "type": "numbered-callout"
+      },
+      {
+        "color": "#000000",
+        "id": "token-redact",
+        "rect": {
+          "height": 40,
+          "width": 380,
+          "x": 288,
+          "y": 676
+        },
+        "type": "redact"
+      },
+      {
+        "id": "save-note",
+        "start": {
+          "x": 900,
+          "y": 620
+        },
+        "target": {
+          "height": 56,
+          "width": 156,
+          "x": 968,
+          "y": 668
+        },
+        "tone": "info",
+        "type": "arrow"
+      }
+    ],
+    "coordinateSpace": "pixel",
+    "defaults": {
+      "fontSize": 24,
+      "maxWidth": 360,
+      "padding": 14
+    },
+    "preset": "docs-light",
+    "version": "1.1"
+  },
+  "hashes": {
+    "inputSha256": "6a6eecf85e419687d86e17c7daabe1c289ec01f2dcc2cebb2c64970cb04a0427",
+    "outputSha256": "acd26971aa601a96cb0e981b5939f7d8f959c9d5a902faf0295d435d2b88eef0",
+    "specSha256": "d8d6b067467ad9fc6927e4f73c1ed4efb0feb261417ad1996a854ac16c06ee4a"
+  },
+  "inputs": [
+    {
+      "dimensions": {
+        "height": 800,
+        "width": 1280
+      },
+      "format": "png",
+      "orientation": null,
+      "path": "hero.png",
+      "pathSemantics": "relative-to-sidecar",
+      "sha256": "6a6eecf85e419687d86e17c7daabe1c289ec01f2dcc2cebb2c64970cb04a0427",
+      "sizeBytes": 71959,
+      "storedDimensions": {
+        "height": 800,
+        "width": 1280
+      }
+    }
+  ],
+  "manifestVersion": "1.0",
+  "markdown": "![AgentCallout output](<hero-annotated.png>)",
+  "operation": "annotate",
+  "operationSpec": {
+    "annotations": [
+      {
+        "id": "risk-orders",
+        "number": 1,
+        "placement": "auto",
+        "target": {
+          "height": 128,
+          "width": 316,
+          "x": 936,
+          "y": 112
+        },
+        "text": "异常订单连续 3 天上升，先排查支付渠道",
+        "tone": "danger",
+        "type": "numbered-callout"
+      },
+      {
+        "id": "conversion",
+        "number": 2,
+        "placement": "bottom",
+        "target": {
+          "height": 128,
+          "width": 316,
+          "x": 256,
+          "y": 112
+        },
+        "text": "支付转化率环比 +0.6%",
+        "type": "numbered-callout"
+      },
+      {
+        "color": "#000000",
+        "id": "token-redact",
+        "rect": {
+          "height": 40,
+          "width": 380,
+          "x": 288,
+          "y": 676
+        },
+        "type": "redact"
+      },
+      {
+        "id": "save-note",
+        "start": {
+          "x": 900,
+          "y": 620
+        },
+        "target": {
+          "height": 56,
+          "width": 156,
+          "x": 968,
+          "y": 668
+        },
+        "tone": "info",
+        "type": "arrow"
+      }
+    ],
+    "coordinateSpace": "pixel",
+    "defaults": {
+      "fontSize": 24,
+      "maxWidth": 360,
+      "padding": 14
+    },
+    "preset": "docs-light",
+    "version": "1.1"
+  },
+  "originalDimensions": {
+    "height": 800,
+    "width": 1280
+  },
+  "outputDimensions": {
+    "height": 800,
+    "width": 1280
+  },
+  "pathSemantics": "relative-to-sidecar",
+  "paths": {
+    "inputs": [
+      "hero.png"
+    ],
+    "output": "hero-annotated.png",
+    "sidecar": "hero-annotated.json"
+  },
+  "renderer": {
+    "font": {
+      "family": "Noto Sans CJK SC",
+      "file": "NotoSansCJKsc-Regular.otf",
+      "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+      "version": "Version 2.004;hotconv 1.0.118;makeotfexe 2.5.65603"
+    },
+    "libvips": "8.18.6",
+    "name": "sharp-svg-pango",
+    "sharp": "0.35.4",
+    "version": "0.2.1"
+  },
+  "resolvedAnnotations": [
+    {
+      "anchor": {
+        "x": 1094,
+        "y": 266
+      },
+      "box": {
+        "height": 94,
+        "width": 365,
+        "x": 907,
+        "y": 303
+      },
+      "fontSize": 24,
+      "id": "risk-orders",
+      "label": {
+        "box": {
+          "height": 94,
+          "width": 365,
+          "x": 907,
+          "y": 303
+        },
+        "fontSize": 24,
+        "padding": 14,
+        "paintedBounds": {
+          "height": 96,
+          "width": 367,
+          "x": 906,
+          "y": 302
+        },
+        "placement": "bottom",
+        "strokeWidth": 2,
+        "text": "异常订单连续 3 天上升，先排查支付渠道"
+      },
+      "layout": {
+        "issues": [],
+        "status": "ok"
+      },
+      "leader": {
+        "bendCount": 0,
+        "bounds": {
+          "height": 28,
+          "width": 2,
+          "x": 1093,
+          "y": 239
+        },
+        "end": {
+          "x": 1094,
+          "y": 240
+        },
+        "kind": "straight",
+        "length": 26,
+        "pathLength": 26,
+        "points": [
+          {
+            "x": 1094,
+            "y": 266
+          },
+          {
+            "x": 1094,
+            "y": 240
+          }
+        ],
+        "segments": [
+          {
+            "end": {
+              "x": 1094,
+              "y": 240
+            },
+            "start": {
+              "x": 1094,
+              "y": 266
+            }
+          }
+        ],
+        "start": {
+          "x": 1094,
+          "y": 266
+        },
+        "strokeWidth": 2
+      },
+      "marker": {
+        "bounds": {
+          "height": 36,
+          "width": 36,
+          "x": 1076,
+          "y": 266
+        },
+        "center": {
+          "x": 1094,
+          "y": 284
+        },
+        "labelSide": "top",
+        "paintedRadius": 18,
+        "radius": 17,
+        "strokeWidth": 2
+      },
+      "number": 1,
+      "placement": "bottom",
+      "style": {
+        "arrowHeadSize": 12,
+        "backgroundColor": "#fef2f2",
+        "blurSigma": 10,
+        "cornerRadius": 8,
+        "fillColor": "#00000000",
+        "fontSize": 24,
+        "lineHeight": 1.35,
+        "markerFillColor": "#dc2626",
+        "markerStrokeColor": "#dc2626",
+        "markerTextColor": "#ffffff",
+        "maxWidth": 360,
+        "opacity": 1,
+        "padding": 14,
+        "strokeColor": "#dc2626",
+        "strokeWidth": 2,
+        "textColor": "#7f1d1d"
+      },
+      "target": {
+        "height": 128,
+        "width": 316,
+        "x": 936,
+        "y": 112
+      },
+      "targetAnchor": {
+        "x": 1094,
+        "y": 240
+      },
+      "text": "异常订单连续 3 天上升，先排查支付渠道",
+      "type": "numbered-callout"
+    },
+    {
+      "anchor": {
+        "x": 414,
+        "y": 266
+      },
+      "box": {
+        "height": 51,
+        "width": 270,
+        "x": 279,
+        "y": 303
+      },
+      "fontSize": 24,
+      "id": "conversion",
+      "label": {
+        "box": {
+          "height": 51,
+          "width": 270,
+          "x": 279,
+          "y": 303
+        },
+        "fontSize": 24,
+        "padding": 14,
+        "paintedBounds": {
+          "height": 53,
+          "width": 272,
+          "x": 278,
+          "y": 302
+        },
+        "placement": "bottom",
+        "strokeWidth": 2,
+        "text": "支付转化率环比 +0.6%"
+      },
+      "layout": {
+        "issues": [],
+        "status": "ok"
+      },
+      "leader": {
+        "bendCount": 0,
+        "bounds": {
+          "height": 28,
+          "width": 2,
+          "x": 413,
+          "y": 239
+        },
+        "end": {
+          "x": 414,
+          "y": 240
+        },
+        "kind": "straight",
+        "length": 26,
+        "pathLength": 26,
+        "points": [
+          {
+            "x": 414,
+            "y": 266
+          },
+          {
+            "x": 414,
+            "y": 240
+          }
+        ],
+        "segments": [
+          {
+            "end": {
+              "x": 414,
+              "y": 240
+            },
+            "start": {
+              "x": 414,
+              "y": 266
+            }
+          }
+        ],
+        "start": {
+          "x": 414,
+          "y": 266
+        },
+        "strokeWidth": 2
+      },
+      "marker": {
+        "bounds": {
+          "height": 36,
+          "width": 36,
+          "x": 396,
+          "y": 266
+        },
+        "center": {
+          "x": 414,
+          "y": 284
+        },
+        "labelSide": "top",
+        "paintedRadius": 18,
+        "radius": 17,
+        "strokeWidth": 2
+      },
+      "number": 2,
+      "placement": "bottom",
+      "style": {
+        "arrowHeadSize": 12,
+        "backgroundColor": "#eff6ff",
+        "blurSigma": 10,
+        "cornerRadius": 8,
+        "fillColor": "#00000000",
+        "fontSize": 24,
+        "lineHeight": 1.35,
+        "markerFillColor": "#2563eb",
+        "markerStrokeColor": "#2563eb",
+        "markerTextColor": "#ffffff",
+        "maxWidth": 360,
+        "opacity": 1,
+        "padding": 14,
+        "strokeColor": "#2563eb",
+        "strokeWidth": 2,
+        "textColor": "#0f172a"
+      },
+      "target": {
+        "height": 128,
+        "width": 316,
+        "x": 256,
+        "y": 112
+      },
+      "targetAnchor": {
+        "x": 414,
+        "y": 240
+      },
+      "text": "支付转化率环比 +0.6%",
+      "type": "numbered-callout"
+    },
+    {
+      "id": "token-redact",
+      "rect": {
+        "height": 40,
+        "width": 380,
+        "x": 288,
+        "y": 676
+      },
+      "style": {
+        "arrowHeadSize": 12,
+        "backgroundColor": "#eff6ff",
+        "blurSigma": 10,
+        "cornerRadius": 8,
+        "fillColor": "#000000",
+        "fontSize": 24,
+        "lineHeight": 1.35,
+        "markerFillColor": "#2563eb",
+        "markerStrokeColor": "#2563eb",
+        "markerTextColor": "#ffffff",
+        "maxWidth": 360,
+        "opacity": 1,
+        "padding": 14,
+        "strokeColor": "#2563eb",
+        "strokeWidth": 0,
+        "textColor": "#0f172a"
+      },
+      "type": "redact"
+    },
+    {
+      "arrowHead": {
+        "bounds": {
+          "height": 9.617187833776597,
+          "width": 11.993822564671746,
+          "x": 980.0061774353283,
+          "y": 658.3828121662234
+        },
+        "tip": {
+          "x": 992,
+          "y": 668
+        },
+        "wings": [
+          {
+            "x": 980.0061774353283,
+            "y": 667.6150061206049
+          },
+          {
+            "x": 984.8229742810926,
+            "y": 658.3828121662234
+          }
+        ]
+      },
+      "end": {
+        "x": 992,
+        "y": 668
+      },
+      "id": "save-note",
+      "layout": {
+        "issues": [],
+        "status": "ok"
+      },
+      "path": {
+        "bendCount": 0,
+        "bounds": {
+          "height": 50,
+          "width": 94,
+          "x": 899,
+          "y": 619
+        },
+        "end": {
+          "x": 992,
+          "y": 668
+        },
+        "kind": "straight",
+        "length": 103.76897416858279,
+        "pathLength": 103.76897416858279,
+        "points": [
+          {
+            "x": 900,
+            "y": 620
+          },
+          {
+            "x": 992,
+            "y": 668
+          }
+        ],
+        "segments": [
+          {
+            "end": {
+              "x": 992,
+              "y": 668
+            },
+            "start": {
+              "x": 900,
+              "y": 620
+            }
+          }
+        ],
+        "start": {
+          "x": 900,
+          "y": 620
+        },
+        "strokeWidth": 2
+      },
+      "start": {
+        "x": 900,
+        "y": 620
+      },
+      "style": {
+        "arrowHeadSize": 12,
+        "backgroundColor": "#eff6ff",
+        "blurSigma": 10,
+        "cornerRadius": 8,
+        "fillColor": "#00000000",
+        "fontSize": 24,
+        "lineHeight": 1.35,
+        "markerFillColor": "#2563eb",
+        "markerStrokeColor": "#2563eb",
+        "markerTextColor": "#ffffff",
+        "maxWidth": 360,
+        "opacity": 1,
+        "padding": 14,
+        "strokeColor": "#2563eb",
+        "strokeWidth": 2,
+        "textColor": "#0f172a"
+      },
+      "target": {
+        "height": 56,
+        "width": 156,
+        "x": 968,
+        "y": 668
+      },
+      "type": "arrow"
+    }
+  ],
+  "security": {
+    "blurIsSecureRedaction": false,
+    "exifOrientationApplied": true,
+    "metadataStripped": true,
+    "outputReDecoded": true,
+    "redactUsesOpaqueOverwrite": true
+  },
+  "usesBlur": false,
+  "usesRedact": true,
+  "warnings": []
+}
