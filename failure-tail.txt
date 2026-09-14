@@ -1,0 +1,12 @@
+
+> agent-callout@0.7.0 verify
+> npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build && npm run check:dist && npm run check:docs
+
+
+> agent-callout@0.7.0 format:check
+> prettier --check .
+
+Checking formatting...
+[[33mwarn[39m] examples/hero/hero-annotated.json
+[[33mwarn[39m] scripts/generate-hero.ts
+[[33mwarn[39m] Code style issues found in 2 files. Run Prettier with --write to fix.
